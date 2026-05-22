@@ -70,6 +70,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Output language for analyst reports and final decision
     # Internal agent debate stays in English for reasoning quality
     "output_language": "English",
+    # Analyst execution mode:
+    #   "auto"         — detect from model name; "gemma" 패턴이면 prefetch, 그 외는 tool_calling
+    #   "prefetch"     — 데이터 사전 fetch 후 단일 LLM 호출 (tool calling 미지원 모델/서버 대응)
+    #   "tool_calling" — 기존 ReAct 멀티턴 방식 (원본 동작)
+    # Sentiment analyst는 모드와 무관하게 항상 prefetch (sentiment_analyst.py 자체가 그렇게 구현됨)
+    "analyst_mode": "auto",
     # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,

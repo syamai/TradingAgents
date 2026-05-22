@@ -36,6 +36,28 @@ def get_language_instruction() -> str:
     return f" Write your entire response in {lang}."
 
 
+def should_use_prefetch_mode() -> bool:
+    """분석가 노드가 사전 fetch 방식을 써야 하는지 판단.
+
+    config['analyst_mode'] 값에 따라:
+      - "prefetch"     → 항상 True (강제)
+      - "tool_calling" → 항상 False (강제 원본 동작)
+      - "auto"         → quick_think_llm 모델명에 "gemma" 포함 시 True
+                         (mlx-server / Gemma 계열의 tool calling 미지원 우회)
+
+    Sentiment analyst는 자체 구현으로 항상 prefetch이므로 이 함수와 무관.
+    """
+    from tradingagents.dataflows.config import get_config
+    cfg = get_config()
+    mode = (cfg.get("analyst_mode") or "auto").strip().lower()
+    if mode == "prefetch":
+        return True
+    if mode == "tool_calling":
+        return False
+    model = (cfg.get("quick_think_llm") or "").lower()
+    return "gemma" in model
+
+
 def build_instrument_context(ticker: str, asset_type: str = "stock") -> str:
     """Describe the exact instrument so agents preserve exchange-qualified tickers."""
     instrument_label = "asset" if asset_type == "crypto" else "instrument"

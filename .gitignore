@@ -157,6 +157,12 @@ ENV/
 env.bak/
 venv.bak/
 
+# trading-ai 작업 산출물 / 백업 / OS
+.runtime/
+*.bak
+.DS_Store
+/tmp/
+
 # Spyder project settings
 .spyderproject
 .spyproject
