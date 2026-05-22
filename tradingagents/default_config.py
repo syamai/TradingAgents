@@ -99,10 +99,13 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Data vendor configuration
     # Category-level configuration (default for all tools in category)
     "data_vendors": {
-        "core_stock_apis": "yfinance",       # Options: alpha_vantage, yfinance
-        "technical_indicators": "yfinance",  # Options: alpha_vantage, yfinance
-        "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
-        "news_data": "yfinance",             # Options: alpha_vantage, yfinance
+        # yahoo_naver: 한국 종목(.KS/.KQ)이면 yfinance + 네이버(또는 DART) 두 소스를
+        # 모두 호출해 합성, 비한국 종목이면 yfinance만 위임. 기존 yfinance-only 동작과
+        # 호환성 유지.
+        "core_stock_apis": "yahoo_naver",       # Options: yahoo_naver, alpha_vantage, yfinance
+        "technical_indicators": "yahoo_naver",  # Options: yahoo_naver, alpha_vantage, yfinance
+        "fundamental_data": "yahoo_naver",      # Options: yahoo_naver, alpha_vantage, yfinance
+        "news_data": "yahoo_naver",             # Options: yahoo_naver, alpha_vantage, yfinance
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {

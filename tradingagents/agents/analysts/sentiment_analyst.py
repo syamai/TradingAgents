@@ -27,6 +27,8 @@ from tradingagents.agents.utils.agent_utils import (
     get_language_instruction,
     get_news,
 )
+from tradingagents.dataflows.korean_utils import is_korean_ticker
+from tradingagents.dataflows.naver_discussion import fetch_naver_discussion
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
 
@@ -56,6 +58,13 @@ def create_sentiment_analyst(llm):
         stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
         reddit_block = fetch_reddit_posts(ticker)
 
+        # 한국 종목은 StockTwits/Reddit이 사실상 빈 데이터라 네이버 종목토론실로 보완.
+        # 비한국 종목은 호출 자체를 건너뛴다 (불필요한 호출/지연 방지).
+        naver_discussion_block = (
+            fetch_naver_discussion(ticker, limit=30)
+            if is_korean_ticker(ticker) else None
+        )
+
         system_message = _build_system_message(
             ticker=ticker,
             start_date=start_date,
@@ -63,6 +72,7 @@ def create_sentiment_analyst(llm):
             news_block=news_block,
             stocktwits_block=stocktwits_block,
             reddit_block=reddit_block,
+            naver_discussion_block=naver_discussion_block,
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -104,9 +114,25 @@ def _build_system_message(
     news_block: str,
     stocktwits_block: str,
     reddit_block: str,
+    naver_discussion_block: str | None = None,
 ) -> str:
     """Assemble the sentiment-analyst system message with structured data blocks."""
-    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
+    sources_count = "four" if naver_discussion_block else "three"
+
+    naver_section = ""
+    if naver_discussion_block:
+        naver_section = f"""
+### Naver Stock Board — 한국 개인 투자자 토론 (한국 종목 전용)
+StockTwits/Reddit이 한국 종목 데이터를 거의 갖지 않는 약점을 보완하는 채널.
+각 게시글의 공감(👍)/비공감(👎) 카운트가 정서 신호의 핵심이며, 집계된 공감 비율은
+강한 retail sentiment 지표다.
+
+<start_of_naver_discussion>
+{naver_discussion_block}
+<end_of_naver_discussion>
+"""
+
+    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on {sources_count} complementary data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
 
@@ -130,7 +156,7 @@ Community discussion. Engagement signal via upvote score and comment count. Subr
 <start_of_reddit>
 {reddit_block}
 <end_of_reddit>
-
+{naver_section}
 ## How to analyze this data (best practices)
 
 1. **Read the StockTwits Bullish/Bearish ratio as a leading retail-sentiment signal.** A 70/30 bullish/bearish split is moderately bullish; ≥90/10 may indicate over-extension and contrarian risk; 50/50 is uncertainty. Sample size matters — base rates on the actual message count, not percentages alone.
@@ -154,7 +180,7 @@ Community discussion. Engagement signal via upvote score and comment count. Subr
 Produce a sentiment report covering, in order:
 
 1. **Overall sentiment direction** — Bullish / Bearish / Neutral / Mixed — with a brief confidence note based on data quality and sample size.
-2. **Source-by-source breakdown** — what each of news / StockTwits / Reddit is telling you, with specific evidence (cite message counts, ratios, notable posts).
+2. **Source-by-source breakdown** — what each source (news / StockTwits / Reddit / Naver if present) is telling you, with specific evidence (cite message counts, ratios, notable posts).
 3. **Divergences, alignments, and key narratives** across sources.
 4. **Catalysts and risks** surfaced by the data.
 5. **Markdown table** at the end summarizing key sentiment signals, their direction, source, and supporting evidence.

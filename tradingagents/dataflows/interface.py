@@ -24,6 +24,20 @@ from .alpha_vantage import (
 )
 from .alpha_vantage_common import AlphaVantageRateLimitError
 
+# yfinance + 네이버/DART 동시 호출 통합 어댑터. 한국 종목이면 두 소스 합성,
+# 비한국이면 yfinance만 위임한다. (yahoo_naver.py 참고)
+from .yahoo_naver import (
+    get_stock_data as get_yahoo_naver_stock_data,
+    get_indicators as get_yahoo_naver_indicators,
+    get_fundamentals as get_yahoo_naver_fundamentals,
+    get_balance_sheet as get_yahoo_naver_balance_sheet,
+    get_cashflow as get_yahoo_naver_cashflow,
+    get_income_statement as get_yahoo_naver_income_statement,
+    get_insider_transactions as get_yahoo_naver_insider_transactions,
+    get_news as get_yahoo_naver_news,
+    get_global_news as get_yahoo_naver_global_news,
+)
+
 # Configuration and routing logic
 from .config import get_config
 
@@ -63,6 +77,7 @@ TOOLS_CATEGORIES = {
 VENDOR_LIST = [
     "yfinance",
     "alpha_vantage",
+    "yahoo_naver",
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -71,41 +86,50 @@ VENDOR_METHODS = {
     "get_stock_data": {
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
+        "yahoo_naver": get_yahoo_naver_stock_data,
     },
     # technical_indicators
     "get_indicators": {
         "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
+        "yahoo_naver": get_yahoo_naver_indicators,
     },
     # fundamental_data
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
+        "yahoo_naver": get_yahoo_naver_fundamentals,
     },
     "get_balance_sheet": {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
+        "yahoo_naver": get_yahoo_naver_balance_sheet,
     },
     "get_cashflow": {
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
+        "yahoo_naver": get_yahoo_naver_cashflow,
     },
     "get_income_statement": {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
+        "yahoo_naver": get_yahoo_naver_income_statement,
     },
     # news_data
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
+        "yahoo_naver": get_yahoo_naver_news,
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
         "alpha_vantage": get_alpha_vantage_global_news,
+        "yahoo_naver": get_yahoo_naver_global_news,
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
+        "yahoo_naver": get_yahoo_naver_insider_transactions,
     },
 }
 
