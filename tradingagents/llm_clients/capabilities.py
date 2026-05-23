@@ -90,6 +90,20 @@ _DEFAULT = ModelCapabilities(
     preferred_structured_method="function_calling",
 )
 
+# Gemma family (served via Ollama / mlx-server) does not implement tool
+# calling reliably enough for langchain's ``with_structured_output`` to
+# return a parsed Pydantic instance — the call succeeds but returns None,
+# which then fails downstream with AttributeError. Flagging the family
+# as ``none`` lets ``bind_structured`` short-circuit at agent-creation time
+# and route every call through the free-text fallback directly. Same
+# rationale as ``should_use_prefetch_mode`` in agent_utils.py.
+_GEMMA = ModelCapabilities(
+    supports_tool_choice=False,
+    supports_json_mode=False,
+    supports_json_schema=False,
+    preferred_structured_method="none",
+)
+
 
 # Exact-ID matches take precedence over pattern matches.
 _BY_ID: dict[str, ModelCapabilities] = {
@@ -114,6 +128,11 @@ _BY_PATTERN: list[tuple[re.Pattern[str], ModelCapabilities]] = [
     (re.compile(r"^deepseek-v\d"), _DEEPSEEK_THINKING),
     (re.compile(r"^deepseek-reasoner"), _DEEPSEEK_THINKING),
     (re.compile(r"^MiniMax-M\d"), _MINIMAX_THINKING),
+    # Covers gemma2/gemma3/gemma4 across Ollama tags (gemma4:26b-a4b,
+    # gemma3:4b, …) and HuggingFace-style IDs (mlx-community/gemma-3-…,
+    # google/gemma-7b). ``.*`` is required because ``get_capabilities``
+    # iterates with ``pattern.match`` which only anchors at the start.
+    (re.compile(r".*gemma", re.IGNORECASE), _GEMMA),
 ]
 
 
