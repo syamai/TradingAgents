@@ -54,11 +54,14 @@ def create_sentiment_analyst(llm):
         # Pre-fetch all three sources. Each fetcher degrades gracefully and
         # returns a string (no exceptions surface from here), so the LLM
         # always sees something — either real data or a clear placeholder.
+        # fetch_reddit_posts internally resolves Korean tickers to their
+        # English company name via yfinance (Reddit users write "Samsung
+        # Electronics", not "005930.KS"), so the caller stays uniform.
         news_block = get_news.func(ticker, start_date, end_date)
         stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
         reddit_block = fetch_reddit_posts(ticker)
 
-        # 한국 종목은 StockTwits/Reddit이 사실상 빈 데이터라 네이버 종목토론실로 보완.
+        # 한국 종목은 네이버 종목토론실로 한국어 retail 채널을 보완.
         # 비한국 종목은 호출 자체를 건너뛴다 (불필요한 호출/지연 방지).
         naver_discussion_block = (
             fetch_naver_discussion(ticker, limit=30)
