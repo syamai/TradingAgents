@@ -87,6 +87,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "news_article_limit": 20,             # max articles per ticker (ticker-news)
     "global_news_article_limit": 10,      # max articles for global/macro news
     "global_news_lookback_days": 7,       # macro news lookback window
+    # Sentiment analyst lookback strategy:
+    #   "default" → 7d / "daily" → 3d / "weekly" → 14d
+    # Maps to fetcher lookback_days param in sentiment_analyst.
+    "sentiment_lookback_strategy": "default",
     # Search queries used by get_global_news for macro headlines. Extend or
     # replace to broaden geographic / sector coverage.
     "global_news_queries": [

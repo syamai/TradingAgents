@@ -1,6 +1,6 @@
 # TradingAgents/graph/setup.py
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -21,13 +21,20 @@ class GraphSetup:
         tool_nodes: Dict[str, ToolNode],
         conditional_logic: ConditionalLogic,
         analyst_concurrency_limit: int = 1,
+        config: Optional[dict] = None,
     ):
-        """Initialize with required components."""
+        """Initialize with required components.
+
+        ``config`` is the runtime config dict (DEFAULT_CONFIG merged with
+        env/CLI overrides). Passed through to analysts that read config
+        keys (e.g. sentiment_analyst's ``sentiment_lookback_strategy``).
+        """
         self.quick_thinking_llm = quick_thinking_llm
         self.deep_thinking_llm = deep_thinking_llm
         self.tool_nodes = tool_nodes
         self.conditional_logic = conditional_logic
         self.analyst_concurrency_limit = analyst_concurrency_limit
+        self.config = config or {}
 
     def setup_graph(
         self, selected_analysts=["market", "social", "news", "fundamentals"]
@@ -48,7 +55,7 @@ class GraphSetup:
 
         analyst_factories = {
             "market": lambda: create_market_analyst(self.quick_thinking_llm),
-            "social": lambda: create_sentiment_analyst(self.quick_thinking_llm),
+            "social": lambda: create_sentiment_analyst(self.quick_thinking_llm, self.config),
             "news": lambda: create_news_analyst(self.quick_thinking_llm),
             "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
         }
