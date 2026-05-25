@@ -74,17 +74,34 @@ def _resolve_search_term(ticker: str) -> Optional[str]:
     return name.strip() or None
 
 
+def _reddit_time_bucket(lookback_days: int) -> str:
+    """Map a lookback window to Reddit's coarse ``t=`` bucket.
+
+    Reddit's public JSON search only accepts coarse time buckets (hour/day/
+    week/month/year/all). Pick the smallest bucket that fully contains the
+    window so we don't underfetch; the caller trims by ``created_utc``.
+    """
+    if lookback_days <= 1:
+        return "day"
+    if lookback_days <= 7:
+        return "week"
+    if lookback_days <= 31:
+        return "month"
+    return "year"
+
+
 def _fetch_subreddit(
     query: str,
     sub: str,
     limit: int,
     timeout: float,
+    lookback_days: int,
 ) -> list[dict]:
     qs = urlencode({
         "q": query,
         "restrict_sr": "on",
         "sort": "new",
-        "t": "week",  # last 7 days
+        "t": _reddit_time_bucket(lookback_days),
         "limit": limit,
     })
     url = _API.format(sub=sub, qs=qs)
@@ -108,12 +125,44 @@ def _fetch_subreddit(
     return [c.get("data", {}) for c in children if isinstance(c, dict)]
 
 
+def collect_reddit_posts(
+    ticker: str,
+    subreddits: Iterable[str] = DEFAULT_SUBREDDITS,
+    limit_per_sub: int = 5,
+    timeout: float = 10.0,
+    inter_request_delay: float = 1.0,
+    lookback_days: int = 7,
+) -> tuple[Optional[str], list[dict]]:
+    """Raw collection — used by triage. Returns ``(resolved_query, posts)``.
+
+    ``resolved_query`` is ``None`` when the ticker could not be mapped to a
+    usable search term (caller should treat as "skipped"). Each post dict
+    has the original Reddit fields plus a ``subreddit`` key.
+    """
+    query = _resolve_search_term(ticker)
+    if query is None:
+        return None, []
+    cutoff_ts = time.time() - lookback_days * 86400
+    collected: list[dict] = []
+    for i, sub in enumerate(subreddits):
+        if i > 0:
+            time.sleep(inter_request_delay)
+        raw_posts = _fetch_subreddit(query, sub, limit_per_sub, timeout, lookback_days)
+        for p in raw_posts:
+            if (p.get("created_utc") or 0) < cutoff_ts:
+                continue
+            p["subreddit"] = sub
+            collected.append(p)
+    return query, collected
+
+
 def fetch_reddit_posts(
     ticker: str,
     subreddits: Iterable[str] = DEFAULT_SUBREDDITS,
     limit_per_sub: int = 5,
     timeout: float = 10.0,
     inter_request_delay: float = 1.0,
+    lookback_days: int = 7,
 ) -> str:
     """Fetch recent Reddit posts mentioning ``ticker`` across finance
     subreddits and return them as a formatted plaintext block.
@@ -122,8 +171,14 @@ def fetch_reddit_posts(
     (~10 req/min per IP) even if the caller queries many subreddits.
     Default 1.0s (was 0.4s) — the lower value was occasionally tripping
     Reddit's anti-bot heuristic into returning HTTP 403 on bursts.
+
+    ``lookback_days`` selects the Reddit time bucket (day/week/month/year)
+    that contains the window, then trims the response by ``created_utc``
+    so the caller sees only posts within the exact window.
     """
-    query = _resolve_search_term(ticker)
+    query, all_posts = collect_reddit_posts(
+        ticker, subreddits, limit_per_sub, timeout, inter_request_delay, lookback_days,
+    )
     if query is None:
         return (
             f"<reddit skipped — could not resolve a usable search term for {ticker.upper()} "
@@ -134,13 +189,11 @@ def fetch_reddit_posts(
 
     blocks = []
     total_posts = 0
-    for i, sub in enumerate(subreddits):
-        if i > 0:
-            time.sleep(inter_request_delay)
-        posts = _fetch_subreddit(query, sub, limit_per_sub, timeout)
+    for sub in subreddits:
+        posts = [p for p in all_posts if p.get("subreddit") == sub]
         total_posts += len(posts)
         if not posts:
-            blocks.append(f"r/{sub}: <no posts found mentioning {display_label} in the past 7 days>")
+            blocks.append(f"r/{sub}: <no posts found mentioning {display_label} in the past {lookback_days} days>")
             continue
 
         lines = [f"r/{sub} — {len(posts)} recent posts mentioning {display_label}:"]
@@ -164,6 +217,6 @@ def fetch_reddit_posts(
     if total_posts == 0:
         return (
             f"<no Reddit posts found mentioning {display_label} across "
-            f"{', '.join(f'r/{s}' for s in subreddits)} in the past 7 days>"
+            f"{', '.join(f'r/{s}' for s in subreddits)} in the past {lookback_days} days>"
         )
     return "\n\n".join(blocks)

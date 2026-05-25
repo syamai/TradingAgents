@@ -13,12 +13,19 @@ StockTwits/Reddit 패턴과 동일).
 """
 from __future__ import annotations
 
+import re
+from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
 
 from .korean_utils import to_naver_code
+
+# 네이버 종목토론의 작성일 컬럼은 일반적으로 "YYYY.MM.DD HH:MM" 형식이며,
+# 페이지 하단으로 갈수록 과거 글이다. 페이지가 시간 역순 정렬이라는 전제
+# 하에 윈도우 밖 행이 누적되면 페이지 순회를 종료한다.
+_DATE_RE = re.compile(r"(\d{4})\.(\d{2})\.(\d{2})")
 
 _BASE = "https://finance.naver.com/item/board.naver"
 _HEADERS = {
@@ -60,20 +67,38 @@ def _safe_int(s: str) -> int:
         return 0
 
 
-def fetch_naver_discussion(ticker: str, limit: int = 30) -> str:
-    """한국 종목 토론실 최근 게시글을 limit개까지 가져와 마크다운 문자열로 반환.
+def _parse_date(date_raw: str) -> Optional[datetime]:
+    """Extract YYYY.MM.DD from the raw cell text. Returns None on failure."""
+    m = _DATE_RE.search(date_raw or "")
+    if not m:
+        return None
+    try:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
 
-    실패 시(차단, 비한국 등) ``<unavailable: ...>`` 형식. sentiment_analyst가
-    그대로 프롬프트에 주입한다.
+
+def collect_naver_discussion(
+    ticker: str,
+    limit: int = 30,
+    lookback_days: int = 7,
+    max_pages: int = 10,
+) -> tuple[Optional[str], list[dict]]:
+    """Raw collection — used by triage. Returns ``(error_or_none, posts)``.
+
+    Each post dict has ``title``, ``date``, ``views``, ``up``, ``down``.
+    On ticker-resolution failure returns ``(error_msg, [])``.
     """
     try:
         code = to_naver_code(ticker)
     except ValueError as e:
-        return f"<naver_discussion unavailable: {e}>"
+        return str(e), []
 
+    cutoff = datetime.now() - timedelta(days=lookback_days)
     posts: list[dict] = []
     page = 1
-    while len(posts) < limit and page <= 3:
+    stop = False
+    while len(posts) < limit and page <= max_pages and not stop:
         soup = _fetch_page(code, page)
         if soup is None:
             break
@@ -81,6 +106,8 @@ def fetch_naver_discussion(ticker: str, limit: int = 30) -> str:
         # 게시판 행: table.type2 안의 tr 중 td 5개 이상인 것
         rows = soup.select("table.type2 tr")
         page_posts = 0
+        out_of_window_rows = 0
+        valid_rows_seen = 0
         for tr in rows:
             tds = tr.find_all("td")
             if len(tds) < 6:
@@ -93,6 +120,11 @@ def fetch_naver_discussion(ticker: str, limit: int = 30) -> str:
             if not title:
                 continue
             date_raw = _safe_text(tds[0])
+            valid_rows_seen += 1
+            parsed_date = _parse_date(date_raw)
+            if parsed_date is not None and parsed_date < cutoff:
+                out_of_window_rows += 1
+                continue
             view_count = _safe_int(_safe_text(tds[3]))
             upvotes = _safe_int(_safe_text(tds[4]))
             downvotes = _safe_int(_safe_text(tds[5]))
@@ -107,12 +139,36 @@ def fetch_naver_discussion(ticker: str, limit: int = 30) -> str:
             if len(posts) >= limit:
                 break
 
-        if page_posts == 0:
+        # 페이지의 유효 행이 전부 윈도우 밖이면 더 이전 페이지를 볼 필요 없음
+        if valid_rows_seen > 0 and out_of_window_rows == valid_rows_seen:
+            stop = True
+        elif page_posts == 0:
             break
         page += 1
 
+    return None, posts
+
+
+def fetch_naver_discussion(
+    ticker: str,
+    limit: int = 30,
+    lookback_days: int = 7,
+    max_pages: int = 10,
+) -> str:
+    """한국 종목 토론실에서 ``lookback_days`` 기간 내 게시글을 ``limit``개까지
+    가져와 마크다운 문자열로 반환.
+
+    실패 시(차단, 비한국 등) ``<unavailable: ...>`` 형식. sentiment_analyst가
+    그대로 프롬프트에 주입한다.
+
+    ``max_pages``는 페이지 순회 상한 (rate-limit/무한루프 안전장치).
+    윈도우 안에서 limit이 채워지면 조기 종료한다.
+    """
+    err, posts = collect_naver_discussion(ticker, limit, lookback_days, max_pages)
+    if err is not None:
+        return f"<naver_discussion unavailable: {err}>"
     if not posts:
-        return f"<no Naver discussion posts found for {ticker}>"
+        return f"<no Naver discussion posts found for {ticker} in the past {lookback_days} days>"
 
     lines = [
         f"## {ticker} Discussion (Naver Stock Board, recent {len(posts)} posts)",
