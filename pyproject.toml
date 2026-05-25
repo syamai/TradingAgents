@@ -29,6 +29,7 @@ dependencies = [
     "stockstats>=0.6.5",
     "tqdm>=4.67.1",
     "typing-extensions>=4.14.0",
+    "vaderSentiment>=3.3.2",
     "yfinance>=0.2.63",
 ]
 
@@ -51,4 +52,9 @@ markers = [
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
 ]
