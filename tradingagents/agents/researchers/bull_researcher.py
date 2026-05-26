@@ -12,6 +12,7 @@ def create_bull_researcher(llm):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
+        supply_demand_report = state.get("supply_demand_report", "")
         asset_type = state.get("asset_type", "stock")
         target_label = "stock" if asset_type == "stock" else "asset"
         fundamentals_label = (
@@ -19,6 +20,16 @@ def create_bull_researcher(llm):
             if asset_type == "stock"
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
+
+        # 한국 종목 전용 수급 보고서 — 비한국 ticker나 분석가 OFF면 빈 문자열 또는
+        # ``<not applicable: ...>`` / ``<unavailable: ...>``. 이런 경우 LLM이
+        # "데이터 부재 = 약점"으로 해석해 회귀를 만들 수 있으므로 블록 자체를 생략.
+        supply_demand_block = ""
+        if supply_demand_report and not supply_demand_report.startswith("<"):
+            supply_demand_block = (
+                f"Supply/Demand signals (KR foreign/institutional/program/short): "
+                f"{supply_demand_report}\n"
+            )
 
         prompt = f"""You are a Bull Analyst advocating for investing in the {target_label}. Your task is to build a strong, evidence-based case emphasizing growth potential, competitive advantages, and positive market indicators. Leverage the provided research and data to address concerns and counter bearish arguments effectively.
 
@@ -34,7 +45,7 @@ Market research report: {market_research_report}
 Social media sentiment report: {sentiment_report}
 Latest world affairs news: {news_report}
 {fundamentals_label}: {fundamentals_report}
-Conversation history of the debate: {history}
+{supply_demand_block}Conversation history of the debate: {history}
 Last bear argument: {current_response}
 Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position.
 """ + get_language_instruction()

@@ -12,6 +12,7 @@ def create_bear_researcher(llm):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
+        supply_demand_report = state.get("supply_demand_report", "")
         asset_type = state.get("asset_type", "stock")
         target_label = "stock" if asset_type == "stock" else "asset"
         fundamentals_label = (
@@ -19,6 +20,14 @@ def create_bear_researcher(llm):
             if asset_type == "stock"
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
+
+        # 한국 종목 전용 — 비한국 ticker 또는 분석가 OFF면 블록 생략 (bull_researcher 동일).
+        supply_demand_block = ""
+        if supply_demand_report and not supply_demand_report.startswith("<"):
+            supply_demand_block = (
+                f"Supply/Demand signals (KR foreign/institutional/program/short): "
+                f"{supply_demand_report}\n"
+            )
 
         prompt = f"""You are a Bear Analyst making the case against investing in the {target_label}. Your goal is to present a well-reasoned argument emphasizing risks, challenges, and negative indicators. Leverage the provided research and data to highlight potential downsides and counter bullish arguments effectively.
 
@@ -36,7 +45,7 @@ Market research report: {market_research_report}
 Social media sentiment report: {sentiment_report}
 Latest world affairs news: {news_report}
 {fundamentals_label}: {fundamentals_report}
-Conversation history of the debate: {history}
+{supply_demand_block}Conversation history of the debate: {history}
 Last bull argument: {current_response}
 Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the {target_label}.
 """ + get_language_instruction()
