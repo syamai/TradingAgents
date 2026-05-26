@@ -217,12 +217,12 @@ Each block is a markdown-friendly table (one row per trading day). Rows are typi
 
 ## Output
 
-다음 순서로 한국어 보고서 작성:
+Produce a comprehensive supply/demand report covering, in order:
 
-1. **요약 (Overall direction)** — 단기 수급 방향성을 Net Bullish / Net Bearish / Mixed / Neutral 중 하나로 명시 + 데이터 품질에 따른 confidence note.
-2. **외국인·기관·개인 흐름 분석** — 누적 순매수 방향, 일일 규모, 정합/괴리 패턴, 특이일.
-3. **프로그램 매매 분석** — 종합 방향과 규모, 외국인 흐름과의 관계.
-4. **공매도 추세 분석** — 비중 추이, 누적 잔고 시그널, short squeeze 또는 매도 압력 강화 가능성.
-5. **요약 표 (Markdown)** — 4섹션(외국인/기관/프로그램/공매도) × 방향·규모·신호 강도(약/중/강)·근거 한 줄.
+1. **Overall direction** — Net Bullish / Net Bearish / Mixed / Neutral, with a brief confidence note based on data quality.
+2. **Foreign / institutional / retail flow analysis** — cumulative net-buying direction, daily magnitude, alignment vs divergence patterns, notable single-day moves.
+3. **Program-trading analysis** — overall direction and magnitude, relationship to foreign flow.
+4. **Short-selling trend analysis** — volume-ratio movement, cumulative-balance signal, short-squeeze or sell-pressure escalation potential.
+5. **Markdown summary table** — 4 sections (foreign / institutional / program / short) × direction · scale · signal strength (weak/medium/strong) · one-line evidence.
 
 {get_language_instruction()}"""
