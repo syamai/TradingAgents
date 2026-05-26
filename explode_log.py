@@ -30,17 +30,19 @@ def write(path, content):
     if content:
         (dst / path).write_text(content, encoding="utf-8")
 
-write("01_analysts/market.md",       d.get("market_report"))
-write("01_analysts/sentiment.md",    d.get("sentiment_report"))
-write("01_analysts/news.md",         d.get("news_report"))
-write("01_analysts/fundamentals.md", d.get("fundamentals_report"))
+write("01_analysts/market.md",        d.get("market_report"))
+write("01_analysts/sentiment.md",     d.get("sentiment_report"))
+write("01_analysts/news.md",          d.get("news_report"))
+write("01_analysts/fundamentals.md",  d.get("fundamentals_report"))
+write("01_analysts/supply_demand.md", d.get("supply_demand_report"))
 
 debate = d.get("investment_debate_state") or {}
 write("02_research/bull.md",    debate.get("bull_history"))
 write("02_research/bear.md",    debate.get("bear_history"))
 write("02_research/manager.md", debate.get("judge_decision"))
 
-write("03_trader/trader.md", d.get("trader_investment_decision"))
+# trader_investment_plan은 graph state 키, trader_investment_decision은 구버전 alias.
+write("03_trader/trader.md", d.get("trader_investment_plan") or d.get("trader_investment_decision"))
 
 risk = d.get("risk_debate_state") or {}
 write("04_risk/aggressive.md",    risk.get("aggressive_history"))
@@ -56,10 +58,11 @@ complete = [
     "## 💬 Sentiment Analyst", d.get("sentiment_report", ""),
     "## 📰 News Analyst", d.get("news_report", ""),
     "## 📈 Fundamentals Analyst", d.get("fundamentals_report", ""),
+    "## 🇰🇷 Supply/Demand Analyst", d.get("supply_demand_report", ""),
     "## 🐂 Bull Researcher", debate.get("bull_history", ""),
     "## 🐻 Bear Researcher", debate.get("bear_history", ""),
     "## 🎓 Research Manager", debate.get("judge_decision", ""),
-    "## 💼 Trader", d.get("trader_investment_decision", ""),
+    "## 💼 Trader", d.get("trader_investment_plan", "") or d.get("trader_investment_decision", ""),
     "## ⚡ Aggressive Analyst", risk.get("aggressive_history", ""),
     "## 🛡️ Conservative Analyst", risk.get("conservative_history", ""),
     "## ⚖️ Neutral Analyst", risk.get("neutral_history", ""),

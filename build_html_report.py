@@ -159,6 +159,7 @@ SECTIONS = [
     {"id": "sentiment",    "stage": "1. 분석가",          "title": "정서 분석",            "agent": "Sentiment Analyst",         "icon": "💬", "color": "blue",   "content": read("01_analysts/sentiment.md")},
     {"id": "news",         "stage": "1. 분석가",          "title": "뉴스 분석",            "agent": "News Analyst",              "icon": "📰", "color": "blue",   "content": read("01_analysts/news.md")},
     {"id": "fundamentals", "stage": "1. 분석가",          "title": "펀더멘털",             "agent": "Fundamentals Analyst",      "icon": "📈", "color": "blue",   "content": read("01_analysts/fundamentals.md")},
+    {"id": "supply_demand","stage": "1. 분석가",          "title": "수급 분석 (KR)",       "agent": "Supply Demand Analyst",     "icon": "🇰🇷", "color": "blue",   "content": read("01_analysts/supply_demand.md")},
     {"id": "bull",         "stage": "2. 리서치 토론",     "title": "강세 논리",            "agent": "Bull Researcher",           "icon": "🐂", "color": "green",  "content": read("02_research/bull.md")},
     {"id": "bear",         "stage": "2. 리서치 토론",     "title": "약세 논리",            "agent": "Bear Researcher",           "icon": "🐻", "color": "red",    "content": read("02_research/bear.md")},
     {"id": "manager",      "stage": "2. 리서치 토론",     "title": "리서치 매니저 종합",   "agent": "Research Manager",          "icon": "🎓", "color": "purple", "content": read("02_research/manager.md")},
