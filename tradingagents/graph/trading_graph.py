@@ -190,6 +190,9 @@ class TradingAgentsGraph:
                     get_income_statement,
                 ]
             ),
+            # Supply/Demand analyst는 prefetch-only — tool 호출 없음.
+            # setup.py가 spec.tool_node 키를 무조건 참조하므로 빈 ToolNode를 등록.
+            "supply_demand": ToolNode([]),
         }
 
     def _resolve_benchmark(self, ticker: str) -> str:

@@ -51,6 +51,13 @@ ANALYST_NODE_SPECS: Dict[str, AnalystNodeSpec] = {
         tool_node="tools_fundamentals",
         report_key="fundamentals_report",
     ),
+    "supply_demand": AnalystNodeSpec(
+        key="supply_demand",
+        agent_node="Supply Demand Analyst",
+        clear_node="Msg Clear Supply Demand",
+        tool_node="tools_supply_demand",
+        report_key="supply_demand_report",
+    ),
 }
 
 

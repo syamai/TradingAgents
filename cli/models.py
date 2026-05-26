@@ -10,6 +10,8 @@ class AnalystType(str, Enum):
     SOCIAL = "social"
     NEWS = "news"
     FUNDAMENTALS = "fundamentals"
+    # KIS 수급분석 — 한국 종목 전용. 비한국 ticker는 분석가 노드가 N/A 한 줄 반환.
+    SUPPLY_DEMAND = "supply_demand"
 
 
 class AssetType(str, Enum):

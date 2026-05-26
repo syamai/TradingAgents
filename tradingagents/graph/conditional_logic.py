@@ -49,6 +49,17 @@ class ConditionalLogic:
             return "tools_fundamentals"
         return "Msg Clear Fundamentals"
 
+    def should_continue_supply_demand(self, state: AgentState):
+        """Supply/Demand analyst는 prefetch-only — 항상 clear node로 진행.
+
+        ``setup.py`` 가 ``getattr(self.conditional_logic, f"should_continue_{spec.key}")``
+        로 동적 조회하므로 메서드는 반드시 존재해야 한다. 도구 호출 분기가 없으므로
+        ``last_message.tool_calls`` 검사 없이 곧장 clear로 흘려보낸다 (비한국 ticker
+        분기에서 ``messages: []`` 를 반환할 수도 있어 last_message 인덱싱이 안전하지
+        않다).
+        """
+        return "Msg Clear Supply Demand"
+
     def should_continue_debate(self, state: AgentState) -> str:
         """Determine if debate should continue."""
 

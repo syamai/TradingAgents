@@ -57,6 +57,7 @@ class AgentState(MessagesState):
         str, "Report from the News Researcher of current world affairs"
     ]
     fundamentals_report: Annotated[str, "Report from the Fundamentals Researcher"]
+    supply_demand_report: Annotated[str, "Report from the Supply Demand Analyst (KR only)"]
 
     # researcher team discussion step
     investment_debate_state: Annotated[

@@ -58,6 +58,7 @@ class GraphSetup:
             "social": lambda: create_sentiment_analyst(self.quick_thinking_llm, self.config),
             "news": lambda: create_news_analyst(self.quick_thinking_llm),
             "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
+            "supply_demand": lambda: create_supply_demand_analyst(self.quick_thinking_llm),
         }
 
         # Create researcher and manager nodes
