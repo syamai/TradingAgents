@@ -41,9 +41,40 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
+def _top_kospi_by_marketcap(n: int) -> list[str]:
+    """네이버 금융에서 KOSPI 시가총액 상위 N 종목 코드(6자리) 추출.
+
+    KIS의 ``market-cap`` ranking endpoint가 0행을 반환하는 시점에 폴백.
+    한 페이지 50종목 → ``ceil(n/50)`` 페이지 스크래핑. EUC-KR 디코드.
+    """
+    import re
+    import urllib.request
+
+    codes: list[str] = []
+    seen: set[str] = set()
+    pages_needed = (n + 49) // 50
+    for page in range(1, pages_needed + 1):
+        url = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page={page}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        html = urllib.request.urlopen(req, timeout=10).read().decode("euc-kr", errors="ignore")
+        for code in re.findall(r'/item/main\.naver\?code=(\d{6})', html):
+            if code not in seen:
+                codes.append(code)
+                seen.add(code)
+                if len(codes) >= n:
+                    return codes
+    return codes
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="KIS 수급 5년치 등 장기 히스토리 수집")
-    p.add_argument("tickers", nargs="+", help="종목 코드 (005930.KS 또는 005930)")
+    p.add_argument("tickers", nargs="*", help="종목 코드 (005930.KS 또는 005930). --top-kospi 사용 시 생략 가능.")
+    p.add_argument(
+        "--top-kospi",
+        type=int,
+        metavar="N",
+        help="KOSPI 시가총액 상위 N종목 자동 선정 (네이버 스크래핑)",
+    )
     p.add_argument("--years", type=int, default=5, help="수집 기간 (년, 기본 5)")
     p.add_argument(
         "--store",
@@ -141,6 +172,17 @@ def collect_one(
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
 
+    # --top-kospi 옵션 처리: tickers 인자에 자동 추가
+    tickers = list(args.tickers)
+    if args.top_kospi:
+        print(f"네이버 시가총액 페이지 스크래핑 — KOSPI 상위 {args.top_kospi}종목...")
+        top = _top_kospi_by_marketcap(args.top_kospi)
+        print(f"  → {len(top)} codes: {top[:5]} ... {top[-3:]}")
+        tickers.extend(top)
+    if not tickers:
+        print("ERROR: 종목 코드 인자 또는 --top-kospi N 중 하나는 필요합니다.", file=sys.stderr)
+        return 2
+
     if args.store == "both":
         backends = ("parquet", "sqlite")
     else:
@@ -148,8 +190,8 @@ def main(argv: list[str] | None = None) -> int:
     store = KisHistoryStore(backends=backends)
 
     print(
-        f"KIS history collection — tickers={args.tickers} years={args.years} "
-        f"endpoints={args.endpoints} backends={backends} "
+        f"KIS history collection — {len(tickers)} tickers, years={args.years}, "
+        f"endpoints={args.endpoints}, backends={backends}, "
         f"mode={'FULL' if args.full else 'INCREMENTAL'}"
     )
     print(f"store root: {store.root}")
@@ -157,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
 
     overall_t0 = time.time()
     summaries = []
-    for ticker in args.tickers:
+    for ticker in tickers:
         print(f"=== {ticker} ===")
         s = collect_one(
             store, ticker,
