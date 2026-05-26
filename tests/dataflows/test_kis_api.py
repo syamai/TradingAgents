@@ -57,7 +57,8 @@ def _mock_response(status=200, json_body=None):
     resp.raise_for_status = MagicMock()
     if status >= 400:
         from requests.exceptions import HTTPError
-        resp.raise_for_status.side_effect = HTTPError(f"{status}")
+        # response 객체를 부착해야 backoff 코드의 getattr(e.response, "status_code") 가 작동
+        resp.raise_for_status.side_effect = HTTPError(f"{status}", response=resp)
     return resp
 
 
@@ -455,6 +456,179 @@ class TestFetchShortInterest:
 
 
 # === rate limiting ===
+
+@pytest.mark.unit
+class TestRangeBackoff:
+    """500 발생 시 exponential backoff + 재시도 검증 (_call_with_backoff)."""
+
+    def test_success_first_try(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, {"rt_cd": "0", "output2": []})
+            body = kis_api._call_with_backoff("/p", "TR", {})
+            assert body == {"rt_cd": "0", "output2": []}
+            assert get.call_count == 1
+
+    def test_500_then_success(self, isolated_cache, kis_env, monkeypatch):
+        slept = []
+        monkeypatch.setattr(kis_api.time, "sleep", lambda s: slept.append(s))
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.side_effect = [
+                _mock_response(500, {}),
+                _mock_response(200, {"rt_cd": "0", "output2": [{"x": 1}]}),
+            ]
+            body = kis_api._call_with_backoff("/p", "TR", {})
+            assert body["output2"] == [{"x": 1}]
+            assert get.call_count == 2
+            # exp backoff: 1s × (2**0) = 1s slept after first 500
+            assert 1.0 in slept
+
+    def test_500_three_times_propagates(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(500, {})
+            from requests.exceptions import HTTPError
+            with pytest.raises(HTTPError):
+                kis_api._call_with_backoff("/p", "TR", {})
+            assert get.call_count == 3  # _RANGE_MAX_RETRIES
+
+    def test_non_500_no_backoff(self, isolated_cache, kis_env, monkeypatch):
+        # 400 같은 다른 에러는 backoff 없이 즉시 raise
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(404, {})
+            from requests.exceptions import HTTPError
+            with pytest.raises(HTTPError):
+                kis_api._call_with_backoff("/p", "TR", {})
+            assert get.call_count == 1
+
+
+@pytest.mark.unit
+class TestRangePagination:
+    """sliding-window 페이지네이션이 정확히 동작하는지."""
+
+    def _investor_response(self, dates):
+        return {
+            "rt_cd": "0",
+            "output1": {},
+            "output2": [
+                {
+                    "stck_bsop_date": d.replace("-", ""), "stck_clpr": "100",
+                    "frgn_ntby_qty": "0", "frgn_reg_ntby_qty": "0",
+                    "frgn_nreg_ntby_qty": "0",
+                    "frgn_ntby_tr_pbmn": "0",
+                    "frgn_reg_ntby_pbmn": "0", "frgn_nreg_ntby_pbmn": "0",
+                    "orgn_ntby_qty": "0", "fund_ntby_qty": "0",
+                    "pe_fund_ntby_vol": "0", "ivtr_ntby_qty": "0",
+                    "scrt_ntby_qty": "0", "bank_ntby_qty": "0", "insu_ntby_qty": "0",
+                    "orgn_ntby_tr_pbmn": "0", "fund_ntby_tr_pbmn": "0",
+                    "pe_fund_ntby_tr_pbmn": "0", "ivtr_ntby_tr_pbmn": "0",
+                    "scrt_ntby_tr_pbmn": "0",
+                    "bank_ntby_tr_pbmn": "0", "insu_ntby_tr_pbmn": "0",
+                    "prsn_ntby_qty": "0", "prsn_ntby_tr_pbmn": "0",
+                    "etc_corp_ntby_vol": "0", "etc_corp_ntby_tr_pbmn": "0",
+                } for d in dates
+            ],
+        }
+
+    def test_single_page_covers_range(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        # 응답에 5일치 — start=05-20, end=05-24 한 호출로 충분
+        body = self._investor_response(["2026-05-24", "2026-05-23", "2026-05-22",
+                                        "2026-05-21", "2026-05-20"])
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, body)
+            rows = kis_api.fetch_investor_trend_range("005930", "2026-05-20", "2026-05-24")
+            assert len(rows) == 5
+            assert [r["date"] for r in rows] == [
+                "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24",
+            ]
+            assert get.call_count == 1
+
+    def test_multi_page_slides_backward(self, isolated_cache, kis_env, monkeypatch):
+        """2개 호출이 필요한 케이스 — 한 페이지에 3일치만 반환."""
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        page1 = self._investor_response(["2026-05-24", "2026-05-23", "2026-05-22"])
+        page2 = self._investor_response(["2026-05-21", "2026-05-20", "2026-05-19"])
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.side_effect = [
+                _mock_response(200, page1),
+                _mock_response(200, page2),
+            ]
+            rows = kis_api.fetch_investor_trend_range("005930", "2026-05-19", "2026-05-24")
+            dates = [r["date"] for r in rows]
+            assert dates == [
+                "2026-05-19", "2026-05-20", "2026-05-21",
+                "2026-05-22", "2026-05-23", "2026-05-24",
+            ]
+            assert get.call_count == 2
+            # 두 번째 호출이 첫 호출의 가장 오래된 날짜 - 1로 슬라이드했는지
+            second_call_params = get.call_args_list[1].kwargs["params"]
+            assert second_call_params["FID_INPUT_DATE_1"] == "20260521"
+
+    def test_empty_response_ends_loop(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, {"rt_cd": "0", "output2": []})
+            rows = kis_api.fetch_investor_trend_range("005930", "2026-05-20", "2026-05-27")
+            assert rows == []
+            assert get.call_count == 1
+
+    def test_progress_callback_invoked(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        body = self._investor_response(["2026-05-24", "2026-05-23"])
+        progress_calls = []
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, body)
+            kis_api.fetch_investor_trend_range(
+                "005930", "2026-05-20", "2026-05-24",
+                progress_cb=lambda n: progress_calls.append(n),
+            )
+        assert progress_calls and progress_calls[-1] == 2
+
+    def test_dedup_across_pages(self, isolated_cache, kis_env, monkeypatch):
+        """두 페이지가 같은 날짜를 포함해도 중복 없이 반환."""
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        page1 = self._investor_response(["2026-05-24", "2026-05-23", "2026-05-22"])
+        page2 = self._investor_response(["2026-05-22", "2026-05-21", "2026-05-20"])  # 22 overlap
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.side_effect = [
+                _mock_response(200, page1),
+                _mock_response(200, page2),
+            ]
+            rows = kis_api.fetch_investor_trend_range("005930", "2026-05-20", "2026-05-24")
+            dates = [r["date"] for r in rows]
+            assert dates == [
+                "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24",
+            ]
+
+
+@pytest.mark.unit
+class TestShortRangePagination:
+    """short은 start/end 둘 다 받는다 — 100일 윈도우로 슬라이딩."""
+
+    def _short_response(self, dates):
+        return {
+            "rt_cd": "0",
+            "output1": {},
+            "output2": [
+                {"stck_bsop_date": d.replace("-", ""), "stck_clpr": "100",
+                 "ssts_cntg_qty": "0", "ssts_vol_rlim": "0",
+                 "ssts_tr_pbmn": "0", "ssts_tr_pbmn_rlim": "0"} for d in dates
+            ],
+        }
+
+    def test_single_call_for_short_range(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        body = self._short_response(["2026-05-22", "2026-05-21", "2026-05-20"])
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, body)
+            rows = kis_api.fetch_short_interest_range("005930", "2026-05-20", "2026-05-22")
+            assert len(rows) == 3
+            params = get.call_args.kwargs["params"]
+            assert params["FID_INPUT_DATE_1"] == "20260520"
+            assert params["FID_INPUT_DATE_2"] == "20260522"
+
 
 @pytest.mark.unit
 class TestRateLimit:

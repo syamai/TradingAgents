@@ -180,6 +180,261 @@ def _call(url_path: str, tr_id: str, params: dict, _retry: bool = False) -> dict
     return body
 
 
+# ============================================================
+# Range fetchers — 5년치 등 임의 기간 sliding-window 수집
+# ============================================================
+#
+# 실측: 50ms 간격으로 burst하면 KIS가 명시적 EGW00201이 아닌 HTTP 500으로
+# 거부하는 패턴 관찰 (50회 호출 중 23회 실패 = 46%). 따라서 range fetcher는
+# 분석가용 _call(50ms)보다 보수적인 정책으로 분리:
+#   - 호출 간격 100ms (10 req/s) — burst 회피
+#   - HTTP 500 → exponential backoff (1s → 2s → 4s) 최대 3회 재시도
+#   - HTTP 401/403 → 기존 _call의 토큰 재발급에 위임
+#
+# 페이지네이션:
+#   - investor/program: 한 호출당 30 거래일. end_date를 응답의 가장 오래된
+#     날짜 - 1일로 슬라이드해 백워드 진행
+#   - short: 한 호출당 최대 100 거래일 (start/end 둘 다 받음). 100일 윈도우로
+#     백워드 진행
+
+_RANGE_CALL_SLEEP_SEC = 0.1     # 100ms (burst-거부 회피)
+_RANGE_BACKOFF_BASE_SEC = 1.0
+_RANGE_MAX_RETRIES = 3
+_INVESTOR_PROGRAM_PAGE_DAYS = 30
+_SHORT_PAGE_DAYS = 100
+
+
+def _call_with_backoff(url_path: str, tr_id: str, params: dict) -> dict:
+    """_call + HTTP 500 시 exponential backoff. 5년치 수집의 burst-거부 회복용.
+
+    토큰 만료(401/403)는 기존 _call이 처리. 여기서는 KIS의 "soft rate limit"
+    (HTTP 500으로 거부) 패턴만 흡수.
+    """
+    for attempt in range(_RANGE_MAX_RETRIES):
+        try:
+            return _call(url_path, tr_id, params)
+        except requests.exceptions.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            if status == 500 and attempt < _RANGE_MAX_RETRIES - 1:
+                wait = _RANGE_BACKOFF_BASE_SEC * (2 ** attempt)
+                logger.warning(
+                    "KIS 500 (attempt %d/%d), backing off %.1fs",
+                    attempt + 1, _RANGE_MAX_RETRIES, wait,
+                )
+                time.sleep(wait)
+                continue
+            raise
+    raise RuntimeError("unreachable")  # _RANGE_MAX_RETRIES 이상 도달
+
+
+def _parse_investor_row(r: dict) -> dict:
+    """raw KIS row → 정규화 dict. 단일 fetcher와 range fetcher가 공유."""
+    bank_qty = _safe_int(r.get("bank_ntby_qty"))
+    insu_qty = _safe_int(r.get("insu_ntby_qty"))
+    bank_amt = _safe_int(r.get("bank_ntby_tr_pbmn"))
+    insu_amt = _safe_int(r.get("insu_ntby_tr_pbmn"))
+    return {
+        "date": _format_date(r.get("stck_bsop_date", "")),
+        "close": _safe_int(r.get("stck_clpr")),
+        "foreign_qty": _safe_int(r.get("frgn_ntby_qty")),
+        "foreign_registered_qty": _safe_int(r.get("frgn_reg_ntby_qty")),
+        "foreign_unregistered_qty": _safe_int(r.get("frgn_nreg_ntby_qty")),
+        "foreign_amount": _safe_int(r.get("frgn_ntby_tr_pbmn")),
+        "foreign_registered_amount": _safe_int(r.get("frgn_reg_ntby_pbmn")),
+        "foreign_unregistered_amount": _safe_int(r.get("frgn_nreg_ntby_pbmn")),
+        "institution_qty": _safe_int(r.get("orgn_ntby_qty")),
+        "pension_qty": _safe_int(r.get("fund_ntby_qty")),
+        "private_equity_qty": _safe_int(r.get("pe_fund_ntby_vol")),
+        "investment_trust_qty": _safe_int(r.get("ivtr_ntby_qty")),
+        "securities_qty": _safe_int(r.get("scrt_ntby_qty")),
+        "bank_insurance_qty": bank_qty + insu_qty,
+        "institution_amount": _safe_int(r.get("orgn_ntby_tr_pbmn")),
+        "pension_amount": _safe_int(r.get("fund_ntby_tr_pbmn")),
+        "private_equity_amount": _safe_int(r.get("pe_fund_ntby_tr_pbmn")),
+        "investment_trust_amount": _safe_int(r.get("ivtr_ntby_tr_pbmn")),
+        "securities_amount": _safe_int(r.get("scrt_ntby_tr_pbmn")),
+        "bank_insurance_amount": bank_amt + insu_amt,
+        "retail_qty": _safe_int(r.get("prsn_ntby_qty")),
+        "retail_amount": _safe_int(r.get("prsn_ntby_tr_pbmn")),
+        "other_corp_qty": _safe_int(r.get("etc_corp_ntby_vol")),
+        "other_corp_amount": _safe_int(r.get("etc_corp_ntby_tr_pbmn")),
+    }
+
+
+def _parse_program_row(r: dict) -> dict:
+    return {
+        "date": _format_date(r.get("stck_bsop_date", "")),
+        "close": _safe_int(r.get("stck_clpr")),
+        "net_qty": _safe_int(r.get("whol_smtn_ntby_qty")),
+        "net_amount": _safe_int(r.get("whol_smtn_ntby_tr_pbmn")),
+    }
+
+
+def _parse_short_row(r: dict) -> dict:
+    return {
+        "date": _format_date(r.get("stck_bsop_date", "")),
+        "close": _safe_int(r.get("stck_clpr")),
+        "short_qty": _safe_int(r.get("ssts_cntg_qty")),
+        "short_volume_ratio": _safe_float(r.get("ssts_vol_rlim")),
+        "short_amount": _safe_int(r.get("ssts_tr_pbmn")),
+        "short_amount_ratio": _safe_float(r.get("ssts_tr_pbmn_rlim")),
+    }
+
+
+def fetch_investor_trend_range(
+    code6: str, start_date: str, end_date: str,
+    *, progress_cb=None,
+) -> list[dict]:
+    """``start_date`` ~ ``end_date`` 사이 전체 일별 시계열을 sliding-window로 수집.
+
+    한 호출당 30 거래일, end_date를 응답의 가장 오래된 날짜 - 1일로 슬라이드.
+    KIS 보유 한계는 실측상 5년+ 정상. 결과는 date 오름차순 정렬.
+
+    ``progress_cb(rows_so_far)`` 콜백을 통해 진행률 출력 가능.
+    """
+    return _range_paginate(
+        code6, start_date, end_date,
+        url_path=_URL_INVESTOR, tr_id=_TR_INVESTOR,
+        extra_params={"FID_ORG_ADJ_PRC": "", "FID_ETC_CLS_CODE": ""},
+        output_key="output2", parser=_parse_investor_row,
+        progress_cb=progress_cb,
+    )
+
+
+def fetch_program_trading_range(
+    code6: str, start_date: str, end_date: str,
+    *, progress_cb=None,
+) -> list[dict]:
+    return _range_paginate(
+        code6, start_date, end_date,
+        url_path=_URL_PROGRAM, tr_id=_TR_PROGRAM,
+        extra_params={},
+        output_key="output", parser=_parse_program_row,
+        progress_cb=progress_cb,
+    )
+
+
+def _range_paginate(
+    code6: str, start_date: str, end_date: str,
+    *, url_path: str, tr_id: str, extra_params: dict,
+    output_key: str, parser, progress_cb=None,
+) -> list[dict]:
+    """investor/program 공통 — end_date 단일 파라미터 백워드 슬라이딩."""
+    start_d = datetime.strptime(_strip_dashes(start_date), "%Y%m%d").date()
+    end_d = datetime.strptime(_strip_dashes(end_date), "%Y%m%d").date()
+    rows: list[dict] = []
+    seen_dates: set[str] = set()
+    cursor = end_d
+    safety_iter = 0
+    max_iter = 200  # 5년 * 250거래일 / 30 ≈ 42 호출, 200으로 안전 마진
+
+    while cursor >= start_d and safety_iter < max_iter:
+        safety_iter += 1
+        cursor_str = cursor.strftime("%Y%m%d")
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": code6,
+            "FID_INPUT_DATE_1": cursor_str,
+            **extra_params,
+        }
+        body = _call_with_backoff(url_path, tr_id, params)
+        time.sleep(_RANGE_CALL_SLEEP_SEC)
+        page = body.get(output_key) or []
+        if not page:
+            break
+
+        added = 0
+        oldest_in_page = None
+        for r in page:
+            parsed = parser(r)
+            d = parsed["date"]
+            if not d:
+                continue
+            if d in seen_dates:
+                continue
+            if d < start_date or d > end_date:
+                continue
+            rows.append(parsed)
+            seen_dates.add(d)
+            added += 1
+            if oldest_in_page is None or d < oldest_in_page:
+                oldest_in_page = d
+
+        if progress_cb:
+            progress_cb(len(rows))
+
+        if oldest_in_page is None or added == 0:
+            break
+        # 다음 cursor: 응답에서 본 가장 오래된 날짜 - 1일
+        oldest_date = datetime.strptime(oldest_in_page, "%Y-%m-%d").date()
+        new_cursor = oldest_date - timedelta(days=1)
+        if new_cursor >= cursor:  # forward 진행 멈춤 — 안전 종료
+            break
+        cursor = new_cursor
+
+    rows.sort(key=lambda r: r["date"])
+    return rows
+
+
+def fetch_short_interest_range(
+    code6: str, start_date: str, end_date: str,
+    *, progress_cb=None,
+) -> list[dict]:
+    """short endpoint는 start/end 둘 다 받고 한 호출당 최대 100행. 100일
+    윈도우로 백워드 슬라이딩.
+    """
+    start_d = datetime.strptime(_strip_dashes(start_date), "%Y%m%d").date()
+    end_d = datetime.strptime(_strip_dashes(end_date), "%Y%m%d").date()
+    rows: list[dict] = []
+    seen_dates: set[str] = set()
+    cursor_end = end_d
+    safety_iter = 0
+    max_iter = 50  # 5년 * 250 / 100 = 12.5 → 50 안전 마진
+
+    while cursor_end >= start_d and safety_iter < max_iter:
+        safety_iter += 1
+        cursor_start = max(start_d, cursor_end - timedelta(days=_SHORT_PAGE_DAYS - 1))
+        body = _call_with_backoff(_URL_SHORT, _TR_SHORT, {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": code6,
+            "FID_INPUT_DATE_1": cursor_start.strftime("%Y%m%d"),
+            "FID_INPUT_DATE_2": cursor_end.strftime("%Y%m%d"),
+        })
+        time.sleep(_RANGE_CALL_SLEEP_SEC)
+        page = body.get("output2") or []
+        if not page:
+            break
+
+        added = 0
+        oldest_in_page = None
+        for r in page:
+            parsed = _parse_short_row(r)
+            d = parsed["date"]
+            if not d or d in seen_dates:
+                continue
+            if d < start_date or d > end_date:
+                continue
+            rows.append(parsed)
+            seen_dates.add(d)
+            added += 1
+            if oldest_in_page is None or d < oldest_in_page:
+                oldest_in_page = d
+
+        if progress_cb:
+            progress_cb(len(rows))
+
+        if oldest_in_page is None or added == 0:
+            break
+        oldest_date = datetime.strptime(oldest_in_page, "%Y-%m-%d").date()
+        new_end = oldest_date - timedelta(days=1)
+        if new_end >= cursor_end:
+            break
+        cursor_end = new_end
+
+    rows.sort(key=lambda r: r["date"])
+    return rows
+
+
 # === parsers ===
 
 def _safe_int(x) -> int:
