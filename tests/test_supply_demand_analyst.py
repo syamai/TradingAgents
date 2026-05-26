@@ -94,19 +94,31 @@ class TestSafeWrapper:
 
 # === block formatters ===
 
+def _investor_row(date, close, fq, iq, rq, fa, ia, ra, **kwargs):
+    """Build a fetcher-shaped row with all 9-subject keys (defaults to 0)."""
+    base = {
+        "date": date, "close": close,
+        "foreign_qty": fq, "foreign_registered_qty": 0, "foreign_unregistered_qty": 0,
+        "foreign_amount": fa, "foreign_registered_amount": 0, "foreign_unregistered_amount": 0,
+        "institution_qty": iq, "pension_qty": 0, "private_equity_qty": 0,
+        "investment_trust_qty": 0, "securities_qty": 0, "bank_insurance_qty": 0,
+        "institution_amount": ia, "pension_amount": 0, "private_equity_amount": 0,
+        "investment_trust_amount": 0, "securities_amount": 0, "bank_insurance_amount": 0,
+        "retail_qty": rq, "retail_amount": ra,
+        "other_corp_qty": 0, "other_corp_amount": 0,
+    }
+    base.update(kwargs)
+    return base
+
+
 _INVESTOR_SAMPLE = [
-    {
-        "date": "2026-05-27", "close": 75300,
-        "foreign_qty": -123456, "institution_qty": 234567, "retail_qty": -111111,
-        "foreign_amount": -9302092800, "institution_amount": 17668994100,
-        "retail_amount": -8366901300,
-    },
-    {
-        "date": "2026-05-26", "close": 75100,
-        "foreign_qty": 100000, "institution_qty": -50000, "retail_qty": -50000,
-        "foreign_amount": 7510000000, "institution_amount": -3755000000,
-        "retail_amount": -3755000000,
-    },
+    _investor_row("2026-05-27", 75300,
+                  fq=-123456, iq=234567, rq=-111111,
+                  fa=-9302092800, ia=17668994100, ra=-8366901300,
+                  pension_amount=6024000000, private_equity_amount=4518000000),
+    _investor_row("2026-05-26", 75100,
+                  fq=100000, iq=-50000, rq=-50000,
+                  fa=7510000000, ia=-3755000000, ra=-3755000000),
 ]
 
 _PROGRAM_SAMPLE = [
@@ -129,9 +141,16 @@ class TestFormatInvestor:
         block = sda._format_investor(_INVESTOR_SAMPLE)
         assert "(2 rows" in block
         assert "2026-05-27" in block
-        assert "+234,567" in block  # institution_qty positive sign
-        assert "-123,456" in block  # foreign_qty negative
         assert "75,300" in block    # close
+        # 표 3개 분리됐는지 확인
+        assert "[표 1] 외국인" in block
+        assert "[표 2] 기관" in block
+        assert "[표 3] 개인" in block
+        # 외국인 amount sign
+        assert "-9,302,092,800" in block
+        # 기관 sub 등장
+        assert "pension" in block.lower() or "+6,024,000,000" in block
+        assert "private_equity" in block.lower() or "+4,518,000,000" in block
 
     def test_unavailable_string_passthrough(self):
         assert sda._format_investor("<unavailable: x>") == "<unavailable: x>"
@@ -141,11 +160,8 @@ class TestFormatInvestor:
         assert "<no investor-trend rows" in block
 
     def test_signed_zero_renders(self):
-        rows = [{
-            "date": "2026-05-27", "close": 100,
-            "foreign_qty": 0, "institution_qty": 0, "retail_qty": 0,
-            "foreign_amount": 0, "institution_amount": 0, "retail_amount": 0,
-        }]
+        rows = [_investor_row("2026-05-27", 100,
+                              fq=0, iq=0, rq=0, fa=0, ia=0, ra=0)]
         block = sda._format_investor(rows)
         assert "+0" in block  # signed format
 

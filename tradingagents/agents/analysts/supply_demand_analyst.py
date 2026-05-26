@@ -118,23 +118,49 @@ def _run_prefetch(state, llm):
 # ---------- block formatters ----------
 
 def _format_investor(rows) -> str:
-    """투자자 매매동향 list[dict] → text 블록. 실패 마커 문자열은 그대로 통과."""
+    """투자자 매매동향 list[dict] → 표 3개 (외국인 / 기관 sub / 개인+기타법인).
+
+    실패 마커 문자열은 그대로 통과. 수량은 종가와 함께 봐야 의미 있어 금액(KRW)
+    위주로 표시 — 사모/연기금 등 sub 주체 식별이 핵심 가치.
+    """
     if isinstance(rows, str):
         return rows
     if not rows:
         return "<no investor-trend rows returned — possibly holiday window or KIS mock environment>"
-    lines = [f"({len(rows)} rows, newest first)"]
-    lines.append(
-        "date | close | foreign_qty | inst_qty | retail_qty | "
-        "foreign_amount_KRW | inst_amount_KRW | retail_amount_KRW"
-    )
+
+    out = [f"({len(rows)} rows, newest first) — amounts in KRW, signed (+ buying / − selling)"]
+
+    out.append("\n[표 1] 외국인 (총합 / 등록 = 장기 / 비등록 = 단기 외국 자금)")
+    out.append("date | close | foreign_total | foreign_registered | foreign_unregistered")
     for r in rows:
-        lines.append(
+        out.append(
             f"{r['date']} | {r['close']:,} | "
-            f"{r['foreign_qty']:+,} | {r['institution_qty']:+,} | {r['retail_qty']:+,} | "
-            f"{r['foreign_amount']:+,} | {r['institution_amount']:+,} | {r['retail_amount']:+,}"
+            f"{r['foreign_amount']:+,} | "
+            f"{r['foreign_registered_amount']:+,} | "
+            f"{r['foreign_unregistered_amount']:+,}"
         )
-    return "\n".join(lines)
+
+    out.append("\n[표 2] 기관 sub-분류 (연기금 = 안정 매수, 사모 = 단기 알고리즘, 투신·증권·은행+보험 = 추세 추종)")
+    out.append("date | inst_total | pension | private_equity | investment_trust | securities | bank+insurance")
+    for r in rows:
+        out.append(
+            f"{r['date']} | "
+            f"{r['institution_amount']:+,} | "
+            f"{r['pension_amount']:+,} | "
+            f"{r['private_equity_amount']:+,} | "
+            f"{r['investment_trust_amount']:+,} | "
+            f"{r['securities_amount']:+,} | "
+            f"{r['bank_insurance_amount']:+,}"
+        )
+
+    out.append("\n[표 3] 개인 + 기타법인 (자사주 매입 가능성)")
+    out.append("date | retail | other_corp")
+    for r in rows:
+        out.append(
+            f"{r['date']} | {r['retail_amount']:+,} | {r['other_corp_amount']:+,}"
+        )
+
+    return "\n".join(out)
 
 
 def _format_program(rows) -> str:
@@ -186,7 +212,12 @@ Each block is a markdown-friendly table (one row per trading day). Rows are typi
 ## Data sources (pre-fetched, in this prompt)
 
 ### Block 1 — 종목별 일별 투자자 매매동향 (Daily investor flow)
-외국인(foreign) vs 기관(institution) vs 개인(retail) 순매수 추이. 외국인·기관의 누적 순매수 방향은 한국 시장 단기 가격 압력의 가장 강한 지표 중 하나.
+3개 sub-표로 분리:
+- **표 1 (외국인)**: 등록(장기 보유 외국인) vs 비등록(단기 외국 자금). 비등록이 강하게 매수하면 단기 투기, 등록이 매수하면 장기 신뢰.
+- **표 2 (기관 sub-분류)**: 연기금(pension, 가장 안정적·장기적), 사모펀드(private_equity, 단기 알고리즘적·변동성 주도), 투자신탁(investment_trust)·증권(securities)·은행+보험(bank+insurance)은 추세 추종 성향.
+- **표 3 (개인 + 기타법인)**: 기타법인(other_corp) 매수는 자사주 매입 가능성으로 강세 신호.
+
+기관 sub 정합/괴리가 단기 가격 압력의 핵심 — 예: 연기금 매수 + 사모 매도 = 장기·단기 시각차, 사모 + 외국인비등록 동시 매수 = 단기 모멘텀 강함.
 
 <start_of_investor_trend>
 {investor_block}
@@ -208,21 +239,25 @@ Each block is a markdown-friendly table (one row per trading day). Rows are typi
 
 ## How to analyze this data (best practices)
 
-1. **외국인 순매수 방향성** — 연속 매수/매도 일수, 일일 평균 규모. 한국 시장에서 외국인 7일 연속 매도는 자체로 약세 신호.
-2. **외국인 vs 기관 vs 개인 정합/괴리** — 셋이 같은 방향이면 강한 추세, 외국인·기관이 한 방향이고 개인이 반대면 retail이 추격당하는 패턴.
-3. **프로그램 매매가 수급을 견인하는지** — 종목 시가총액 대비 net_amount 크기로 판단. KOSPI200 편입 종목은 인덱스 자금 효과로 프로그램 매매 영향이 큼.
-4. **공매도 비중 추이** — 거래량 대비 공매도 비중 10% 이상 + 누적 잔고 증가 = 약세론 가시화. 비중 하락은 short covering 가능성.
-5. **데이터 한계 인정** — 한 블록이 ``<unavailable: ...>``이거나 ``<no ... rows>``이면 그 신호는 평가할 수 없음. 명시적으로 보고서에 언급.
-6. **다른 분석가와의 결합 신호로 프레이밍** — 수급은 단기 가격 압력의 한 입력일 뿐, 가격 예측이 아니다. 펀더멘털·기술적 신호와 결합되어야 함.
+1. **외국인 등록 vs 비등록** — 등록자 매수는 장기 신뢰, 비등록 매수는 단기 외국 자금 유입. 둘이 같은 방향이면 강한 신호, 괴리면 단기/장기 시각차.
+2. **기관 sub-분류 패턴** — 연기금 매수 = 안정적 강세 신호 (가장 보수적·장기적 주체). 사모 매도 + 외국인비등록 매도 = 단기 차익 실현·약세. 사모 + 비등록 동시 매수 = 단기 모멘텀 강함. 투신·증권·은행+보험은 추세 추종이라 방향성 확인 보조.
+3. **기타법인 매수** — 자사주 매입 또는 대주주·계열사 매수일 가능성, 강세 신호.
+4. **3대 주체 정합/괴리** — 외국인+기관 동방향 + 개인 반대 = retail이 추격당하는 패턴, 추세 강함. 외국인+개인 동방향 + 기관 반대 = 기관이 차익 실현 중.
+5. **프로그램 매매가 수급을 견인하는지** — 종목 시가총액 대비 net_amount 크기로 판단. KOSPI200 편입 종목은 인덱스 자금 효과로 프로그램 매매 영향이 큼.
+6. **공매도 비중 추이** — 거래량 대비 공매도 비중 10% 이상 + 누적 잔고 증가 = 약세론 가시화. 비중 하락은 short covering 가능성.
+7. **데이터 한계 인정** — 한 블록이 ``<unavailable: ...>``이거나 ``<no ... rows>``이면 그 신호는 평가할 수 없음. 명시적으로 보고서에 언급.
+8. **다른 분석가와의 결합 신호로 프레이밍** — 수급은 단기 가격 압력의 한 입력일 뿐, 가격 예측이 아니다. 펀더멘털·기술적 신호와 결합되어야 함.
 
 ## Output
 
 Produce a comprehensive supply/demand report covering, in order:
 
 1. **Overall direction** — Net Bullish / Net Bearish / Mixed / Neutral, with a brief confidence note based on data quality.
-2. **Foreign / institutional / retail flow analysis** — cumulative net-buying direction, daily magnitude, alignment vs divergence patterns, notable single-day moves.
-3. **Program-trading analysis** — overall direction and magnitude, relationship to foreign flow.
-4. **Short-selling trend analysis** — volume-ratio movement, cumulative-balance signal, short-squeeze or sell-pressure escalation potential.
-5. **Markdown summary table** — 4 sections (foreign / institutional / program / short) × direction · scale · signal strength (weak/medium/strong) · one-line evidence.
+2. **Foreign flow analysis** — registered vs unregistered split, long-term vs short-term foreign capital interpretation.
+3. **Institutional sub-breakdown** — pension / private equity / investment trust / securities / bank+insurance individual directions and what their combined pattern signals (e.g., pension buying while PE selling = long/short horizon divergence).
+4. **Retail and other-corp flow** — including any self-buyback signal from other_corp.
+5. **Program-trading analysis** — overall direction and magnitude, relationship to foreign flow.
+6. **Short-selling trend analysis** — volume-ratio movement, cumulative-balance signal, short-squeeze or sell-pressure escalation potential.
+7. **Markdown summary table** — at least 6 rows (foreign-total / pension / private-equity / other-institutions / program / short) × direction · scale · signal strength (weak/medium/strong) · one-line evidence.
 
 {get_language_instruction()}"""

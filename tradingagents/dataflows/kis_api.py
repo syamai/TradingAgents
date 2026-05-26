@@ -235,16 +235,41 @@ def fetch_investor_trend(code6: str, end_date: str, lookback_days: int = 7) -> l
         "FID_ETC_CLS_CODE": "",
     })
     rows = body.get("output2") or []
-    out = [{
-        "date": _format_date(r.get("stck_bsop_date", "")),
-        "close": _safe_int(r.get("stck_clpr")),
-        "foreign_qty": _safe_int(r.get("frgn_ntby_qty")),
-        "institution_qty": _safe_int(r.get("orgn_ntby_qty")),
-        "retail_qty": _safe_int(r.get("prsn_ntby_qty")),
-        "foreign_amount": _safe_int(r.get("frgn_ntby_tr_pbmn")),
-        "institution_amount": _safe_int(r.get("orgn_ntby_tr_pbmn")),
-        "retail_amount": _safe_int(r.get("prsn_ntby_tr_pbmn")),
-    } for r in rows]
+    out = []
+    for r in rows:
+        bank_qty = _safe_int(r.get("bank_ntby_qty"))
+        insu_qty = _safe_int(r.get("insu_ntby_qty"))
+        bank_amt = _safe_int(r.get("bank_ntby_tr_pbmn"))
+        insu_amt = _safe_int(r.get("insu_ntby_tr_pbmn"))
+        out.append({
+            "date": _format_date(r.get("stck_bsop_date", "")),
+            "close": _safe_int(r.get("stck_clpr")),
+            # 외국인 — 통합 + 등록(장기) / 비등록(단기 외국 자금) 분리
+            "foreign_qty": _safe_int(r.get("frgn_ntby_qty")),
+            "foreign_registered_qty": _safe_int(r.get("frgn_reg_ntby_qty")),
+            "foreign_unregistered_qty": _safe_int(r.get("frgn_nreg_ntby_qty")),
+            "foreign_amount": _safe_int(r.get("frgn_ntby_tr_pbmn")),
+            "foreign_registered_amount": _safe_int(r.get("frgn_reg_ntby_pbmn")),
+            "foreign_unregistered_amount": _safe_int(r.get("frgn_nreg_ntby_pbmn")),
+            # 기관 — 통합 + 5개 sub. 종금/기타는 신호 약해 생략.
+            "institution_qty": _safe_int(r.get("orgn_ntby_qty")),
+            "pension_qty": _safe_int(r.get("fund_ntby_qty")),               # 연기금
+            "private_equity_qty": _safe_int(r.get("pe_fund_ntby_vol")),     # 사모펀드
+            "investment_trust_qty": _safe_int(r.get("ivtr_ntby_qty")),      # 투자신탁
+            "securities_qty": _safe_int(r.get("scrt_ntby_qty")),            # 증권
+            "bank_insurance_qty": bank_qty + insu_qty,                       # 은행 + 보험 (보수적 운용)
+            "institution_amount": _safe_int(r.get("orgn_ntby_tr_pbmn")),
+            "pension_amount": _safe_int(r.get("fund_ntby_tr_pbmn")),
+            "private_equity_amount": _safe_int(r.get("pe_fund_ntby_tr_pbmn")),
+            "investment_trust_amount": _safe_int(r.get("ivtr_ntby_tr_pbmn")),
+            "securities_amount": _safe_int(r.get("scrt_ntby_tr_pbmn")),
+            "bank_insurance_amount": bank_amt + insu_amt,
+            # 개인 + 기타법인 (자사주 매입 가능성)
+            "retail_qty": _safe_int(r.get("prsn_ntby_qty")),
+            "retail_amount": _safe_int(r.get("prsn_ntby_tr_pbmn")),
+            "other_corp_qty": _safe_int(r.get("etc_corp_ntby_vol")),
+            "other_corp_amount": _safe_int(r.get("etc_corp_ntby_tr_pbmn")),
+        })
     trimmed = out[:lookback_days]
     if not skip:
         _save_cache(cache_p, trimmed)

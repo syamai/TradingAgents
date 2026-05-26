@@ -253,17 +253,43 @@ class TestCall:
 _INVESTOR_OUTPUT2_SAMPLE = [
     {
         "stck_bsop_date": "20260527", "stck_clpr": "75300",
-        "frgn_ntby_qty": "-123456", "orgn_ntby_qty": "234567", "prsn_ntby_qty": "-111111",
-        "frgn_ntby_tr_pbmn": "-9302092800", "orgn_ntby_tr_pbmn": "17668994100",
-        "prsn_ntby_tr_pbmn": "-8366901300",
+        # foreign
+        "frgn_ntby_qty": "-123456", "frgn_reg_ntby_qty": "-100000", "frgn_nreg_ntby_qty": "-23456",
+        "frgn_ntby_tr_pbmn": "-9302092800",
+        "frgn_reg_ntby_pbmn": "-7530000000", "frgn_nreg_ntby_pbmn": "-1772092800",
+        # institution and 5 subs
+        "orgn_ntby_qty": "234567",
+        "fund_ntby_qty": "80000",      # pension
+        "pe_fund_ntby_vol": "60000",   # PE
+        "ivtr_ntby_qty": "40000",      # invest. trust
+        "scrt_ntby_qty": "30000",      # securities
+        "bank_ntby_qty": "15000", "insu_ntby_qty": "9567",  # bank+ins combined
+        "orgn_ntby_tr_pbmn": "17668994100",
+        "fund_ntby_tr_pbmn": "6024000000",
+        "pe_fund_ntby_tr_pbmn": "4518000000",
+        "ivtr_ntby_tr_pbmn": "3012000000",
+        "scrt_ntby_tr_pbmn": "2259000000",
+        "bank_ntby_tr_pbmn": "1129500000", "insu_ntby_tr_pbmn": "720494100",
+        # retail + other corp
+        "prsn_ntby_qty": "-111111", "prsn_ntby_tr_pbmn": "-8366901300",
+        "etc_corp_ntby_vol": "5000", "etc_corp_ntby_tr_pbmn": "376500000",
     },
     {
         "stck_bsop_date": "20260526", "stck_clpr": "75100",
-        "frgn_ntby_qty": "100000", "orgn_ntby_qty": "-50000", "prsn_ntby_qty": "-50000",
-        "frgn_ntby_tr_pbmn": "7510000000", "orgn_ntby_tr_pbmn": "-3755000000",
-        "prsn_ntby_tr_pbmn": "-3755000000",
+        "frgn_ntby_qty": "100000", "frgn_reg_ntby_qty": "70000", "frgn_nreg_ntby_qty": "30000",
+        "frgn_ntby_tr_pbmn": "7510000000",
+        "frgn_reg_ntby_pbmn": "5257000000", "frgn_nreg_ntby_pbmn": "2253000000",
+        "orgn_ntby_qty": "-50000",
+        "fund_ntby_qty": "-10000", "pe_fund_ntby_vol": "-20000",
+        "ivtr_ntby_qty": "-8000", "scrt_ntby_qty": "-7000",
+        "bank_ntby_qty": "-3000", "insu_ntby_qty": "-2000",
+        "orgn_ntby_tr_pbmn": "-3755000000",
+        "fund_ntby_tr_pbmn": "-751000000", "pe_fund_ntby_tr_pbmn": "-1502000000",
+        "ivtr_ntby_tr_pbmn": "-600800000", "scrt_ntby_tr_pbmn": "-525700000",
+        "bank_ntby_tr_pbmn": "-225300000", "insu_ntby_tr_pbmn": "-150200000",
+        "prsn_ntby_qty": "-50000", "prsn_ntby_tr_pbmn": "-3755000000",
+        "etc_corp_ntby_vol": "0", "etc_corp_ntby_tr_pbmn": "0",
     },
-    # ... 30 days total typically — for test, 2 rows enough
 ]
 
 
@@ -277,12 +303,27 @@ class TestFetchInvestorTrend:
             get.return_value = _mock_response(200, body)
             rows = kis_api.fetch_investor_trend("005930", "2026-05-27", lookback_days=7)
             assert len(rows) == 2
-            assert rows[0] == {
-                "date": "2026-05-27", "close": 75300,
-                "foreign_qty": -123456, "institution_qty": 234567, "retail_qty": -111111,
-                "foreign_amount": -9302092800, "institution_amount": 17668994100,
-                "retail_amount": -8366901300,
-            }
+            r0 = rows[0]
+            assert r0["date"] == "2026-05-27"
+            assert r0["close"] == 75300
+            # foreign — registered + unregistered = total
+            assert r0["foreign_qty"] == -123456
+            assert r0["foreign_registered_qty"] == -100000
+            assert r0["foreign_unregistered_qty"] == -23456
+            # institution + 5 subs
+            assert r0["institution_qty"] == 234567
+            assert r0["pension_qty"] == 80000
+            assert r0["private_equity_qty"] == 60000
+            assert r0["investment_trust_qty"] == 40000
+            assert r0["securities_qty"] == 30000
+            assert r0["bank_insurance_qty"] == 15000 + 9567  # combined
+            # retail + other corp
+            assert r0["retail_qty"] == -111111
+            assert r0["other_corp_qty"] == 5000
+            # amounts (sample row 0)
+            assert r0["foreign_amount"] == -9302092800
+            assert r0["pension_amount"] == 6024000000
+            assert r0["bank_insurance_amount"] == 1129500000 + 720494100
 
     def test_lookback_3_truncates(self, isolated_cache, kis_env, monkeypatch):
         monkeypatch.setattr(kis_api, "_is_market_open", lambda *a: True)
