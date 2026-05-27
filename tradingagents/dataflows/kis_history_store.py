@@ -33,6 +33,8 @@ from typing import Iterable, Literal, Optional, Sequence
 
 import pandas as pd
 
+from tradingagents.dataflows.korean_utils import to_naver_code
+
 logger = logging.getLogger(__name__)
 
 Endpoint = Literal["investor", "program", "short"]
@@ -40,6 +42,15 @@ Backend = Literal["parquet", "sqlite"]
 
 _VALID_ENDPOINTS: tuple[Endpoint, ...] = ("investor", "program", "short")
 _VALID_BACKENDS: tuple[Backend, ...] = ("parquet", "sqlite")
+
+
+def _norm_ticker(ticker: str) -> str:
+    """저장 키를 6자리 KIS 코드로 정규화.
+
+    ``005930.KS`` / ``005930.KQ`` / ``005930`` 셋 다 ``005930`` 로 매핑된다.
+    KIS store는 한국 종목 전용이라 비한국 ticker는 ``to_naver_code`` 가 ValueError 발생.
+    """
+    return to_naver_code(ticker)
 
 
 def _default_history_dir() -> Path:
@@ -74,6 +85,7 @@ class KisHistoryStore:
     # === Paths ===
 
     def _parquet_path(self, ticker: str, endpoint: Endpoint) -> Path:
+        # 내부 헬퍼는 호출자가 _norm_ticker 통과한 값만 넘긴다고 가정 (public method 진입점에서 정규화).
         return self.root / "parquet" / ticker / f"{endpoint}.parquet"
 
     def _sqlite_path(self) -> Path:
@@ -120,10 +132,13 @@ class KisHistoryStore:
     def write(self, ticker: str, endpoint: Endpoint, rows: Iterable[dict]) -> int:
         """``rows`` 를 두 백엔드에 저장. 기존 데이터와 merge, date 기준 중복 제거.
 
+        ``ticker`` 는 ``005930.KS`` / ``005930.KQ`` / ``005930`` 셋 다 받아 6자리로 정규화.
+
         Returns: write 된 행 수 (merge 후 ticker 전체 행 수).
         """
         if endpoint not in _VALID_ENDPOINTS:
             raise ValueError(f"unknown endpoint: {endpoint}")
+        ticker = _norm_ticker(ticker)
         rows = list(rows)
         if not rows:
             return 0
@@ -159,10 +174,11 @@ class KisHistoryStore:
         """date 오름차순 정렬된 DataFrame 반환. 데이터 없으면 빈 DataFrame.
 
         ``backend`` 로 어느 백엔드에서 읽을지 선택. 기본 parquet (pandas
-        친화적·압축률).
+        친화적·압축률). ``ticker`` 는 ``write`` 와 동일 규칙으로 정규화.
         """
         if endpoint not in _VALID_ENDPOINTS:
             raise ValueError(f"unknown endpoint: {endpoint}")
+        ticker = _norm_ticker(ticker)
         if backend == "parquet":
             df = self._read_parquet_if_exists(ticker, endpoint)
             if df is None:
@@ -181,17 +197,26 @@ class KisHistoryStore:
     def last_date(self, ticker: str, endpoint: Endpoint) -> Optional[str]:
         """가장 최근 데이터 날짜 (YYYY-MM-DD) — 증분 업데이트 진입점.
 
-        없으면 None.
+        없으면 None. ``ticker`` 는 ``write`` 와 동일 규칙으로 정규화.
         """
-        meta = self._read_meta(ticker)
+        meta = self._read_meta(_norm_ticker(ticker))
         return (meta.get(endpoint) or {}).get("last_date")
 
     def list_tickers(self) -> list[str]:
-        """저장된 종목 리스트 (parquet 기반)."""
+        """저장된 종목 리스트 (parquet 기반). 모든 키는 6자리 정규형으로 반환."""
         parquet_root = self.root / "parquet"
         if not parquet_root.exists():
             return []
-        return sorted(p.name for p in parquet_root.iterdir() if p.is_dir())
+        keys: set[str] = set()
+        for p in parquet_root.iterdir():
+            if not p.is_dir():
+                continue
+            try:
+                keys.add(_norm_ticker(p.name))
+            except ValueError:
+                # 정규형이 아닌 잔재 디렉토리는 무시 (마이그레이션 대상).
+                continue
+        return sorted(keys)
 
     # === backend implementations ===
 
