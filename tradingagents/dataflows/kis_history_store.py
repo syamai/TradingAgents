@@ -380,3 +380,105 @@ class KisHistoryStore:
             "ticker": row[0], "company_name": row[1],
             "market": row[2], "updated_at": row[3],
         }
+
+    # === Analysis reports (raw·derived 외 분석 산출물) ===
+
+    def _ensure_analysis_reports_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS analysis_reports (
+                ticker TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                as_of_date TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                generated_at TEXT NOT NULL,
+                PRIMARY KEY (ticker, kind, as_of_date)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_analysis_reports_kind "
+            "ON analysis_reports(kind, generated_at)"
+        )
+
+    def write_analysis_report(
+        self, ticker: str, kind: str, as_of_date: str, payload: dict,
+    ) -> None:
+        """분석 산출물 upsert. ``payload`` 는 JSON 직렬화 가능한 dict.
+
+        ``kind`` 예시: ``"correlation"``. ``as_of_date`` 는 보통 분석 기간 끝
+        (YYYY-MM-DD) — 같은 종목·종류·종료일이면 덮어쓰기.
+        """
+        if "sqlite" not in self.backends:
+            return
+        from datetime import datetime
+        norm = _norm_ticker(ticker)
+        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        payload_json = json.dumps(payload, ensure_ascii=False, default=str)
+        with self._sqlite_conn() as conn:
+            self._ensure_analysis_reports_table(conn)
+            conn.execute(
+                "INSERT INTO analysis_reports (ticker, kind, as_of_date, "
+                "  payload, generated_at) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(ticker, kind, as_of_date) DO UPDATE SET "
+                "  payload=excluded.payload, "
+                "  generated_at=excluded.generated_at",
+                (norm, kind, as_of_date, payload_json, now),
+            )
+
+    def read_analysis_report(
+        self, ticker: str, kind: str, as_of_date: Optional[str] = None,
+    ) -> Optional[dict]:
+        """단일 보고서 조회. ``as_of_date`` 미지정 시 가장 최근."""
+        if "sqlite" not in self.backends:
+            return None
+        norm = _norm_ticker(ticker)
+        if not self._sqlite_path().exists():
+            return None
+        with self._sqlite_conn() as conn:
+            try:
+                self._ensure_analysis_reports_table(conn)
+                if as_of_date is None:
+                    row = conn.execute(
+                        "SELECT ticker, kind, as_of_date, payload, generated_at "
+                        "FROM analysis_reports WHERE ticker = ? AND kind = ? "
+                        "ORDER BY as_of_date DESC LIMIT 1",
+                        (norm, kind),
+                    ).fetchone()
+                else:
+                    row = conn.execute(
+                        "SELECT ticker, kind, as_of_date, payload, generated_at "
+                        "FROM analysis_reports WHERE ticker = ? AND kind = ? "
+                        "AND as_of_date = ?",
+                        (norm, kind, as_of_date),
+                    ).fetchone()
+            except sqlite3.OperationalError:
+                return None
+        if row is None:
+            return None
+        return {
+            "ticker": row[0], "kind": row[1], "as_of_date": row[2],
+            "payload": json.loads(row[3]),
+            "generated_at": row[4],
+        }
+
+    def list_analysis_reports(self, kind: Optional[str] = None) -> list[dict]:
+        """저장된 보고서 목록 (ticker, kind, as_of_date, generated_at만)."""
+        if "sqlite" not in self.backends or not self._sqlite_path().exists():
+            return []
+        sql = ("SELECT ticker, kind, as_of_date, generated_at FROM "
+               "analysis_reports")
+        params: tuple = ()
+        if kind is not None:
+            sql += " WHERE kind = ?"
+            params = (kind,)
+        sql += " ORDER BY generated_at DESC"
+        with self._sqlite_conn() as conn:
+            try:
+                self._ensure_analysis_reports_table(conn)
+                rows = conn.execute(sql, params).fetchall()
+            except sqlite3.OperationalError:
+                return []
+        return [
+            {"ticker": r[0], "kind": r[1], "as_of_date": r[2],
+             "generated_at": r[3]}
+            for r in rows
+        ]
