@@ -32,13 +32,15 @@ dependencies = [
     "vaderSentiment>=3.3.2",
     "yfinance>=0.2.63",
     "pyarrow>=24.0.0",
+    "plotly>=5.24",
+    "streamlit>=1.40",
 ]
 
 [project.scripts]
 tradingagents = "cli.main:app"
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*"]
+include = ["tradingagents*", "cli*", "dashboard*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]
@@ -58,4 +60,6 @@ filterwarnings = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "ipykernel>=6.30",
+    "nbformat>=5.10",
 ]
