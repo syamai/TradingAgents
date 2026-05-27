@@ -234,6 +234,9 @@ def compute_correlation_report(
 
 def render_markdown(report: dict) -> str:
     """correlation report dict → 마크다운 문자열."""
+    # 자연어 해석은 dashboard.interpretation에서 — 순환 import 회피 위해 지연 로드.
+    from dashboard import interpretation as itp  # noqa: PLC0415
+
     lines: list[str] = []
     name = report.get("company_name") or "(no name)"
     ticker = report["ticker"]
@@ -271,6 +274,8 @@ def render_markdown(report: dict) -> str:
         sign = "🟢" if r["cum_qty"] > 0 else "🔴" if r["cum_qty"] < 0 else "⚪"
         lines.append(f"| {sign} {r['label']}{note} | {r['cum_qty']:+,} | {pct_s} |")
     lines.append("")
+    lines.append(f"> **해석**: {itp.interpret_cumulative(report)}")
+    lines.append("")
 
     # [2] 동시 상관
     lines.append("## 2. 동시 상관 — `price_change_pct(t) ↔ net_qty(t)`")
@@ -283,6 +288,8 @@ def render_markdown(report: dict) -> str:
         sig = r["significance"]
         lines.append(f"| {r['label']} | {r['r']:+.4f} | {p_s} | "
                      f"{r['interpretation']} {sig} |")
+    lines.append("")
+    lines.append(f"> **해석**: {itp.interpret_concurrent(report)}")
     lines.append("")
 
     # [3] 상승/하락
@@ -302,6 +309,8 @@ def render_markdown(report: dict) -> str:
         lines.append(f"| {r['label']} | {r['up_mean']:+,.0f} | {r['down_mean']:+,.0f} | "
                      f"{r['diff']:+,.0f} | {pat_label[r['pattern']]} |")
     lines.append("")
+    lines.append(f"> **해석**: {itp.interpret_up_down(report)}")
+    lines.append("")
 
     # [4] Lag
     lines.append("## 4. Lag 분석 (CCF) — 수급이 가격을 선도? 후행?")
@@ -314,6 +323,8 @@ def render_markdown(report: dict) -> str:
         lines.append(f"| {r['label']} | " + " | ".join(cells) + " |")
     lines.append("")
     lines.append("- `t=0` 동시. `t+k` 수급이 k일 *선도*. `t-k` 수급이 k일 *후행*(chasing).")
+    lines.append("")
+    lines.append(f"> **해석**: {itp.interpret_lag(report)}")
     lines.append("")
 
     # [5] Regime
@@ -330,6 +341,8 @@ def render_markdown(report: dict) -> str:
                 cells.append("n/a" if v is None else f"{v:+.3f}")
             lines.append(f"| {r['label']} | " + " | ".join(cells) + " |")
         lines.append("")
+        lines.append(f"> **해석**: {itp.interpret_regime(report)}")
+        lines.append("")
 
     # [6] Level
     lines.append("## 6. 누적 수준 상관 — `r(cum_qty, close)` *(트렌드 영향 큼 — 참고)*")
@@ -338,6 +351,8 @@ def render_markdown(report: dict) -> str:
     lines.append("|---|---:|")
     for r in report["level"]:
         lines.append(f"| {r['label']} | {r['r']:+.3f} |")
+    lines.append("")
+    lines.append(f"> **해석**: {itp.interpret_level(report)}")
     lines.append("")
 
     lines.append("---")

@@ -21,6 +21,7 @@ import pandas as pd
 import streamlit as st
 
 import tradingagents  # noqa: F401 — dotenv
+import dashboard.interpretation as itp
 from dashboard.advanced_analysis import compute_advanced_report
 from dashboard.correlation_analysis import compute_correlation_report
 from dashboard.holdings_chart import (
@@ -304,6 +305,7 @@ def _render_correlation_section(
                     "비중%": st.column_config.NumberColumn(format="%.2f"),
                 },
             )
+            st.info(itp.interpret_cumulative(report))
 
         # [2] 동시 상관 — r 4자리, p 과학표기
         with c2:
@@ -324,6 +326,7 @@ def _render_correlation_section(
                     "r": st.column_config.NumberColumn(format="%.4f"),
                 },
             )
+            st.info(itp.interpret_concurrent(report))
 
         # [3] 상승/하락일 — 정수, 천 단위 콤마
         meta = report["up_down_meta"]
@@ -348,6 +351,7 @@ def _render_correlation_section(
                 "차이": st.column_config.NumberColumn(format="%,.0f"),
             },
         )
+        st.info(itp.interpret_up_down(report))
 
         # [4] Lag — r 3자리
         st.markdown("**4. Lag (CCF) — 수급이 가격을 선도? 후행?**")
@@ -367,6 +371,7 @@ def _render_correlation_section(
             st.caption(
                 "`t=0` 동시 · `t+k` 수급이 k일 *선도* · `t-k` 수급이 k일 *후행*."
             )
+            st.info(itp.interpret_lag(report))
 
         # [5] Regime — r 3자리, None 은 자동 빈칸
         st.markdown("**5. Regime — 기간별 동시 상관**")
@@ -385,6 +390,7 @@ def _render_correlation_section(
                     for k in win_keys
                 },
             )
+            st.info(itp.interpret_regime(report))
 
         # [6] Level — r 3자리
         st.markdown("**6. 누적 수준 상관 — `r(cum_qty, close)`** *(트렌드 영향 큼 — 참고용)*")
@@ -398,6 +404,7 @@ def _render_correlation_section(
                 "r": st.column_config.NumberColumn(format="%+.3f"),
             },
         )
+        st.info(itp.interpret_level(report))
 
 
 # === 정교한 분석 패널 (동적) -------------------------------------------------
@@ -447,6 +454,7 @@ def _render_advanced_section(
         )
         st.caption("종가·cum_qty 같은 누적 시계열이 비정상으로 나오는 게 보통 — "
                    "level r 은 spurious 위험. Cointegration 결과로 보강.")
+        st.info(itp.interpret_adf(adv))
 
         # 7-2. Granger
         st.markdown("**7-2. Granger Causality**")
@@ -475,6 +483,7 @@ def _render_advanced_section(
             )
         st.caption("값은 p-value. p<0.05 면 Granger 인과 — 셀 옆 ✓ 의미는 "
                    "데이터프레임 값이 0.05 미만인 셀.")
+        st.info(itp.interpret_granger(adv))
 
         # 7-3. VAR + IRF
         st.markdown("**7-3. VAR + 누적 충격반응 (IRF)**")
@@ -507,6 +516,7 @@ def _render_advanced_section(
                         for c in irf_df.columns if c.startswith("t=")
                     },
                 )
+                st.info(itp.interpret_var_irf(adv))
 
         # 7-4. Cointegration
         st.markdown("**7-4. Cointegration — `cum_qty ↔ close`**")
@@ -525,6 +535,7 @@ def _render_advanced_section(
         )
         st.caption("✓면 두 시계열이 장기적으로 함께 움직임 → level r 신뢰. "
                    "✗면 추세 동조성으로 spurious 가능.")
+        st.info(itp.interpret_cointegration(adv))
 
         # 7-5. MI
         st.markdown("**7-5. Mutual Information — 비선형 의존성**")
@@ -539,6 +550,7 @@ def _render_advanced_section(
             },
         )
         st.caption("Pearson r 이 작은데 MI 가 크면 비선형 의존성 신호.")
+        st.info(itp.interpret_mi(adv))
 
         # 7-6. Rolling
         rw = cfg["rolling_window"]
@@ -557,6 +569,7 @@ def _render_advanced_section(
             } | {"std": st.column_config.NumberColumn(format="%.3f")},
         )
         st.caption("std 가 크면 상관 강도가 시기마다 크게 변동(regime 변화 시사).")
+        st.info(itp.interpret_rolling(adv))
 
 
 def _granger_df(rows: list[dict], direction_key: str) -> pd.DataFrame:

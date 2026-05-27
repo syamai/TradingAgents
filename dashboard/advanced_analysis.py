@@ -305,6 +305,8 @@ def compute_advanced_report(df: pd.DataFrame) -> dict:
 
 def render_advanced_markdown(adv: dict) -> str:
     """advanced report dict → 마크다운 (CLI / 옵시디언 공용)."""
+    from dashboard import interpretation as itp  # noqa: PLC0415
+
     lines: list[str] = ["## 7. 정교한 분석 (Granger·VAR·MI 외)"]
     if not adv["adf"]:
         lines.append("")
@@ -332,6 +334,8 @@ def render_advanced_markdown(adv: dict) -> str:
     lines.append("")
     lines.append("*해석*: 종가·cum_qty 같은 누적 시계열이 비정상으로 나오는 게 보통. "
                  "level r 은 spurious 위험 — cointegration 결과로 보강.")
+    lines.append("")
+    lines.append(f"> **자동 해석**: {itp.interpret_adf(adv)}")
     lines.append("")
 
     # Granger
@@ -369,6 +373,8 @@ def render_advanced_markdown(adv: dict) -> str:
                 cells.append(f"p={x['p_value']:.3f} {mark}".strip())
         lines.append(f"| {r['label']} | " + " | ".join(cells) + " |")
     lines.append("")
+    lines.append(f"> **자동 해석**: {itp.interpret_granger(adv)}")
+    lines.append("")
 
     # VAR
     irf = adv["var_irf"] or {}
@@ -394,6 +400,8 @@ def render_advanced_markdown(adv: dict) -> str:
             v10 = vals[10] if len(vals) > 10 else vals[-1]
             lines.append(f"| {SUBJECT_LABELS[s]} | {v0:+.4f} | {v5:+.4f} | {v10:+.4f} |")
     lines.append("")
+    lines.append(f"> **자동 해석**: {itp.interpret_var_irf(adv)}")
+    lines.append("")
 
     # Cointegration
     lines.append("### 7-4. Cointegration — cum_qty ↔ close")
@@ -409,6 +417,8 @@ def render_advanced_markdown(adv: dict) -> str:
     lines.append("*공적분 ✓ 면 두 시계열이 장기적으로 함께 움직임 → level r 신뢰 가능. "
                  "✗ 면 추세 동조성으로 spurious 가능.*")
     lines.append("")
+    lines.append(f"> **자동 해석**: {itp.interpret_cointegration(adv)}")
+    lines.append("")
 
     # MI
     lines.append("### 7-5. Mutual Information — net_qty ↔ return (비선형 포함)")
@@ -419,6 +429,8 @@ def render_advanced_markdown(adv: dict) -> str:
         lines.append(f"| {r['label']} | {r['mi']:.4f} |")
     lines.append("")
     lines.append("*Pearson r 이 작은데 MI 가 크면 비선형 의존성 신호.*")
+    lines.append("")
+    lines.append(f"> **자동 해석**: {itp.interpret_mi(adv)}")
     lines.append("")
 
     # Rolling
@@ -435,6 +447,8 @@ def render_advanced_markdown(adv: dict) -> str:
                      f"{r['p90']:+.3f} | {r['max']:+.3f} |")
     lines.append("")
     lines.append("*std 가 크면 상관 강도가 시기마다 크게 변동(regime 변화).*")
+    lines.append("")
+    lines.append(f"> **자동 해석**: {itp.interpret_rolling(adv)}")
     lines.append("")
 
     lines.append("---")
