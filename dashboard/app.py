@@ -22,7 +22,7 @@ import streamlit as st
 
 import tradingagents  # noqa: F401 — dotenv
 from dashboard.holdings_chart import (
-    SUBJECTS_ORDER, SUBJECT_LABELS, load_holdings, make_figure,
+    PLOTLY_CONFIG, SUBJECTS_ORDER, SUBJECT_LABELS, load_holdings, make_figure,
 )
 from tradingagents.dataflows.kis_history_store import KisHistoryStore
 
@@ -91,7 +91,7 @@ def _render_panel(
     )
     fig = make_figure(df, title=None, visible_subjects=visible_subjects)
     # height 는 비교 모드에서 column 폭이 절반이라 살짝 줄임
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
 
 # --- 메인 --------------------------------------------------------------------
@@ -194,6 +194,13 @@ def main() -> None:
   카테고리(외국인 / 기관 / 개인 / 기타법인)별 범례 그룹 클릭으로 한 번에 토글.
 - **Row 3** — 10 sub 의 *비중* 100% 누적영역. 외국인은 통합이 아니라 등록 + 비등록으로 분해되어 합 = 100%.
 - 첫 거래일 근처는 누적이 작아 row 3 비중이 흔들리는 게 정상.
+
+**조작법**
+
+- **마우스 스크롤** — 호버 중인 패널 확대/축소
+- **드래그(박스)** — 선택 영역 확대
+- **더블클릭** — 줌 리셋
+- **우상단 modebar** — 줌인/아웃 버튼, 카메라(PNG), 팬/줌 모드 전환
             """.strip()
         )
 

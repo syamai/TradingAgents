@@ -279,11 +279,25 @@ def make_figure(
     return fig
 
 
+# --- Plotly 공용 config ------------------------------------------------------
+
+PLOTLY_CONFIG: dict = {
+    # 마우스 스크롤로 호버 중인 subplot 확대/축소.
+    # 박스 드래그 줌(디폴트), 더블클릭 리셋, modebar 줌버튼은 plotly 내장.
+    "scrollZoom": True,
+    "displaylogo": False,
+    "responsive": True,
+}
+
+
 # --- HTML 저장 ---------------------------------------------------------------
 
 def save_html(fig: go.Figure, path: str | Path) -> Path:
     """plotly figure → 단일 HTML. plotly.js 는 CDN 로딩으로 파일 크기 ↓."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.write_html(str(path), include_plotlyjs="cdn", full_html=True)
+    fig.write_html(
+        str(path), include_plotlyjs="cdn", full_html=True,
+        config=PLOTLY_CONFIG,
+    )
     return path
