@@ -267,14 +267,19 @@ def make_figure(
         )
 
     # === 축 설정 ===
-    fig.update_yaxes(title_text="종가 (원)", row=1, col=1, secondary_y=False)
+    # tickformat=",.0f" — 천 단위 콤마. 0d3s 같은 SI 약어 대신 명시적 풀 숫자.
+    fig.update_yaxes(title_text="종가 (원)", row=1, col=1, secondary_y=False,
+                     tickformat=",.0f")
     fig.update_yaxes(
         title_text="변동률 (%)", row=1, col=1, secondary_y=True,
         zeroline=True, zerolinecolor="#888", zerolinewidth=1,
+        tickformat=",.2f",
     )
     fig.update_yaxes(title_text="누적 보유량 (주)", row=2, col=1,
-                     zeroline=True, zerolinecolor="#888", zerolinewidth=1)
-    fig.update_yaxes(title_text="비중 (%)", row=3, col=1, range=[0, 100])
+                     zeroline=True, zerolinecolor="#888", zerolinewidth=1,
+                     tickformat=",.0f")
+    fig.update_yaxes(title_text="비중 (%)", row=3, col=1, range=[0, 100],
+                     tickformat=",.0f")
 
     # bottom range slider + 1Y/3Y/5Y/전체 버튼 — row 3 xaxis 에만
     fig.update_xaxes(

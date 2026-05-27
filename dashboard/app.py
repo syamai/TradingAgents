@@ -267,20 +267,26 @@ def _render_correlation_section(
 
         c1, c2 = st.columns(2)
 
-        # [1] 5년 누적
+        # [1] 5년 누적 — 정수, 천 단위 콤마
         with c1:
             st.markdown("**1. 누적 매수·매도 (cum_qty 최종)**")
             cum_df = pd.DataFrame([
                 {
                     "주체": ("ⓘ " if r["is_info_total"] else "") + r["label"],
                     "누적": r["cum_qty"],
-                    "비중%": "—" if r["is_info_total"] else round(r["pct"], 2),
+                    "비중%": None if r["is_info_total"] else r["pct"],
                 }
                 for r in report["cumulative"]
             ])
-            st.dataframe(cum_df, use_container_width=True, hide_index=True)
+            st.dataframe(
+                cum_df, use_container_width=True, hide_index=True,
+                column_config={
+                    "누적": st.column_config.NumberColumn(format="%,d"),
+                    "비중%": st.column_config.NumberColumn(format="%.2f"),
+                },
+            )
 
-        # [2] 동시 상관
+        # [2] 동시 상관 — r 4자리, p 과학표기
         with c2:
             st.markdown("**2. 동시 상관 — `ret(t) ↔ net_qty(t)`**")
             conc_df = pd.DataFrame([
@@ -292,13 +298,18 @@ def _render_correlation_section(
                 }
                 for r in report["concurrent"]
             ])
-            st.dataframe(conc_df, use_container_width=True, hide_index=True)
+            st.dataframe(
+                conc_df, use_container_width=True, hide_index=True,
+                column_config={
+                    "r": st.column_config.NumberColumn(format="%.4f"),
+                },
+            )
 
-        # [3] 상승/하락일
+        # [3] 상승/하락일 — 정수, 천 단위 콤마
         meta = report["up_down_meta"]
         st.markdown(
             f"**3. 상승일 vs 하락일 평균 순매수** "
-            f"(상승 {meta['n_up']} · 하락 {meta['n_down']} · 보합 {meta['n_flat']})"
+            f"(상승 {meta['n_up']:,} · 하락 {meta['n_down']:,} · 보합 {meta['n_flat']:,})"
         )
         pat_label = {"accumulating_up": "추세 추종",
                      "counter_trend": "역행 매매", "mixed": "혼합"}
@@ -308,38 +319,61 @@ def _render_correlation_section(
              "패턴": pat_label[r["pattern"]]}
             for r in report["up_down"]
         ])
-        st.dataframe(ud_df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            ud_df, use_container_width=True, hide_index=True,
+            column_config={
+                "상승일 평균": st.column_config.NumberColumn(format="%,.0f"),
+                "하락일 평균": st.column_config.NumberColumn(format="%,.0f"),
+                "차이": st.column_config.NumberColumn(format="%,.0f"),
+            },
+        )
 
-        # [4] Lag
+        # [4] Lag — r 3자리
         st.markdown("**4. Lag (CCF) — 수급이 가격을 선도? 후행?**")
         if report["lag"]:
             lag_keys = list(report["lag"][0]["lags"].keys())
             lag_df = pd.DataFrame([
                 {"주체": r["label"], **r["lags"]} for r in report["lag"]
             ])
-            st.dataframe(lag_df, use_container_width=True, hide_index=True)
+            st.dataframe(
+                lag_df, use_container_width=True, hide_index=True,
+                column_config={
+                    k: st.column_config.NumberColumn(format="%+.3f")
+                    for k in lag_keys
+                },
+            )
             st.caption(
                 "`t=0` 동시 · `t+k` 수급이 k일 *선도* · `t-k` 수급이 k일 *후행*."
             )
 
-        # [5] Regime
+        # [5] Regime — r 3자리, None 은 자동 빈칸
         st.markdown("**5. Regime — 기간별 동시 상관**")
         if report["regime"]:
             win_keys = list(report["regime"][0]["windows"].keys())
             rg_df = pd.DataFrame([
                 {"주체": r["label"],
-                 **{k: ("n/a" if r["windows"][k] is None else r["windows"][k])
-                    for k in win_keys}}
+                 **{k: r["windows"][k] for k in win_keys}}
                 for r in report["regime"]
             ])
-            st.dataframe(rg_df, use_container_width=True, hide_index=True)
+            st.dataframe(
+                rg_df, use_container_width=True, hide_index=True,
+                column_config={
+                    k: st.column_config.NumberColumn(format="%+.3f")
+                    for k in win_keys
+                },
+            )
 
-        # [6] Level
+        # [6] Level — r 3자리
         st.markdown("**6. 누적 수준 상관 — `r(cum_qty, close)`** *(트렌드 영향 큼 — 참고용)*")
         lv_df = pd.DataFrame([
             {"주체": r["label"], "r": r["r"]} for r in report["level"]
         ])
-        st.dataframe(lv_df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            lv_df, use_container_width=True, hide_index=True,
+            column_config={
+                "r": st.column_config.NumberColumn(format="%+.3f"),
+            },
+        )
 
 
 # === 분석 기법 가이드 (정적) -------------------------------------------------
