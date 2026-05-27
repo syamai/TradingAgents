@@ -21,6 +21,7 @@ import pandas as pd
 import streamlit as st
 
 import tradingagents  # noqa: F401 — dotenv
+from dashboard.correlation_analysis import compute_correlation_report
 from dashboard.holdings_chart import (
     PLOTLY_CONFIG, SUBJECTS_ORDER, SUBJECT_LABELS, load_holdings, make_figure,
 )
@@ -53,6 +54,18 @@ def _cached_holdings(
     ticker: str, start: Optional[str], end: Optional[str],
 ) -> tuple[pd.DataFrame, dict]:
     return load_holdings(ticker, start=start, end=end)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_correlation(
+    ticker: str, start: Optional[str], end: Optional[str],
+) -> dict:
+    df, meta = load_holdings(ticker, start=start, end=end)
+    return compute_correlation_report(
+        df, ticker=ticker,
+        company_name=meta.get("company_name"),
+        market=meta.get("market"),
+    )
 
 
 # --- 기간 계산 ---------------------------------------------------------------
@@ -200,6 +213,7 @@ def main() -> None:
         _render_panel(primary[0], primary[1], primary[2],
                       start_str, end_str, visible, pct_mode)
 
+    # === 차트 해석 가이드 ===
     with st.expander("ℹ️ 차트 해석 가이드"):
         st.markdown(
             """
@@ -217,6 +231,188 @@ def main() -> None:
 - **드래그(박스)** — 선택 영역 확대
 - **더블클릭** — 줌 리셋
 - **우상단 modebar** — 줌인/아웃 버튼, 카메라(PNG), 팬/줌 모드 전환
+            """.strip()
+        )
+
+    # === 상관 분석 패널 (동적 — 현재 선택 종목) ===
+    if not compare:
+        _render_correlation_section(primary[0], primary[1], start_str, end_str)
+
+    # === 분석 기법 설명 (정적) ===
+    _render_methodology_guide()
+
+
+# === 상관 분석 패널 ----------------------------------------------------------
+
+def _render_correlation_section(
+    ticker: str, company_name: str,
+    start: Optional[str], end: Optional[str],
+) -> None:
+    st.divider()
+    with st.expander(f"📊 상관 분석 — {company_name} ({ticker})", expanded=False):
+        with st.spinner("상관관계 계산 중..."):
+            report = _cached_correlation(ticker, start, end)
+        if report["n_days"] == 0:
+            st.info("데이터 없음.")
+            return
+
+        pr = report["price"]
+        w = report["window"]
+        st.markdown(
+            f"**기간** {w['start']} ~ {w['end']} · {report['n_days']}일 · "
+            f"**종가** {pr['start']:,.0f} → {pr['end']:,.0f} "
+            f"({pr['total_return_pct']:+.1f}%) · "
+            f"**일별 σ** {pr['daily_std_pct']:.2f}%"
+        )
+
+        c1, c2 = st.columns(2)
+
+        # [1] 5년 누적
+        with c1:
+            st.markdown("**1. 누적 매수·매도 (cum_qty 최종)**")
+            cum_df = pd.DataFrame([
+                {
+                    "주체": ("ⓘ " if r["is_info_total"] else "") + r["label"],
+                    "누적": r["cum_qty"],
+                    "비중%": "—" if r["is_info_total"] else round(r["pct"], 2),
+                }
+                for r in report["cumulative"]
+            ])
+            st.dataframe(cum_df, use_container_width=True, hide_index=True)
+
+        # [2] 동시 상관
+        with c2:
+            st.markdown("**2. 동시 상관 — `ret(t) ↔ net_qty(t)`**")
+            conc_df = pd.DataFrame([
+                {
+                    "주체": r["label"],
+                    "r": r["r"],
+                    "p": f"{r['p_value']:.1e}" if r["p_value"] > 0 else "≈0",
+                    "해석": r["interpretation"] + " " + r["significance"],
+                }
+                for r in report["concurrent"]
+            ])
+            st.dataframe(conc_df, use_container_width=True, hide_index=True)
+
+        # [3] 상승/하락일
+        meta = report["up_down_meta"]
+        st.markdown(
+            f"**3. 상승일 vs 하락일 평균 순매수** "
+            f"(상승 {meta['n_up']} · 하락 {meta['n_down']} · 보합 {meta['n_flat']})"
+        )
+        pat_label = {"accumulating_up": "추세 추종",
+                     "counter_trend": "역행 매매", "mixed": "혼합"}
+        ud_df = pd.DataFrame([
+            {"주체": r["label"], "상승일 평균": r["up_mean"],
+             "하락일 평균": r["down_mean"], "차이": r["diff"],
+             "패턴": pat_label[r["pattern"]]}
+            for r in report["up_down"]
+        ])
+        st.dataframe(ud_df, use_container_width=True, hide_index=True)
+
+        # [4] Lag
+        st.markdown("**4. Lag (CCF) — 수급이 가격을 선도? 후행?**")
+        if report["lag"]:
+            lag_keys = list(report["lag"][0]["lags"].keys())
+            lag_df = pd.DataFrame([
+                {"주체": r["label"], **r["lags"]} for r in report["lag"]
+            ])
+            st.dataframe(lag_df, use_container_width=True, hide_index=True)
+            st.caption(
+                "`t=0` 동시 · `t+k` 수급이 k일 *선도* · `t-k` 수급이 k일 *후행*."
+            )
+
+        # [5] Regime
+        st.markdown("**5. Regime — 기간별 동시 상관**")
+        if report["regime"]:
+            win_keys = list(report["regime"][0]["windows"].keys())
+            rg_df = pd.DataFrame([
+                {"주체": r["label"],
+                 **{k: ("n/a" if r["windows"][k] is None else r["windows"][k])
+                    for k in win_keys}}
+                for r in report["regime"]
+            ])
+            st.dataframe(rg_df, use_container_width=True, hide_index=True)
+
+        # [6] Level
+        st.markdown("**6. 누적 수준 상관 — `r(cum_qty, close)`** *(트렌드 영향 큼 — 참고용)*")
+        lv_df = pd.DataFrame([
+            {"주체": r["label"], "r": r["r"]} for r in report["level"]
+        ])
+        st.dataframe(lv_df, use_container_width=True, hide_index=True)
+
+
+# === 분석 기법 가이드 (정적) -------------------------------------------------
+
+def _render_methodology_guide() -> None:
+    with st.expander("🧪 분석 방법·기법 설명 (r·lag·사용 기법)", expanded=False):
+        st.markdown(
+            """
+### r — Pearson 상관계수
+
+두 변수의 **선형 동조** 정도. 수식 `r = Cov(X,Y) / (σ_X · σ_Y)`.
+
+| r | 의미 |
+|---|---|
+| +1.0 | 완벽 양의 선형 |
+| +0.5 ~ +0.7 | 강한 양의 동조 |
+| +0.1 ~ +0.3 | 약한 동조 |
+| 0 | 무관 |
+| −0.5 이하 | 강한 역행 |
+| −1.0 | 완벽 음의 선형 |
+
+**p-value** — 우연일 확률. p<0.05 면 통계적 유의(`*`). 1222일 표본이면 |r|≈0.06만 넘어도 p<0.05라서 의미는 **r 의 절댓값 크기** 자체로 판단.
+
+⚠️ **상관 ≠ 인과** — 같은 제3 요인(시장 분위기·뉴스)에 둘 다 반응해도 r 이 커진다.
+
+---
+
+### lag — 시간 지연
+
+한 변수를 *k 일* 어긋나게 놓고 상관 계산.
+
+| 표시 | 의미 |
+|---|---|
+| **t=0** | 같은 날: 오늘 수급 ↔ 오늘 수익률 |
+| **t+1** | 오늘 수급 ↔ **내일** 수익률 — 수급이 가격을 1일 선도? |
+| **t+3** | 오늘 수급 ↔ 3일 뒤 수익률 |
+| **t−1** | 어제 수급 ↔ 오늘 수익률 — 가격이 어제 수급에 영향?(chasing) |
+
+t=0 만 강하고 t±1, ±3 이 0 에 가까우면 → 수급은 가격을 1 일 이상 선도/후행하지 않는다(인트라데이 영향 또는 즉시 chasing).
+
+---
+
+### 본 패널이 사용한 기법
+
+| # | 기법 | 어디서 |
+|---|---|---|
+| 1 | **Pearson product-moment correlation** | 동시 상관 표 (r, p-value) |
+| 2 | **Cross-correlation function (CCF)** | lag −3 ~ +3 표 (시계열 기본) |
+| 3 | **Sub-period (regime-split) correlation** | 2021-22 / 2023-24 / 2025- 비교 |
+| 4 | **Conditional mean** (event-study 변형) | 상승일 vs 하락일 평균 net_qty |
+| 5 | **Compositional analysis** | 5년 누적 매수 주체 비중 |
+| 6 | **Level correlation** | cum_qty 수준 vs 종가 수준 (trend-spurious 가능) |
+
+---
+
+### 더 정교한 기법 (현재 미적용 — 필요 시 확장 가능)
+
+| 기법 | 무엇을 잡나 | 비고 |
+|---|---|---|
+| **Granger causality test** | X 가 Y 의 *미래값* 예측에 통계적으로 기여하는가 (선형) | 인과 방향 검증. AR 모델 잔차 비교 (F-test). 의미는 "예측력"이지 진짜 인과는 아님 |
+| **VAR (Vector AutoRegression)** | 11 주체 net_qty + 수익률을 동시에 다변량 lag 회귀 | 충격반응함수(IRF) 로 "외국인 매수 충격이 가격에 미치는 누적 효과" 추적 |
+| **DCC-GARCH** | 시간에 따라 *변하는* 상관 (regime split 의 연속판) | 조건부 상관이 시점마다 다름. 위기·붐 시기 동조성 변화 탐지 |
+| **Cointegration / VECM** | `cum_qty` 와 `close` 같은 비정상(non-stationary) 시계열의 **장기 균형** | level r 의 spurious 위험을 정식으로 처리. Engle-Granger 또는 Johansen 검정 |
+| **Mutual information (MI)** | **비선형** 의존성 (Pearson r 은 선형만 잡음) | KSG 추정기. 변수가 step·threshold 형태로 반응하면 r 은 작지만 MI 는 큼 |
+| **Transfer entropy** | 정보 흐름의 방향성 — Granger 의 비선형판 | MI 기반. 선도/후행을 엔트로피로 표현 |
+| **Hawkes process** | 매매 이벤트의 자기·교차 유발(self/cross-excitation) | 한 주체의 매수가 다른 주체의 매수를 부르는 군집 효과 |
+| **Wavelet coherence** | 시간-주파수 공간에서 두 시계열의 공변 | 단기·중기·장기에서 동조성이 어떻게 다른지 동시에 본다 |
+
+### 본 패널에서 보강 가능한 다음 단계
+
+- Pearson 외에 **Spearman 순위 상관** 추가 — 비선형 단조 관계 보존, outlier 강건
+- 정상성 검정 (ADF) — level correlation 해석 정당화 또는 폐기
+- 가중 상관 — 거래대금 가중 r (큰 거래일에 가중)
             """.strip()
         )
 
