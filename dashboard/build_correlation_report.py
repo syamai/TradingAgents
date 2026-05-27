@@ -26,6 +26,9 @@ from dashboard.correlation_analysis import (
     compute_correlation_report, render_markdown,
 )
 from dashboard.holdings_chart import load_holdings
+from dashboard.llm_synthesis import (
+    DEFAULT_MODEL, DEFAULT_PROVIDER, synthesize_conclusion,
+)
 from tradingagents.dataflows.kis_history_store import KisHistoryStore
 
 _OBSIDIAN_REL = Path("Projects/trading-ai/reports")
@@ -82,6 +85,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                    help="마크다운을 stdout에도 출력")
     p.add_argument("--advanced", action="store_true",
                    help="정교한 분석 6 종 (Granger·VAR·MI 등) 함께 계산·저장")
+    p.add_argument("--llm-synthesis", action="store_true",
+                   help=f"로컬 LLM ({DEFAULT_PROVIDER}/{DEFAULT_MODEL}) 으로 "
+                        f"최종 종합 의견 생성·저장")
+    p.add_argument("--llm-provider", default=DEFAULT_PROVIDER,
+                   help="LLM provider (디폴트: %(default)s)")
+    p.add_argument("--llm-model", default=DEFAULT_MODEL,
+                   help="LLM 모델 (디폴트: %(default)s)")
     return p.parse_args(argv)
 
 
@@ -107,6 +117,21 @@ def main(argv: list[str] | None = None) -> int:
     md_body = render_markdown(report)
     if args.advanced and report.get("advanced"):
         md_body += "\n\n" + render_advanced_markdown(report["advanced"])
+
+    if args.llm_synthesis:
+        print(f"  → LLM synthesis ({args.llm_provider}/{args.llm_model})...",
+              file=sys.stderr)
+        synthesis = synthesize_conclusion(
+            report, report.get("advanced"),
+            provider=args.llm_provider, model=args.llm_model,
+        )
+        report["llm_synthesis"] = {
+            "provider": args.llm_provider,
+            "model": args.llm_model,
+            "content": synthesis,
+        }
+        md_body += "\n\n" + synthesis
+
     md_full = _frontmatter(report) + md_body + "\n"
 
     saved_paths: list[str] = []

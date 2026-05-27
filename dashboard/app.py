@@ -27,6 +27,9 @@ from dashboard.correlation_analysis import compute_correlation_report
 from dashboard.holdings_chart import (
     PLOTLY_CONFIG, SUBJECTS_ORDER, SUBJECT_LABELS, load_holdings, make_figure,
 )
+from dashboard.llm_synthesis import (
+    DEFAULT_MODEL, DEFAULT_PROVIDER, synthesize_conclusion,
+)
 from tradingagents.dataflows.kis_history_store import KisHistoryStore
 
 
@@ -76,6 +79,24 @@ def _cached_advanced(
 ) -> dict:
     df, _ = load_holdings(ticker, start=start, end=end)
     return compute_advanced_report(df)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_llm_synthesis(
+    ticker: str, start: Optional[str], end: Optional[str],
+    provider: str, model: str,
+) -> str:
+    """LLM 호출 결과 캐시 — provider·model 도 캐시 키."""
+    df, meta = load_holdings(ticker, start=start, end=end)
+    report = compute_correlation_report(
+        df, ticker=ticker,
+        company_name=meta.get("company_name"),
+        market=meta.get("market"),
+    )
+    advanced = compute_advanced_report(df)
+    return synthesize_conclusion(
+        report, advanced, provider=provider, model=model,
+    )
 
 
 def _df_height(n_rows: int) -> int:
@@ -256,6 +277,7 @@ def main() -> None:
     if not compare:
         _render_correlation_section(primary[0], primary[1], start_str, end_str)
         _render_advanced_section(primary[0], primary[1], start_str, end_str)
+        _render_llm_synthesis_section(primary[0], primary[1], start_str, end_str)
 
     # === 분석 기법 설명 (정적) ===
     _render_methodology_guide()
@@ -581,6 +603,47 @@ def _granger_df(rows: list[dict], direction_key: str) -> pd.DataFrame:
             row[f"lag {x['lag']}"] = x["p_value"]
         out_rows.append(row)
     return pd.DataFrame(out_rows)
+
+
+# === 최종 종합 의견 — 로컬 LLM 호출 -----------------------------------------
+
+def _render_llm_synthesis_section(
+    ticker: str, company_name: str,
+    start: Optional[str], end: Optional[str],
+) -> None:
+    st.divider()
+    with st.expander(
+        f"🧠 최종 종합 의견 — {company_name} (로컬 LLM)", expanded=False,
+    ):
+        st.caption(
+            f"로컬 LLM (`{DEFAULT_PROVIDER}` · `{DEFAULT_MODEL}`)이 위 12 섹션 "
+            "자동 해석을 통합해 최종 의견을 작성합니다. 첫 호출에 10~30 초 "
+            "소요 후 1 시간 캐시. 매매 추천은 포함하지 않습니다."
+        )
+        col_a, col_b = st.columns([3, 1])
+        with col_a:
+            model = st.text_input(
+                "모델 (provider:model 또는 model 만)",
+                value=f"{DEFAULT_PROVIDER}:{DEFAULT_MODEL}",
+                help="예: `ollama:gemma4:26b-a4b` 또는 `ollama:llama3.2:8b`",
+            )
+        with col_b:
+            st.write("")  # vertical spacer
+            run = st.button("의견 생성", type="primary")
+
+        # provider:model 파싱
+        if ":" in model:
+            provider, _, model_name = model.partition(":")
+        else:
+            provider, model_name = DEFAULT_PROVIDER, model
+
+        if not run:
+            st.info("'의견 생성' 버튼을 누르면 로컬 LLM 호출이 시작됩니다.")
+            return
+
+        with st.spinner(f"{provider}/{model_name} 호출 중... (10~30초)"):
+            text = _cached_llm_synthesis(ticker, start, end, provider, model_name)
+        st.markdown(text)
 
 
 # === 분석 기법 가이드 (정적) -------------------------------------------------
