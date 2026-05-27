@@ -41,13 +41,15 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def _top_by_marketcap(n: int, market: str = "kospi") -> list[str]:
-    """네이버 금융에서 시가총액 상위 N 종목 코드(6자리) 추출.
+def _top_by_marketcap(n: int, market: str = "kospi") -> list[tuple[str, str]]:
+    """네이버 금융에서 시가총액 상위 N 종목 (코드, 종목명) 튜플 추출.
 
     KIS의 ``market-cap`` ranking endpoint가 0행을 반환하는 시점에 폴백.
     한 페이지 50종목 → ``ceil(n/50)`` 페이지 스크래핑. EUC-KR 디코드.
 
     ``market``: ``"kospi"`` (sosok=0) 또는 ``"kosdaq"`` (sosok=1).
+
+    HTML 패턴: ``/item/main.naver?code=NNNNNN" class="tltle">종목명<``
     """
     import re
     import urllib.request
@@ -56,20 +58,21 @@ def _top_by_marketcap(n: int, market: str = "kospi") -> list[str]:
     if sosok is None:
         raise ValueError(f"market must be 'kospi' or 'kosdaq', got {market!r}")
 
-    codes: list[str] = []
+    pattern = re.compile(r'/item/main\.naver\?code=(\d{6})" class="tltle">([^<]+)')
+    out: list[tuple[str, str]] = []
     seen: set[str] = set()
     pages_needed = (n + 49) // 50
     for page in range(1, pages_needed + 1):
         url = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok={sosok}&page={page}"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         html = urllib.request.urlopen(req, timeout=10).read().decode("euc-kr", errors="ignore")
-        for code in re.findall(r'/item/main\.naver\?code=(\d{6})', html):
+        for code, name in pattern.findall(html):
             if code not in seen:
-                codes.append(code)
+                out.append((code, name.strip()))
                 seen.add(code)
-                if len(codes) >= n:
-                    return codes
-    return codes
+                if len(out) >= n:
+                    return out
+    return out
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -186,16 +189,23 @@ def main(argv: list[str] | None = None) -> int:
 
     # --top-kospi / --top-kosdaq 옵션 처리: tickers 인자에 자동 추가
     tickers = list(args.tickers)
+    # (code, name, market) 트리플 — store.set_ticker_metadata 호출용. tickers 인자로
+    # 직접 받은 코드는 종목명 모름 → 빈 문자열로 두고 메타 호출 skip.
+    metadata: list[tuple[str, str, str]] = []
     if args.top_kospi:
         print(f"네이버 시가총액 페이지 스크래핑 — KOSPI 상위 {args.top_kospi}종목...")
         top = _top_by_marketcap(args.top_kospi, market="kospi")
-        print(f"  → {len(top)} codes: {top[:5]} ... {top[-3:]}")
-        tickers.extend(top)
+        print(f"  → {len(top)} codes: {[c for c,_ in top[:5]]} ... {[c for c,_ in top[-3:]]}")
+        for code, name in top:
+            tickers.append(code)
+            metadata.append((code, name, "KOSPI"))
     if args.top_kosdaq:
         print(f"네이버 시가총액 페이지 스크래핑 — KOSDAQ 상위 {args.top_kosdaq}종목...")
         top = _top_by_marketcap(args.top_kosdaq, market="kosdaq")
-        print(f"  → {len(top)} codes: {top[:5]} ... {top[-3:]}")
-        tickers.extend(top)
+        print(f"  → {len(top)} codes: {[c for c,_ in top[:5]]} ... {[c for c,_ in top[-3:]]}")
+        for code, name in top:
+            tickers.append(code)
+            metadata.append((code, name, "KOSDAQ"))
     if not tickers:
         print("ERROR: 종목 코드 인자 또는 --top-kospi/--top-kosdaq N 중 하나는 필요합니다.", file=sys.stderr)
         return 2
@@ -205,6 +215,12 @@ def main(argv: list[str] | None = None) -> int:
     else:
         backends = (args.store,)
     store = KisHistoryStore(backends=backends)
+
+    # 종목명·시장 메타 우선 저장. 다중 호출 시 collect 진행 중 사용자가 SQL로 종목명 조회 가능.
+    if metadata:
+        print(f"tickers 메타 저장 ({len(metadata)} 종목)...")
+        for code, name, market in metadata:
+            store.set_ticker_metadata(code, name, market)
 
     print(
         f"KIS history collection — {len(tickers)} tickers, years={args.years}, "
