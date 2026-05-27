@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>TradingAgents 그래프 토폴로지</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                 "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    margin: 0; background: #fafafa; color: #222;
+  }
+  .layout { display: flex; height: 100vh; }
+  .graph-pane { flex: 1; overflow: auto; position: relative; background:
+    linear-gradient(#fff 0 0) padding-box,
+    repeating-linear-gradient(0deg, #f0f0f0 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(90deg, #f0f0f0 0 1px, transparent 1px 40px);
+  }
+  .detail-pane {
+    width: 400px; background: #fff; border-left: 1px solid #ddd;
+    padding: 24px; overflow-y: auto; flex-shrink: 0;
+  }
+  #graph { position: relative; width: 920px; height: 1430px; padding: 20px; }
+  svg.edges {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .node {
+    position: absolute; padding: 8px 14px; border-radius: 7px;
+    border: 1.5px solid #888; background: #fff;
+    font-size: 13px; cursor: pointer; user-select: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    transition: transform 0.15s, box-shadow 0.15s;
+    white-space: nowrap; transform: translate(-50%, -50%);
+    z-index: 2;
+  }
+  .node:hover {
+    box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+    transform: translate(-50%, -50%) scale(1.06);
+    z-index: 3;
+  }
+  .node.active {
+    border-color: #0066cc; background: #eaf3ff;
+    box-shadow: 0 0 0 3px rgba(0,102,204,0.25);
+  }
+  .node.terminal { background: #222; color: #fff; border-color: #222; border-radius: 18px; padding: 6px 18px; }
+  .node.analyst   { border-color: #0a7;     background: #e7f7ef; }
+  .node.tool      { border-color: #c80;     background: #fff5e0; font-family: ui-monospace, monospace; font-size: 12px; }
+  .node.clear     { border-color: #999;     background: #f0f0f0; color: #666; font-size: 12px; }
+  .node.researcher{ border-color: #5a47b8;  background: #efeafb; }
+  .node.manager   { border-color: #b03a48;  background: #fde9eb; font-weight: 600; }
+  .node.trader    { border-color: #0066cc;  background: #dfeaff; font-weight: 600; }
+  .node.risk      { border-color: #d2691e;  background: #ffeede; }
+
+  .edge        { fill: none; stroke: #888; stroke-width: 1.6; }
+  .edge.conditional { stroke-dasharray: 6,4; }
+  .edge.loop   { stroke: #c80; stroke-width: 1.8; }
+  .edge-label  {
+    font-size: 10px; fill: #666; pointer-events: none;
+    font-family: ui-monospace, monospace;
+  }
+  .stage-band {
+    position: absolute; left: 0; right: 0;
+    background: rgba(0,0,0,0.025); pointer-events: none;
+    z-index: 0;
+  }
+  .stage-label {
+    position: absolute; left: 30px; font-size: 10px; color: #999;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    pointer-events: none; z-index: 1; font-weight: 600;
+  }
+
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  h2 { font-size: 13px; margin: 18px 0 8px; color: #0066cc;
+       border-bottom: 1px solid #eee; padding-bottom: 4px; }
+  .type-tag {
+    color: #888; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 1.2px; margin-bottom: 12px;
+  }
+  .role { font-size: 13px; line-height: 1.55; color: #333; }
+  .easy-box {
+    background: #fffbe6; border: 1px solid #f3d97a; border-radius: 6px;
+    padding: 12px 14px; margin: 12px 0; font-size: 13px; line-height: 1.6;
+    color: #4d3a00;
+  }
+  .easy-box::before {
+    content: "💡 쉬운 설명";
+    display: block; font-size: 10px; color: #a07a00;
+    letter-spacing: 1px; margin-bottom: 6px; font-weight: 600;
+  }
+  .field {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+    background: #f3f3f3; padding: 3px 7px; border-radius: 3px;
+    margin: 3px 4px 3px 0; display: inline-block;
+    cursor: help; border: 1px solid transparent;
+  }
+  .field:hover { border-color: #0066cc; }
+  .field.write { background: #e7f7ef; color: #0a4f30; }
+  .field.read  { background: #eaf3ff; color: #003a73; }
+  .empty { color: #aaa; font-size: 12px; }
+  .legend { font-size: 11px; }
+  .legend-item { display: flex; align-items: center; margin: 4px 0; }
+  .legend-swatch {
+    width: 18px; height: 11px; margin-right: 8px;
+    border: 1.5px solid; border-radius: 3px;
+  }
+  .glossary-btn {
+    display: inline-block; margin-top: 10px; padding: 6px 12px;
+    background: #0066cc; color: #fff; border: 0; border-radius: 4px;
+    font-size: 12px; cursor: pointer;
+  }
+  .glossary-btn:hover { background: #0052a3; }
+
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: none; align-items: flex-start; justify-content: center;
+    z-index: 100; padding: 40px 20px; overflow-y: auto;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: 8px; max-width: 720px; width: 100%;
+    padding: 28px 32px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal h1 { font-size: 22px; margin-bottom: 4px; }
+  .modal-sub { color: #666; font-size: 13px; margin-bottom: 20px; }
+  .modal-close {
+    float: right; background: transparent; border: 0;
+    font-size: 22px; cursor: pointer; color: #888;
+  }
+  .modal-close:hover { color: #222; }
+  .term-row {
+    display: grid; grid-template-columns: 180px 1fr;
+    gap: 12px; padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .term-row:last-child { border-bottom: 0; }
+  .term-name {
+    font-family: ui-monospace, monospace; font-size: 12px;
+    color: #0066cc; font-weight: 600;
+  }
+  .term-desc { font-size: 13px; line-height: 1.6; color: #333; }
+
+  .chip-tip {
+    position: absolute; max-width: 320px;
+    background: #222; color: #fff;
+    padding: 10px 12px; border-radius: 6px;
+    font-size: 12px; line-height: 1.5;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    pointer-events: none; z-index: 50; display: none;
+  }
+  .chip-tip::before {
+    content: ""; position: absolute; top: -6px; left: 20px;
+    border: 6px solid transparent; border-bottom-color: #222;
+    border-top: 0;
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="graph-pane">
+    <div id="graph">
+      <svg class="edges" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#888"/>
+          </marker>
+          <marker id="arrow-loop" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#c80"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+  <div class="detail-pane" id="detail">
+    <h1>TradingAgents 그래프</h1>
+    <p style="font-size:12px; color:#666; line-height:1.5; margin:8px 0 4px;">
+      여러 AI 에이전트가 차례로 의견을 내고 토론해서 '주식을 살까 팔까' 결정하는 흐름도.
+      노드(상자)를 클릭하면 자세한 설명이 표시됩니다.
+    </p>
+    <button class="glossary-btn" onclick="openGlossary()">📖 용어 사전 열기</button>
+
+    <h2>그래프 읽는 법</h2>
+    <div class="legend">
+      <div class="legend-item">━━ 실선: 항상 따라가는 경로</div>
+      <div class="legend-item">┄┄ 점선: 상황에 따라 갈라지는 경로 (조건 분기)</div>
+      <div class="legend-item" style="color:#c80;">━━ 주황: 에이전트 ↔ 도구 반복 호출</div>
+    </div>
+
+    <h2>노드 종류 (색깔)</h2>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch" style="background:#222; border-color:#222;"></span>입구/출구 (START · END)</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#e7f7ef; border-color:#0a7;"></span>분석가 (Analyst) — 4명</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#fff5e0; border-color:#c80;"></span>도구 (Tool) — 데이터 수집 담당</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#f0f0f0; border-color:#999;"></span>메시지 정리 (Msg Clear)</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#efeafb; border-color:#5a47b8;"></span>토론가 (Bull · Bear)</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#fde9eb; border-color:#b03a48;"></span>매니저 (deep_think_llm)</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#dfeaff; border-color:#0066cc;"></span>트레이더</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#ffeede; border-color:#d2691e;"></span>위험 분석가 — 3명</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="glossary-modal" onclick="closeGlossaryIfBg(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeGlossary()">×</button>
+    <h1>📖 용어 사전</h1>
+    <p class="modal-sub">쉬운 말로 풀어 쓴 설명.</p>
+    <h2 style="margin-top:8px;">그래프 용어</h2>
+    <div id="term-list"></div>
+    <h2 style="margin-top:24px;">상태(State) 칸 — 모든 노드가 공유하는 메모장의 항목들</h2>
+    <div id="state-list"></div>
+  </div>
+</div>
+
+<div class="chip-tip" id="chip-tip"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+// 1) State 항목 풀이
+// ─────────────────────────────────────────────────────────
+const STATE_GLOSSARY = {
+  "company_of_interest":
+    "지금 분석하려는 회사 이름 또는 주식 코드. 예: '005930.KS'는 삼성전자. 이 값이 정해져야 분석 작업을 시작할 수 있습니다.",
+  "asset_type":
+    "자산 종류 — 주식인지, 암호화폐(BTC)인지 등. 어디서 데이터를 가져올지 결정할 때 참조합니다.",
+  "trade_date":
+    "분석 기준 날짜. 과거 데이터를 어디까지 가져올지의 기준점입니다.",
+  "messages":
+    "AI와 도구들이 주고받은 대화 기록. 새 메시지는 뒤에 누적됩니다. 도구를 호출하라는 'tool_calls'도 메시지 안에 들어 있습니다.",
+  "market_report":
+    "Market Analyst가 시세를 분석해 작성한 리포트. 가격이 어떻게 움직이고 있는지 한 페이지로 정리.",
+  "sentiment_report":
+    "Sentiment Analyst가 소셜(Reddit 등)을 보고 작성한 리포트. 시장 분위기가 긍정적인지 부정적인지 정리.",
+  "news_report":
+    "News Analyst가 뉴스 기사를 모아 정리한 리포트. 최근에 어떤 사건이 있었는지 요약.",
+  "fundamentals_report":
+    "Fundamentals Analyst가 회사 재무(매출·이익·부채)를 정리한 리포트.",
+  "investment_debate_state":
+    "Bull(매수 입장)과 Bear(매도 입장)가 토론한 내용을 기록하는 영역. 누가 몇 번 발언했는지 횟수(count)도 함께 보관.",
+  "investment_plan":
+    "토론이 끝난 뒤 Research Manager가 '이 종목을 어떻게 처리할지' 정리한 투자 계획.",
+  "trader_investment_plan":
+    "Trader가 위 투자 계획을 받아 '실제로 얼마나 매수/매도할지' 구체화한 매매 제안.",
+  "risk_debate_state":
+    "공격형/보수형/중립형 위험 분석가 3명이 돌아가며 토론한 기록. 마지막 발언자도 함께 기록.",
+  "final_trade_decision":
+    "Portfolio Manager가 내린 최종 결정 — BUY(매수) / HOLD(보유) / SELL(매도).",
+  "past_context":
+    "동일 종목에 대한 과거 결정 기록과 다른 종목에서 얻은 교훈. 분석 시작 전에 메모리에서 미리 주입합니다.",
+  "tool_calls":
+    "AI가 도구에 요청한 호출 목록. 비어 있으면 더 호출할 도구가 없다는 뜻 → 다음 단계로 진행.",
+  "sender":
+    "직전 메시지를 작성한 노드의 이름. 예: 'Trader'.",
+};
+
+// ─────────────────────────────────────────────────────────
+// 2) 일반 용어 사전
+// ─────────────────────────────────────────────────────────
+const TERM_GLOSSARY = [
+  ["그래프 (Graph)",
+   "노드(작업 단위)들을 엣지(화살표)로 이어 놓은 구조도. 어떤 단계가 끝나면 어디로 진행할지 정의합니다."],
+  ["노드 (Node)",
+   "그래프를 구성하는 한 단계. 분석가·도구·매니저 등 각각의 작업 단위."],
+  ["엣지 (Edge)",
+   "노드와 노드를 잇는 화살표. '이 단계가 끝나면 다음은 여기로'라는 경로."],
+  ["조건 분기 (Conditional edge)",
+   "점선 화살표. 상황에 따라 어디로 갈지 결정되는 분기. 예: '호출할 도구가 남았으면 도구 노드로, 없으면 다음 단계로.'"],
+  ["Tool 루프",
+   "분석가 ↔ 도구 사이의 반복 호출. 분석가가 더 이상 호출할 도구가 없을 때까지 같은 분석가로 돌아갑니다."],
+  ["State / 상태",
+   "모든 노드가 공유하는 메모장. 각 노드는 자기 영역을 채우고, 다음 노드는 이전 노드가 기록한 내용을 읽어서 작업합니다. 노드끼리 직접 통신하지 않고 State를 통해서만 데이터를 주고받습니다."],
+  ["ToolNode",
+   "AI가 '이 도구를 호출해줘'라고 요청하면 실제로 실행해주는 노드. 예: 인터넷에서 가격 데이터 조회, Reddit 글 수집."],
+  ["Msg Clear",
+   "이전 노드가 남긴 대화 메시지를 정리하는 단계. 다음 노드가 이전 노드의 대화 맥락에 오염되지 않도록 비워줍니다."],
+  ["START / END",
+   "그래프의 진입점과 종료점. START에서 분석 요청이 들어오고, END에서 최종 결정이 반환됩니다."],
+  ["max_debate_rounds (N)",
+   "Bull/Bear 토론 라운드 한도. count가 2×N에 도달하면 토론이 종료되고 Research Manager가 정리합니다."],
+  ["max_risk_discuss_rounds (N)",
+   "위험 분석가 3명의 토론 라운드 한도. count가 3×N에 도달하면 토론이 종료되고 Portfolio Manager가 결정합니다."],
+  ["count",
+   "지금까지 누적된 발언 횟수. 한 노드가 발언할 때마다 1씩 증가합니다."],
+  ["LLM (Large Language Model)",
+   "ChatGPT·Gemma 같은 언어 모델. quick_think_llm은 빠른 모델(자주 호출되는 분석가용), deep_think_llm은 더 똑똑하지만 느린 모델(매니저용)."],
+];
+
+// ─────────────────────────────────────────────────────────
+// 3) 노드 데이터 — role (요약) + easy (풀어 쓴 설명)
+// ─────────────────────────────────────────────────────────
+const NODES = [
+  {id:"START", x:400, y:40, label:"START", type:"terminal",
+   role:"그래프 진입점. propagation 단계에서 초기 상태를 주입.",
+   easy:"그래프의 입구. '삼성전자 분석해줘' 같은 요청이 처음 들어오는 위치. 회사 이름·날짜·과거 기록을 State에 적어두고 첫 번째 노드로 넘깁니다.",
+   reads:[],
+   writes:["company_of_interest","asset_type","trade_date","past_context"]},
+
+  {id:"Market Analyst", x:400, y:120, label:"Market Analyst", type:"analyst",
+   role:"OHLCV·기술지표를 요청해 시세 리포트 작성. tool_calls가 남아 있는 한 tools_market과 루프.",
+   easy:"주식의 가격 차트를 분석하는 노드. '어제 종가는? 지난주 추세는?' 같은 질문을 도구에 요청해 데이터를 받고, 한 장짜리 시세 리포트를 작성합니다.",
+   reads:["company_of_interest","trade_date","asset_type","messages"],
+   writes:["messages","market_report"]},
+  {id:"tools_market", x:720, y:120, label:"tools_market", type:"tool",
+   role:"ToolNode. yfinance / 네이버 금융 / DART 등 시세·기술지표 툴을 실행.",
+   easy:"Market Analyst의 도구 실행기. 'yfinance에서 가격 조회' 같은 요청이 들어오면 실제로 야후·네이버에 접속해 데이터를 가져옵니다.",
+   reads:["tool_calls"],
+   writes:["messages"]},
+  {id:"Msg Clear Market", x:400, y:210, label:"Msg Clear Market", type:"clear",
+   role:"Market Analyst가 남긴 메시지 정리 (다음 분석가에 누수 방지).",
+   easy:"Market Analyst가 도구와 주고받은 대화 메시지를 정리하는 단계. 다음 노드(Sentiment Analyst)가 이전 대화 내용에 영향받지 않게 비워줍니다.",
+   reads:["messages"], writes:["messages"]},
+
+  {id:"Sentiment Analyst", x:400, y:300, label:"Sentiment Analyst", type:"analyst",
+   role:"Reddit·StockTwits 등 소셜 감성 리포트. 한국 종목은 yfinance로 영문명 lookup 후 Reddit 검색.",
+   easy:"사람들이 Reddit 같은 SNS에서 이 회사에 대해 어떻게 말하는지 분석하는 노드. 한국 종목은 영문 회사명(예: Samsung)으로 검색해 글을 수집합니다.",
+   reads:["company_of_interest","trade_date","messages"],
+   writes:["messages","sentiment_report"]},
+  {id:"tools_social", x:720, y:300, label:"tools_social", type:"tool",
+   role:"Reddit / StockTwits 패치. 표준 브라우저 헤더 부착해 403 회피.",
+   easy:"Sentiment Analyst의 도구 실행기. Reddit·StockTwits에서 글을 가져옵니다. 봇 차단을 피하려고 일반 브라우저처럼 Accept-Language 등 헤더를 붙여 요청합니다.",
+   reads:["tool_calls"], writes:["messages"]},
+  {id:"Msg Clear Sentiment", x:400, y:390, label:"Msg Clear Sentiment", type:"clear",
+   role:"감성 분석가 메시지 정리.",
+   easy:"Sentiment Analyst의 대화 메시지를 정리하는 단계.",
+   reads:["messages"], writes:["messages"]},
+
+  {id:"News Analyst", x:400, y:480, label:"News Analyst", type:"analyst",
+   role:"Finnhub·Google·한국 뉴스 등 시사 리포트.",
+   easy:"최근 뉴스를 읽고 '이 회사에 어떤 사건이 있었나' 정리하는 노드. 신제품 발표·사고·정책 변화 등을 한 장 리포트로 요약합니다.",
+   reads:["company_of_interest","trade_date","messages"],
+   writes:["messages","news_report"]},
+  {id:"tools_news", x:720, y:480, label:"tools_news", type:"tool",
+   role:"뉴스 API 호출 ToolNode.",
+   easy:"News Analyst의 도구 실행기. 뉴스 API(Finnhub, Google 등)에서 기사를 가져옵니다.",
+   reads:["tool_calls"], writes:["messages"]},
+  {id:"Msg Clear News", x:400, y:570, label:"Msg Clear News", type:"clear",
+   role:"뉴스 분석가 메시지 정리.",
+   easy:"News Analyst의 대화 메시지를 정리하는 단계.",
+   reads:["messages"], writes:["messages"]},
+
+  {id:"Fundamentals Analyst", x:400, y:660, label:"Fundamentals Analyst", type:"analyst",
+   role:"재무·DART/SimFin 펀더멘털 리포트. 한국 종목은 DART, 그 외는 SimFin/yfinance.",
+   easy:"회사의 재무 상태(매출·이익·부채)를 분석하는 노드. 회사가 실제로 돈을 잘 벌고 있는지 판단합니다.",
+   reads:["company_of_interest","trade_date","asset_type","messages"],
+   writes:["messages","fundamentals_report"]},
+  {id:"tools_fundamentals", x:720, y:660, label:"tools_fundamentals", type:"tool",
+   role:"재무 데이터 패치 ToolNode.",
+   easy:"Fundamentals Analyst의 도구 실행기. 한국 종목은 DART(공시 사이트), 그 외는 SimFin·yfinance에서 재무제표를 가져옵니다.",
+   reads:["tool_calls"], writes:["messages"]},
+  {id:"Msg Clear Fundamentals", x:400, y:750, label:"Msg Clear Fundamentals", type:"clear",
+   role:"펀더멘털 메시지 정리 후 리서치 토론 페이즈로 진입.",
+   easy:"마지막 분석가의 메시지 정리 단계. 여기서 분석가 4명의 작업이 끝나고 토론 단계로 진입합니다.",
+   reads:["messages"], writes:["messages"]},
+
+  {id:"Bull Researcher", x:290, y:850, label:"Bull Researcher", type:"researcher",
+   role:"4개 리포트 + past_context 근거로 강세 논증 한 턴.",
+   easy:"매수 입장 토론자. 분석가 4명의 리포트를 근거로 '이 종목은 매수해야 한다'고 주장합니다.",
+   reads:["market_report","sentiment_report","news_report","fundamentals_report",
+          "investment_debate_state","past_context"],
+   writes:["investment_debate_state"]},
+  {id:"Bear Researcher", x:510, y:850, label:"Bear Researcher", type:"researcher",
+   role:"동일 리포트로 약세 논증 한 턴. Bull과 turn-taking.",
+   easy:"매도 입장 토론자. 같은 리포트를 보고 '이 종목은 위험하다, 매도해야 한다'고 반박합니다. Bull과 번갈아 발언.",
+   reads:["market_report","sentiment_report","news_report","fundamentals_report",
+          "investment_debate_state","past_context"],
+   writes:["investment_debate_state"]},
+  {id:"Research Manager", x:400, y:940, label:"Research Manager", type:"manager",
+   role:"Bull/Bear 토론 종료 후 deep_think_llm으로 판정하고 투자 계획 작성.",
+   easy:"리서치 매니저. Bull/Bear 토론이 충분히 진행되면 양쪽 주장을 종합해 투자 계획을 정리합니다. 더 똑똑한 모델(deep_think_llm) 사용.",
+   reads:["4개 *_report","investment_debate_state","past_context"],
+   writes:["investment_debate_state","investment_plan"]},
+
+  {id:"Trader", x:400, y:1030, label:"Trader", type:"trader",
+   role:"investment_plan을 실제 매매 제안(rationale + 사이징 힌트)으로 변환.",
+   easy:"매매 실행 노드. 매니저가 정리한 투자 계획을 받아 '얼마나 매수/매도할지' 구체적인 매매 제안으로 변환합니다.",
+   reads:["investment_plan","4개 *_report","company_of_interest","past_context"],
+   writes:["messages","trader_investment_plan","sender"]},
+
+  {id:"Aggressive Analyst", x:200, y:1140, label:"Aggressive Analyst", type:"risk",
+   role:"공격적 리스크 입장 한 턴. 라운드 로빈 A→C→N→A.",
+   easy:"공격적 위험 분석가. '위험을 감수해도 큰 수익을 노리자'는 입장을 주장합니다.",
+   reads:["trader_investment_plan","4개 *_report","risk_debate_state"],
+   writes:["risk_debate_state"]},
+  {id:"Conservative Analyst", x:400, y:1140, label:"Conservative Analyst", type:"risk",
+   role:"보수적 입장.",
+   easy:"보수적 위험 분석가. '안전하게 가자, 위험은 줄이자'는 입장을 주장합니다.",
+   reads:["trader_investment_plan","4개 *_report","risk_debate_state"],
+   writes:["risk_debate_state"]},
+  {id:"Neutral Analyst", x:600, y:1140, label:"Neutral Analyst", type:"risk",
+   role:"중립 입장. count가 3*max_risk_discuss_rounds에 도달하면 Portfolio Manager로 라우팅.",
+   easy:"중립 위험 분석가. 너무 공격적이지도 보수적이지도 않은 균형 입장을 제시합니다. 마지막 발언자가 Neutral이고 토론이 종료되면 Portfolio Manager로 진행.",
+   reads:["trader_investment_plan","4개 *_report","risk_debate_state"],
+   writes:["risk_debate_state"]},
+
+  {id:"Portfolio Manager", x:400, y:1260, label:"Portfolio Manager", type:"manager",
+   role:"리스크 토론 종료 후 최종 판정 (BUY/HOLD/SELL + 사이징). Gemma는 capabilities.py에서 structured-output 비활성화.",
+   easy:"포트폴리오 매니저(최종 결정권자). 모든 의견(분석가 4명, Bull/Bear 토론, Trader 제안, 위험 분석가 3명)을 종합해 BUY/HOLD/SELL 최종 결정을 내립니다. 더 똑똑한 모델(deep_think_llm) 사용.",
+   reads:["risk_debate_state","4개 *_report","trader_investment_plan","investment_plan","past_context"],
+   writes:["risk_debate_state","final_trade_decision"]},
+
+  {id:"END", x:400, y:1370, label:"END", type:"terminal",
+   role:"종료. final_trade_decision이 호출자에게 반환됨.",
+   easy:"그래프의 출구. Portfolio Manager가 내린 최종 결정이 호출자에게 반환되는 종료 지점입니다.",
+   reads:["final_trade_decision"], writes:[]},
+];
+
+const EDGES = [
+  {from:"START", to:"Market Analyst"},
+
+  {from:"Market Analyst", to:"tools_market", type:"conditional", label:"tool_calls"},
+  {from:"tools_market", to:"Market Analyst", type:"loop"},
+  {from:"Market Analyst", to:"Msg Clear Market", type:"conditional", label:"done"},
+  {from:"Msg Clear Market", to:"Sentiment Analyst"},
+
+  {from:"Sentiment Analyst", to:"tools_social", type:"conditional", label:"tool_calls"},
+  {from:"tools_social", to:"Sentiment Analyst", type:"loop"},
+  {from:"Sentiment Analyst", to:"Msg Clear Sentiment", type:"conditional", label:"done"},
+  {from:"Msg Clear Sentiment", to:"News Analyst"},
+
+  {from:"News Analyst", to:"tools_news", type:"conditional", label:"tool_calls"},
+  {from:"tools_news", to:"News Analyst", type:"loop"},
+  {from:"News Analyst", to:"Msg Clear News", type:"conditional", label:"done"},
+  {from:"Msg Clear News", to:"Fundamentals Analyst"},
+
+  {from:"Fundamentals Analyst", to:"tools_fundamentals", type:"conditional", label:"tool_calls"},
+  {from:"tools_fundamentals", to:"Fundamentals Analyst", type:"loop"},
+  {from:"Fundamentals Analyst", to:"Msg Clear Fundamentals", type:"conditional", label:"done"},
+  {from:"Msg Clear Fundamentals", to:"Bull Researcher"},
+
+  {from:"Bull Researcher", to:"Bear Researcher",   type:"conditional", label:"count<2N"},
+  {from:"Bear Researcher", to:"Bull Researcher",   type:"conditional", label:"count<2N"},
+  {from:"Bull Researcher", to:"Research Manager",  type:"conditional", label:"max"},
+  {from:"Bear Researcher", to:"Research Manager",  type:"conditional", label:"max"},
+
+  {from:"Research Manager", to:"Trader"},
+  {from:"Trader", to:"Aggressive Analyst"},
+
+  {from:"Aggressive Analyst",   to:"Conservative Analyst", type:"conditional", label:"count<3N"},
+  {from:"Conservative Analyst", to:"Neutral Analyst",      type:"conditional", label:"count<3N"},
+  {from:"Neutral Analyst",      to:"Aggressive Analyst",   type:"conditional", label:"count<3N"},
+  {from:"Aggressive Analyst",   to:"Portfolio Manager",    type:"conditional", label:"max"},
+  {from:"Conservative Analyst", to:"Portfolio Manager",    type:"conditional", label:"max"},
+  {from:"Neutral Analyst",      to:"Portfolio Manager",    type:"conditional", label:"max"},
+
+  {from:"Portfolio Manager", to:"END"},
+];
+
+const STAGES = [
+  {y0:80,   y1:790,  label:"1. 분석가 단계 (Market → Sentiment → News → Fundamentals)"},
+  {y0:810,  y1:990,  label:"2. 리서치 토론 (Bull ⇄ Bear → Research Manager)"},
+  {y0:1000, y1:1080, label:"3. 트레이더"},
+  {y0:1100, y1:1320, label:"4. 위험 토론 → Portfolio Manager 최종 결정"},
+];
+
+// ─────────────────────────────────────────────────────────
+// Render
+// ─────────────────────────────────────────────────────────
+const graph = document.getElementById("graph");
+
+for (const s of STAGES) {
+  const band = document.createElement("div");
+  band.className = "stage-band";
+  band.style.top = s.y0 + "px";
+  band.style.height = (s.y1 - s.y0) + "px";
+  graph.appendChild(band);
+  const label = document.createElement("div");
+  label.className = "stage-label";
+  label.style.top = (s.y0 + 8) + "px";
+  label.textContent = s.label;
+  graph.appendChild(label);
+}
+
+const nodeIndex = {};
+for (const n of NODES) {
+  const div = document.createElement("div");
+  div.className = `node ${n.type}`;
+  div.textContent = n.label;
+  div.style.left = n.x + "px";
+  div.style.top = n.y + "px";
+  div.dataset.id = n.id;
+  div.addEventListener("click", () => selectNode(n.id));
+  graph.appendChild(div);
+  nodeIndex[n.id] = {data:n, el:div};
+}
+
+const edgeKey = (e) => `${e.from}->${e.to}`;
+const edgeSet = new Set(EDGES.map(edgeKey));
+const hasReverse = (e) => edgeSet.has(`${e.to}->${e.from}`);
+
+const svg = graph.querySelector("svg.edges");
+const NS = "http://www.w3.org/2000/svg";
+
+function halfSize(id) {
+  const data = nodeIndex[id].data;
+  const w = Math.max(70, data.label.length * 4.5 + 24);
+  return { hw: w/2, hh: 16 };
+}
+
+function endpoints(a, b) {
+  const A = halfSize(a.id), B = halfSize(b.id);
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const horiz = Math.abs(dx) > Math.abs(dy);
+  if (horiz) {
+    return {
+      sx: a.x + Math.sign(dx) * A.hw, sy: a.y,
+      ex: b.x - Math.sign(dx) * B.hw, ey: b.y,
+      horiz: true,
+    };
+  }
+  return {
+    sx: a.x, sy: a.y + Math.sign(dy) * A.hh,
+    ex: b.x, ey: b.y - Math.sign(dy) * B.hh,
+    horiz: false,
+  };
+}
+
+function buildPath(e) {
+  const a = nodeIndex[e.from].data, b = nodeIndex[e.to].data;
+  const p = endpoints(a, b);
+
+  if (e.type === "loop") {
+    const cx = (p.sx + p.ex) / 2;
+    const cy = p.sy + 38;
+    return `M ${p.sx} ${p.sy + 6} Q ${cx} ${cy} ${p.ex} ${p.ey + 6}`;
+  }
+  if (p.horiz && hasReverse(e)) {
+    const cx = (p.sx + p.ex) / 2;
+    const cy = p.sy - 24;
+    return `M ${p.sx} ${p.sy - 6} Q ${cx} ${cy} ${p.ex} ${p.ey - 6}`;
+  }
+  if (e.from === "Neutral Analyst" && e.to === "Aggressive Analyst") {
+    const cx = (p.sx + p.ex) / 2;
+    const cy = p.sy + 70;
+    return `M ${p.sx} ${p.sy + 8} Q ${cx} ${cy} ${p.ex} ${p.ey + 8}`;
+  }
+  if (!p.horiz && Math.abs(b.x - a.x) > 50) {
+    return `M ${a.x + (b.x > a.x ? halfSize(a.id).hw : -halfSize(a.id).hw)} ${a.y}
+            L ${b.x - (b.x > a.x ? halfSize(b.id).hw : -halfSize(b.id).hw)} ${b.y}`;
+  }
+  return `M ${p.sx} ${p.sy} L ${p.ex} ${p.ey}`;
+}
+
+for (const e of EDGES) {
+  const path = document.createElementNS(NS, "path");
+  const cls = ["edge"];
+  if (e.type === "conditional") cls.push("conditional");
+  if (e.type === "loop") cls.push("loop");
+  path.setAttribute("class", cls.join(" "));
+  path.setAttribute("d", buildPath(e));
+  path.setAttribute("marker-end", e.type === "loop" ? "url(#arrow-loop)" : "url(#arrow)");
+  svg.appendChild(path);
+
+  if (e.label) {
+    const a = nodeIndex[e.from].data, b = nodeIndex[e.to].data;
+    const text = document.createElementNS(NS, "text");
+    const mx = (a.x + b.x)/2, my = (a.y + b.y)/2;
+    text.setAttribute("x", mx + 6);
+    text.setAttribute("y", my - 4);
+    text.setAttribute("class", "edge-label");
+    text.textContent = e.label;
+    svg.appendChild(text);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Detail pane
+// ─────────────────────────────────────────────────────────
+function baseField(f) {
+  if (f.includes("*_report")) return "*_report";
+  return f.replace(/\s*\(.*$/, '').replace(/\..*$/, '').replace(/\[.*$/, '').trim();
+}
+
+function fieldTip(f) {
+  const base = baseField(f);
+  if (base === "*_report") {
+    return "분석가 4명이 작성한 4개 리포트 — market_report, sentiment_report, news_report, fundamentals_report를 모두 참조한다는 뜻.";
+  }
+  return STATE_GLOSSARY[base] || "(설명 준비 중)";
+}
+
+function renderFields(arr, cls) {
+  if (!arr.length) return '<span class="empty">—</span>';
+  return arr.map(f =>
+    `<span class="field ${cls}" data-tip="${escapeHTML(fieldTip(f))}">${escapeHTML(f)}</span>`
+  ).join("");
+}
+
+function selectNode(id) {
+  document.querySelectorAll(".node.active").forEach(el => el.classList.remove("active"));
+  nodeIndex[id].el.classList.add("active");
+  const n = nodeIndex[id].data;
+  const detail = document.getElementById("detail");
+  detail.innerHTML = `
+    <button onclick="renderHome()" style="font-size:11px; background:transparent; border:1px solid #ddd; border-radius:4px; padding:3px 8px; cursor:pointer; margin-bottom:12px;">← 처음 화면</button>
+    <h1>${escapeHTML(n.label)}</h1>
+    <div class="type-tag">${n.type}</div>
+    <div class="easy-box">${escapeHTML(n.easy)}</div>
+    <h2>역할 (요약)</h2>
+    <div class="role">${escapeHTML(n.role)}</div>
+    <h2>읽는 상태 <span style="font-size:10px; color:#999; font-weight:400;">(State에서 가져오는 항목)</span></h2>
+    <div>${renderFields(n.reads, "read")}</div>
+    <h2>쓰는 상태 <span style="font-size:10px; color:#999; font-weight:400;">(State에 기록하는 항목)</span></h2>
+    <div>${renderFields(n.writes, "write")}</div>
+    <p style="font-size:11px; color:#888; margin-top:14px;">
+      💡 위 항목들에 마우스를 올리면 자세한 설명이 표시됩니다.
+    </p>
+    <h2>소스 파일</h2>
+    <div style="font-family:ui-monospace,monospace; font-size:11px; color:#666; word-break:break-all;">
+      ${sourcePathFor(n)}
+    </div>
+    <button class="glossary-btn" onclick="openGlossary()" style="margin-top:16px;">📖 용어 사전</button>
+  `;
+  attachChipTooltips();
+}
+
+function sourcePathFor(n) {
+  const m = {
+    "Market Analyst":           "tradingagents/agents/analysts/market_analyst.py",
+    "Sentiment Analyst":        "tradingagents/agents/analysts/sentiment_analyst.py",
+    "News Analyst":             "tradingagents/agents/analysts/news_analyst.py",
+    "Fundamentals Analyst":     "tradingagents/agents/analysts/fundamentals_analyst.py",
+    "Bull Researcher":          "tradingagents/agents/researchers/bull_researcher.py",
+    "Bear Researcher":          "tradingagents/agents/researchers/bear_researcher.py",
+    "Research Manager":         "tradingagents/agents/managers/research_manager.py",
+    "Trader":                   "tradingagents/agents/trader/trader.py",
+    "Aggressive Analyst":       "tradingagents/agents/risk_mgmt/aggressive_debator.py",
+    "Conservative Analyst":     "tradingagents/agents/risk_mgmt/conservative_debator.py",
+    "Neutral Analyst":          "tradingagents/agents/risk_mgmt/neutral_debator.py",
+    "Portfolio Manager":        "tradingagents/agents/managers/portfolio_manager.py",
+  };
+  if (n.id.startsWith("tools_")) return "tradingagents/graph/trading_graph.py (ToolNode 등록)";
+  if (n.id.startsWith("Msg Clear")) return "tradingagents/agents/utils/agent_utils.py:create_msg_delete";
+  if (n.id === "START" || n.id === "END") return "tradingagents/graph/setup.py";
+  return m[n.id] || "—";
+}
+
+function escapeHTML(s) {
+  return String(s)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#39;");
+}
+
+const tipEl = document.getElementById("chip-tip");
+function attachChipTooltips() {
+  document.querySelectorAll(".field[data-tip]").forEach(el => {
+    el.addEventListener("mouseenter", () => {
+      tipEl.textContent = el.dataset.tip;
+      const r = el.getBoundingClientRect();
+      tipEl.style.left = (r.left + window.scrollX) + "px";
+      tipEl.style.top  = (r.bottom + window.scrollY + 8) + "px";
+      tipEl.style.display = "block";
+    });
+    el.addEventListener("mouseleave", () => { tipEl.style.display = "none"; });
+  });
+}
+
+function openGlossary() {
+  const termList = TERM_GLOSSARY.map(([t,d]) =>
+    `<div class="term-row"><div class="term-name">${escapeHTML(t)}</div><div class="term-desc">${escapeHTML(d)}</div></div>`
+  ).join("");
+  document.getElementById("term-list").innerHTML = termList;
+  const stateList = Object.entries(STATE_GLOSSARY).map(([k,v]) =>
+    `<div class="term-row"><div class="term-name">${escapeHTML(k)}</div><div class="term-desc">${escapeHTML(v)}</div></div>`
+  ).join("");
+  document.getElementById("state-list").innerHTML = stateList;
+  document.getElementById("glossary-modal").classList.add("open");
+}
+function closeGlossary() {
+  document.getElementById("glossary-modal").classList.remove("open");
+}
+function closeGlossaryIfBg(ev) {
+  if (ev.target.id === "glossary-modal") closeGlossary();
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeGlossary(); });
+
+const HOME_HTML = document.getElementById("detail").innerHTML;
+function renderHome() {
+  document.getElementById("detail").innerHTML = HOME_HTML;
+  document.querySelectorAll(".node.active").forEach(el => el.classList.remove("active"));
+}
+</script>
+</body>
+</html>
