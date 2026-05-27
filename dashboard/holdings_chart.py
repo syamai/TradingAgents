@@ -68,7 +68,10 @@ SUBJECT_COLORS: dict[str, str] = {
     "investment_trust": "#17becf",
     "securities": "#1f77b4",
     "bank": "#7f8fa6",
-    "insurance": "#2c3e50",
+    # 보험: 기관 6 sub 안에서 연기금(#1f3b73 진청)과 톤이 비슷하지 않도록
+    # 자홍/장미 계열로. 외국인 red 계열(#d62728/#ff7f0e/#ffbb78)과 색상환에서
+    # 떨어져 있어 카테고리 혼동도 적다.
+    "insurance": "#c2185b",
     # 개인 — green
     "retail": "#2ca02c",
     # 기타법인 — yellow/khaki
@@ -296,18 +299,22 @@ def make_figure(
         ),
     )
 
+    # x축(plot 영역)을 paper 좌표 0~0.65 로 제한 → 우측 35% 가 hover 박스
+    # 와 legend 전용 빈 공간. plotly 의 unified hover 박스가 cursor 옆에
+    # 자동 배치되는데, plot 영역 자체를 좌측으로 좁히면 박스가 우측 빈 공간에
+    # 자연스럽게 들어간다.
+    fig.update_xaxes(domain=[0.0, 0.65])
+
     fig.update_layout(
         title=dict(text=title or "수급 보유 변화", x=0.01, xanchor="left"),
         height=900,
-        # hovermode "x" — 호버한 trace 하나만 박스. unified 는 11 주체 한번에
-        # 떠서 가격선을 덮어버림. 박스를 작게.
-        hovermode="x",
+        hovermode="x unified",
         hoverlabel=dict(
+            # bgcolor 미지정 → trace 색을 따라 자동(다크 테마와 자연스럽게 어울림)
             font=dict(family='"Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
                       size=11),
             namelength=-1,
-            bgcolor="rgba(255, 255, 255, 0.92)",
-            bordercolor="#888",
+            align="right",
         ),
         barmode="relative",
         font=dict(family='"Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
@@ -315,10 +322,11 @@ def make_figure(
         legend=dict(
             orientation="v",
             yanchor="top", y=1.0,
-            xanchor="left", x=1.02,
+            # 좁아진 plot 우경계(0.65) 바로 옆
+            xanchor="left", x=0.66,
             groupclick="togglegroup",
         ),
-        margin=dict(l=70, r=180, t=70, b=80),
+        margin=dict(l=70, r=30, t=70, b=80),
     )
     return fig
 
