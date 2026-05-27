@@ -77,6 +77,14 @@ def _cached_advanced(
     return compute_advanced_report(df)
 
 
+def _df_height(n_rows: int) -> int:
+    """streamlit dataframe height — 헤더 + n_rows 행이 스크롤 없이 보이게.
+
+    행 높이 ~35px + 헤더 38px + 패딩 6px. 최대 800px 까지(매우 긴 표는 스크롤).
+    """
+    return min(35 * n_rows + 38 + 6, 800)
+
+
 # --- 기간 계산 ---------------------------------------------------------------
 
 def _period_to_start(period: str, last_date: Optional[date]) -> Optional[str]:
@@ -290,6 +298,7 @@ def _render_correlation_section(
             ])
             st.dataframe(
                 cum_df, use_container_width=True, hide_index=True,
+                height=_df_height(len(cum_df)),
                 column_config={
                     "누적": st.column_config.NumberColumn(format="%,d"),
                     "비중%": st.column_config.NumberColumn(format="%.2f"),
@@ -310,6 +319,7 @@ def _render_correlation_section(
             ])
             st.dataframe(
                 conc_df, use_container_width=True, hide_index=True,
+                height=_df_height(len(conc_df)),
                 column_config={
                     "r": st.column_config.NumberColumn(format="%.4f"),
                 },
@@ -331,6 +341,7 @@ def _render_correlation_section(
         ])
         st.dataframe(
             ud_df, use_container_width=True, hide_index=True,
+            height=_df_height(len(ud_df)),
             column_config={
                 "상승일 평균": st.column_config.NumberColumn(format="%,.0f"),
                 "하락일 평균": st.column_config.NumberColumn(format="%,.0f"),
@@ -347,6 +358,7 @@ def _render_correlation_section(
             ])
             st.dataframe(
                 lag_df, use_container_width=True, hide_index=True,
+                height=_df_height(len(lag_df)),
                 column_config={
                     k: st.column_config.NumberColumn(format="%+.3f")
                     for k in lag_keys
@@ -367,6 +379,7 @@ def _render_correlation_section(
             ])
             st.dataframe(
                 rg_df, use_container_width=True, hide_index=True,
+                height=_df_height(len(rg_df)),
                 column_config={
                     k: st.column_config.NumberColumn(format="%+.3f")
                     for k in win_keys
@@ -380,6 +393,7 @@ def _render_correlation_section(
         ])
         st.dataframe(
             lv_df, use_container_width=True, hide_index=True,
+            height=_df_height(len(lv_df)),
             column_config={
                 "r": st.column_config.NumberColumn(format="%+.3f"),
             },
@@ -424,6 +438,7 @@ def _render_advanced_section(
         ])
         st.dataframe(
             adf_df, use_container_width=True, hide_index=True,
+            height=_df_height(len(adf_df)),
             column_config={
                 "ADF": st.column_config.NumberColumn(format="%+.3f"),
                 "p": st.column_config.NumberColumn(format="%.4f"),
@@ -441,6 +456,7 @@ def _render_advanced_section(
             granger_a = _granger_df(adv["granger"], "net_causes_return")
             st.dataframe(
                 granger_a, use_container_width=True, hide_index=True,
+                height=_df_height(len(granger_a)),
                 column_config={
                     f"lag {k}": st.column_config.NumberColumn(format="%.4f")
                     for k in range(1, cfg["granger_max_lag"] + 1)
@@ -451,6 +467,7 @@ def _render_advanced_section(
             granger_b = _granger_df(adv["granger"], "return_causes_net")
             st.dataframe(
                 granger_b, use_container_width=True, hide_index=True,
+                height=_df_height(len(granger_b)),
                 column_config={
                     f"lag {k}": st.column_config.NumberColumn(format="%.4f")
                     for k in range(1, cfg["granger_max_lag"] + 1)
@@ -484,6 +501,7 @@ def _render_advanced_section(
                 irf_df = pd.DataFrame(irf_rows)
                 st.dataframe(
                     irf_df, use_container_width=True, hide_index=True,
+                    height=_df_height(len(irf_df)),
                     column_config={
                         c: st.column_config.NumberColumn(format="%+.5f")
                         for c in irf_df.columns if c.startswith("t=")
@@ -499,6 +517,7 @@ def _render_advanced_section(
         ])
         st.dataframe(
             coint_df, use_container_width=True, hide_index=True,
+            height=_df_height(len(coint_df)),
             column_config={
                 "score": st.column_config.NumberColumn(format="%+.3f"),
                 "p": st.column_config.NumberColumn(format="%.4f"),
@@ -514,6 +533,7 @@ def _render_advanced_section(
         ])
         st.dataframe(
             mi_df, use_container_width=True, hide_index=True,
+            height=_df_height(len(mi_df)),
             column_config={
                 "MI": st.column_config.NumberColumn(format="%.4f"),
             },
@@ -530,6 +550,7 @@ def _render_advanced_section(
         ])
         st.dataframe(
             roll_df, use_container_width=True, hide_index=True,
+            height=_df_height(len(roll_df)),
             column_config={
                 c: st.column_config.NumberColumn(format="%+.3f")
                 for c in ["mean", "min", "p10", "p90", "max"]

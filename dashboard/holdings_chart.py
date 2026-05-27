@@ -299,7 +299,16 @@ def make_figure(
     fig.update_layout(
         title=dict(text=title or "수급 보유 변화", x=0.01, xanchor="left"),
         height=900,
-        hovermode="x unified",
+        # hovermode "x" — 호버한 trace 하나만 박스. unified 는 11 주체 한번에
+        # 떠서 가격선을 덮어버림. 박스를 작게.
+        hovermode="x",
+        hoverlabel=dict(
+            font=dict(family='"Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+                      size=11),
+            namelength=-1,
+            bgcolor="rgba(255, 255, 255, 0.92)",
+            bordercolor="#888",
+        ),
         barmode="relative",
         font=dict(family='"Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
                   size=12),
