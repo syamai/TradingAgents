@@ -21,6 +21,7 @@ import pandas as pd
 import streamlit as st
 
 import tradingagents  # noqa: F401 — dotenv
+from dashboard.advanced_analysis import compute_advanced_report
 from dashboard.correlation_analysis import compute_correlation_report
 from dashboard.holdings_chart import (
     PLOTLY_CONFIG, SUBJECTS_ORDER, SUBJECT_LABELS, load_holdings, make_figure,
@@ -66,6 +67,14 @@ def _cached_correlation(
         company_name=meta.get("company_name"),
         market=meta.get("market"),
     )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_advanced(
+    ticker: str, start: Optional[str], end: Optional[str],
+) -> dict:
+    df, _ = load_holdings(ticker, start=start, end=end)
+    return compute_advanced_report(df)
 
 
 # --- 기간 계산 ---------------------------------------------------------------
@@ -237,6 +246,7 @@ def main() -> None:
     # === 상관 분석 패널 (동적 — 현재 선택 종목) ===
     if not compare:
         _render_correlation_section(primary[0], primary[1], start_str, end_str)
+        _render_advanced_section(primary[0], primary[1], start_str, end_str)
 
     # === 분석 기법 설명 (정적) ===
     _render_methodology_guide()
@@ -376,6 +386,169 @@ def _render_correlation_section(
         )
 
 
+# === 정교한 분석 패널 (동적) -------------------------------------------------
+
+def _render_advanced_section(
+    ticker: str, company_name: str,
+    start: Optional[str], end: Optional[str],
+) -> None:
+    with st.expander(
+        f"🧬 정교한 분석 — Granger·VAR·MI 외 ({company_name})", expanded=False,
+    ):
+        st.caption(
+            "⚠️ Granger·VAR fit·MI 등 statsmodels/sklearn 계산이 수 초 소요됨. "
+            "expander 열면 1회 계산 후 1시간 캐시."
+        )
+        with st.spinner("정교한 분석 계산 중..."):
+            adv = _cached_advanced(ticker, start, end)
+        if not adv["adf"]:
+            st.info("데이터 부족 — 분석 미수행.")
+            return
+
+        cfg = adv["config"]
+        key_labels = ", ".join(SUBJECT_LABELS[s] for s in cfg["key_subjects"])
+        st.caption(
+            f"핵심 주체: {key_labels} · "
+            f"Granger max lag={cfg['granger_max_lag']} · "
+            f"VAR horizon={cfg['var_horizon']}일 · "
+            f"Rolling window={cfg['rolling_window']}일"
+        )
+
+        # 7-1. ADF
+        st.markdown("**7-1. ADF 정상성 검정**")
+        adf_df = pd.DataFrame([
+            {"시리즈": r["label"], "ADF": r["adf_stat"],
+             "p": r["p_value"], "정상성": "✓" if r["is_stationary"] else "✗ 비정상",
+             "n": r["n_obs"]}
+            for r in adv["adf"]
+        ])
+        st.dataframe(
+            adf_df, use_container_width=True, hide_index=True,
+            column_config={
+                "ADF": st.column_config.NumberColumn(format="%+.3f"),
+                "p": st.column_config.NumberColumn(format="%.4f"),
+                "n": st.column_config.NumberColumn(format="%,d"),
+            },
+        )
+        st.caption("종가·cum_qty 같은 누적 시계열이 비정상으로 나오는 게 보통 — "
+                   "level r 은 spurious 위험. Cointegration 결과로 보강.")
+
+        # 7-2. Granger
+        st.markdown("**7-2. Granger Causality**")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("`net_qty → return` — 매매가 미래 가격 *예측*")
+            granger_a = _granger_df(adv["granger"], "net_causes_return")
+            st.dataframe(
+                granger_a, use_container_width=True, hide_index=True,
+                column_config={
+                    f"lag {k}": st.column_config.NumberColumn(format="%.4f")
+                    for k in range(1, cfg["granger_max_lag"] + 1)
+                },
+            )
+        with c2:
+            st.markdown("`return → net_qty` — 가격이 매매 유발 (chasing)")
+            granger_b = _granger_df(adv["granger"], "return_causes_net")
+            st.dataframe(
+                granger_b, use_container_width=True, hide_index=True,
+                column_config={
+                    f"lag {k}": st.column_config.NumberColumn(format="%.4f")
+                    for k in range(1, cfg["granger_max_lag"] + 1)
+                },
+            )
+        st.caption("값은 p-value. p<0.05 면 Granger 인과 — 셀 옆 ✓ 의미는 "
+                   "데이터프레임 값이 0.05 미만인 셀.")
+
+        # 7-3. VAR + IRF
+        st.markdown("**7-3. VAR + 누적 충격반응 (IRF)**")
+        irf = adv["var_irf"] or {}
+        if not irf or irf.get("order") is None:
+            st.info("VAR fit 실패 — 데이터 부족 또는 공선성.")
+        else:
+            st.caption(
+                f"VAR 차수(AIC) = **{irf['order']}**, horizon = {irf['horizon']}일. "
+                "1-σ 매매 충격이 누적 수익률(%)에 미치는 효과."
+            )
+            irf_rows = []
+            for s in cfg["key_subjects"]:
+                key = f"{s}_net->return"
+                vals = irf["irf_cum"].get(key, [])
+                if not vals:
+                    continue
+                row = {"충격원 → return": SUBJECT_LABELS[s]}
+                for h in [0, 1, 3, 5, 10]:
+                    if h < len(vals):
+                        row[f"t={h}"] = vals[h]
+                irf_rows.append(row)
+            if irf_rows:
+                irf_df = pd.DataFrame(irf_rows)
+                st.dataframe(
+                    irf_df, use_container_width=True, hide_index=True,
+                    column_config={
+                        c: st.column_config.NumberColumn(format="%+.5f")
+                        for c in irf_df.columns if c.startswith("t=")
+                    },
+                )
+
+        # 7-4. Cointegration
+        st.markdown("**7-4. Cointegration — `cum_qty ↔ close`**")
+        coint_df = pd.DataFrame([
+            {"주체": r["label"], "score": r["score"], "p": r["p_value"],
+             "공적분": "✓ 장기 균형" if r["is_cointegrated"] else "✗"}
+            for r in adv["cointegration"]
+        ])
+        st.dataframe(
+            coint_df, use_container_width=True, hide_index=True,
+            column_config={
+                "score": st.column_config.NumberColumn(format="%+.3f"),
+                "p": st.column_config.NumberColumn(format="%.4f"),
+            },
+        )
+        st.caption("✓면 두 시계열이 장기적으로 함께 움직임 → level r 신뢰. "
+                   "✗면 추세 동조성으로 spurious 가능.")
+
+        # 7-5. MI
+        st.markdown("**7-5. Mutual Information — 비선형 의존성**")
+        mi_df = pd.DataFrame([
+            {"주체": r["label"], "MI": r["mi"]} for r in adv["mutual_info"]
+        ])
+        st.dataframe(
+            mi_df, use_container_width=True, hide_index=True,
+            column_config={
+                "MI": st.column_config.NumberColumn(format="%.4f"),
+            },
+        )
+        st.caption("Pearson r 이 작은데 MI 가 크면 비선형 의존성 신호.")
+
+        # 7-6. Rolling
+        rw = cfg["rolling_window"]
+        st.markdown(f"**7-6. Rolling correlation ({rw}일) — DCC 단순판**")
+        roll_df = pd.DataFrame([
+            {"주체": r["label"], "mean": r["mean"], "std": r["std"],
+             "min": r["min"], "p10": r["p10"], "p90": r["p90"], "max": r["max"]}
+            for r in adv["rolling_r"] if r["mean"] is not None
+        ])
+        st.dataframe(
+            roll_df, use_container_width=True, hide_index=True,
+            column_config={
+                c: st.column_config.NumberColumn(format="%+.3f")
+                for c in ["mean", "min", "p10", "p90", "max"]
+            } | {"std": st.column_config.NumberColumn(format="%.3f")},
+        )
+        st.caption("std 가 크면 상관 강도가 시기마다 크게 변동(regime 변화 시사).")
+
+
+def _granger_df(rows: list[dict], direction_key: str) -> pd.DataFrame:
+    """granger 양방향 결과 → pivot DataFrame (행: 주체, 열: lag 1..N)."""
+    out_rows = []
+    for r in rows:
+        row = {"주체": r["label"]}
+        for x in r[direction_key]:
+            row[f"lag {x['lag']}"] = x["p_value"]
+        out_rows.append(row)
+    return pd.DataFrame(out_rows)
+
+
 # === 분석 기법 가이드 (정적) -------------------------------------------------
 
 def _render_methodology_guide() -> None:
@@ -429,24 +602,31 @@ t=0 만 강하고 t±1, ±3 이 0 에 가까우면 → 수급은 가격을 1 일
 
 ---
 
-### 더 정교한 기법 (현재 미적용 — 필요 시 확장 가능)
+### 더 정교한 기법 — 구현 적용 6 종 (위 "🧬 정교한 분석" expander 참조)
 
-| 기법 | 무엇을 잡나 | 비고 |
+| 기법 | 무엇을 잡나 | 구현 위치 |
 |---|---|---|
-| **Granger causality test** | X 가 Y 의 *미래값* 예측에 통계적으로 기여하는가 (선형) | 인과 방향 검증. AR 모델 잔차 비교 (F-test). 의미는 "예측력"이지 진짜 인과는 아님 |
-| **VAR (Vector AutoRegression)** | 11 주체 net_qty + 수익률을 동시에 다변량 lag 회귀 | 충격반응함수(IRF) 로 "외국인 매수 충격이 가격에 미치는 누적 효과" 추적 |
-| **DCC-GARCH** | 시간에 따라 *변하는* 상관 (regime split 의 연속판) | 조건부 상관이 시점마다 다름. 위기·붐 시기 동조성 변화 탐지 |
-| **Cointegration / VECM** | `cum_qty` 와 `close` 같은 비정상(non-stationary) 시계열의 **장기 균형** | level r 의 spurious 위험을 정식으로 처리. Engle-Granger 또는 Johansen 검정 |
-| **Mutual information (MI)** | **비선형** 의존성 (Pearson r 은 선형만 잡음) | KSG 추정기. 변수가 step·threshold 형태로 반응하면 r 은 작지만 MI 는 큼 |
-| **Transfer entropy** | 정보 흐름의 방향성 — Granger 의 비선형판 | MI 기반. 선도/후행을 엔트로피로 표현 |
-| **Hawkes process** | 매매 이벤트의 자기·교차 유발(self/cross-excitation) | 한 주체의 매수가 다른 주체의 매수를 부르는 군집 효과 |
-| **Wavelet coherence** | 시간-주파수 공간에서 두 시계열의 공변 | 단기·중기·장기에서 동조성이 어떻게 다른지 동시에 본다 |
+| **ADF (Augmented Dickey-Fuller)** | 시리즈가 정상(stationary)인가 — level r 의 spurious 위험 정량화 | 7-1 |
+| **Granger causality** | X 가 Y 의 *미래값* 예측에 기여 (선형, F-test). 양방향: 매매→가격 / 가격→매매(chasing) | 7-2 |
+| **VAR + Impulse Response** | 다변량 lag 회귀. 1-σ 매매 충격이 누적 수익률에 미치는 효과를 horizon 별로 추적 | 7-3 |
+| **Cointegration (Engle-Granger)** | `cum_qty` 와 `close` 같은 비정상 시계열의 **장기 균형** | 7-4 |
+| **Mutual Information** | **비선형** 의존성 (Pearson r 은 선형만). KSG 추정기. | 7-5 |
+| **Rolling correlation** | 시간에 따른 상관 변화. DCC-GARCH 의 단순판. | 7-6 |
+
+### 구현하지 않은 4 종 — 사유
+
+| 기법 | 사유 |
+|---|---|
+| **DCC-GARCH** | `arch` 라이브러리(C 확장) 추가 필요, fit 시간 길고 종목·주체별로 모델링이 무거움. **Rolling correlation (7-6)** 으로 1차 근사. |
+| **Transfer Entropy** | 안정적 PyPI 패키지 부재(직접 구현 필요), 표본 크기에 매우 민감해 1,200일로는 추정 분산이 큼. **Granger (7-2) + MI (7-5)** 로 선·비선형 정보 흐름은 부분 커버. |
+| **Hawkes process** | `tick` 라이브러리는 macOS arm64 빌드 이슈가 잦고, 이벤트 자기·교차 유발 모델은 일별 데이터(저빈도)보다 분/틱 데이터에서 가치가 높음. |
+| **Wavelet coherence** | `pywt` + 자체 구현 부담. 결과 해석에 푸리에/웨이블릿 도메인 친숙도 필요. 본 분석 목적(주체별 상관 구조)에 비해 가독성 낮음. |
 
 ### 본 패널에서 보강 가능한 다음 단계
 
 - Pearson 외에 **Spearman 순위 상관** 추가 — 비선형 단조 관계 보존, outlier 강건
-- 정상성 검정 (ADF) — level correlation 해석 정당화 또는 폐기
 - 가중 상관 — 거래대금 가중 r (큰 거래일에 가중)
+- **VECM** (Vector Error Correction Model) — cointegration ✓ 인 시리즈의 장단기 분리
             """.strip()
         )
 
