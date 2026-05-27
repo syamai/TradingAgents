@@ -74,6 +74,7 @@ def _render_panel(
     ticker: str, company_name: str, market: str,
     start: Optional[str], end: Optional[str],
     visible_subjects: list[str],
+    pct_mode: str,
 ) -> None:
     df, meta = _cached_holdings(ticker, start, end)
 
@@ -89,7 +90,10 @@ def _render_panel(
         f"시장: {mkt} · 기간: {df['date'].iloc[0]} ~ {df['date'].iloc[-1]} "
         f"· 총 {len(df)}일"
     )
-    fig = make_figure(df, title=None, visible_subjects=visible_subjects)
+    fig = make_figure(
+        df, title=None,
+        visible_subjects=visible_subjects, pct_mode=pct_mode,
+    )
     # height 는 비교 모드에서 column 폭이 절반이라 살짝 줄임
     st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
@@ -155,6 +159,16 @@ def main() -> None:
             format_func=lambda s: SUBJECT_LABELS[s],
         )
 
+        st.header("Row 3 비중")
+        pct_mode_label = st.radio(
+            "분모 기준",
+            ["누적 (첫 거래일~오늘)", "일별 (그날 net_qty)"],
+            index=0,
+            help="누적: |cum_qty| / Σ|cum_qty|. "
+                 "일별: |net_qty| / Σ|net_qty| (그날 분).",
+        )
+        pct_mode = "cumulative" if pct_mode_label.startswith("누적") else "daily"
+
         st.header("비교 모드")
         compare = st.checkbox("두 종목 비교", value=False)
         compare_idx: Optional[int] = None
@@ -177,14 +191,14 @@ def main() -> None:
         col1, col2 = st.columns(2)
         with col1:
             _render_panel(primary[0], primary[1], primary[2],
-                          start_str, end_str, visible)
+                          start_str, end_str, visible, pct_mode)
         with col2:
             other = tickers[compare_idx]
             _render_panel(other[0], other[1], other[2],
-                          start_str, end_str, visible)
+                          start_str, end_str, visible, pct_mode)
     else:
         _render_panel(primary[0], primary[1], primary[2],
-                      start_str, end_str, visible)
+                      start_str, end_str, visible, pct_mode)
 
     with st.expander("ℹ️ 차트 해석 가이드"):
         st.markdown(
@@ -193,7 +207,9 @@ def main() -> None:
 - **Row 2** — 11 주체 *누적* 보유량. 라인 기울기 = 매수·매도 강도.
   카테고리(외국인 / 기관 / 개인 / 기타법인)별 범례 그룹 클릭으로 한 번에 토글.
 - **Row 3** — 10 sub 의 *비중* 100% 누적영역. 외국인은 통합이 아니라 등록 + 비등록으로 분해되어 합 = 100%.
-- 첫 거래일 근처는 누적이 작아 row 3 비중이 흔들리는 게 정상.
+  - **누적 모드** — 첫 거래일부터의 매매 영향력 누적 비중. 시간이 지나면 안정됨.
+  - **일별 모드** — 그날 하루의 매매 비중. 누적과 달리 일변동이 크고, 거래가 없는 주체는 즉시 0%.
+- 첫 거래일 근처는 누적이 작아 row 3 (누적 모드) 비중이 흔들리는 게 정상.
 
 **조작법**
 

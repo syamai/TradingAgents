@@ -122,17 +122,35 @@ def _pct_col(s: str) -> str:
     return f"{s}_pct"
 
 
+PCT_MODES = ("cumulative", "daily")
+
+
 def make_figure(
     df: pd.DataFrame,
     *,
     title: Optional[str] = None,
     visible_subjects: Optional[Iterable[str]] = None,
+    pct_mode: str = "cumulative",
 ) -> go.Figure:
     """3-패널 figure 생성. 빈 DataFrame 도 안전(빈 figure 반환).
 
     ``visible_subjects`` 미지정 시 모두 표시. 일부만 지정하면 나머지는
     ``legendonly`` 로 숨김(범례 클릭으로 재표시 가능).
+
+    ``pct_mode``:
+      - ``"cumulative"`` (디폴트): row 3 = ``|cum_qty|`` / ``sum(|10 sub cum_qty|)``
+        × 100. 첫 거래일부터 누적된 매매 영향력 비중.
+      - ``"daily"``: row 3 = ``|net_qty|`` / ``sum(|10 sub net_qty|)`` × 100.
+        그날 일별 순매수 절댓값 비중. 0 거래일은 분모 0 → 0%.
     """
+    if pct_mode not in PCT_MODES:
+        raise ValueError(f"pct_mode must be one of {PCT_MODES}, got {pct_mode!r}")
+
+    row3_title = {
+        "cumulative": "주체별 보유 비율 — 누적 (10 sub, 합=100%)",
+        "daily": "주체별 보유 비율 — 일별 (10 sub, 합=100%)",
+    }[pct_mode]
+
     fig = make_subplots(
         rows=3, cols=1,
         shared_xaxes=True,
@@ -143,8 +161,7 @@ def make_figure(
             [{"secondary_y": False}],  # row 2: cum_qty
             [{"secondary_y": False}],  # row 3: pct 100% stack
         ],
-        subplot_titles=("종가 / 가격변동률", "주체별 누적 보유량",
-                        "주체별 보유 비율 (10 sub, 합=100%)"),
+        subplot_titles=("종가 / 가격변동률", "주체별 누적 보유량", row3_title),
     )
 
     if df.empty:
@@ -169,16 +186,8 @@ def make_figure(
     x = df["date"]
 
     # === Row 1 — 종가 (left y) + 가격변동률 bar (right y) ===
-    fig.add_trace(
-        go.Scatter(
-            x=x, y=df["close"],
-            name="종가", mode="lines",
-            line=dict(color="#1f1f1f", width=1.6),
-            hovertemplate="%{x|%Y-%m-%d}<br>종가: %{y:,.0f}원<extra></extra>",
-            legendgroup="가격", legendgrouptitle_text="가격",
-        ),
-        row=1, col=1, secondary_y=False,
-    )
+    # 변동률 bar 를 먼저(아래) → 종가 line 을 나중(위). bar 는 반투명(0.30)
+    # 으로 깔고 line 은 진한 인디고 + 두께 2.4 로 메인 시그널이 묻히지 않게.
     pct = df["price_change_pct"]
     bar_colors = ["#e74c3c" if v >= 0 else "#3498db" for v in pct]
     fig.add_trace(
@@ -186,11 +195,21 @@ def make_figure(
             x=x, y=pct,
             name="가격 변동률 (%)",
             marker_color=bar_colors,
-            opacity=0.55,
+            opacity=0.30,
             hovertemplate="%{x|%Y-%m-%d}<br>변동: %{y:+.2f}%<extra></extra>",
-            legendgroup="가격",
+            legendgroup="가격", legendgrouptitle_text="가격",
         ),
         row=1, col=1, secondary_y=True,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x, y=df["close"],
+            name="종가", mode="lines",
+            line=dict(color="#1a237e", width=2.4),
+            hovertemplate="%{x|%Y-%m-%d}<br>종가: %{y:,.0f}원<extra></extra>",
+            legendgroup="가격",
+        ),
+        row=1, col=1, secondary_y=False,
     )
 
     # === Row 2 — 11 주체 cum_qty 라인 ===
@@ -214,10 +233,21 @@ def make_figure(
         )
 
     # === Row 3 — 10 sub pct 100% 누적영역 (외국인 통합 제외) ===
+    # cumulative: 저장된 _pct 컬럼 그대로. daily: net_qty 절댓값으로 즉석 계산.
+    if pct_mode == "cumulative":
+        pct_series = {s: df[_pct_col(s)] for s in SUBS_10}
+    else:  # daily
+        abs_net = {s: df[_net_col(s)].abs() for s in SUBS_10}
+        denom = sum(abs_net.values())
+        safe_denom = denom.where(denom != 0, other=1)
+        pct_series = {
+            s: (abs_net[s] / safe_denom * 100).round(4) for s in SUBS_10
+        }
+
     for s in SUBS_10:
         fig.add_trace(
             go.Scatter(
-                x=x, y=df[_pct_col(s)],
+                x=x, y=pct_series[s],
                 name=SUBJECT_LABELS[s] + " (비중)",
                 mode="lines",
                 line=dict(width=0.5, color=SUBJECT_COLORS[s]),

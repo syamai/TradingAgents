@@ -69,6 +69,38 @@ class TestMakeFigure:
         fig = make_figure(_sample_holdings(), title="삼성전자 005930")
         assert fig.layout.title.text == "삼성전자 005930"
 
+    def test_invalid_pct_mode_raises(self):
+        with pytest.raises(ValueError, match="pct_mode"):
+            make_figure(_sample_holdings(), pct_mode="weekly")
+
+    def test_pct_mode_changes_row3_title(self):
+        cum = make_figure(_sample_holdings(), pct_mode="cumulative")
+        daily = make_figure(_sample_holdings(), pct_mode="daily")
+        # row 3 subplot title 은 layout.annotations[2].text (subplot_titles 순서 그대로)
+        assert "누적" in cum.layout.annotations[2].text
+        assert "일별" in daily.layout.annotations[2].text
+
+    def test_pct_mode_daily_uses_net_qty(self):
+        """일별 모드 row 3 첫 행의 비중이 net_qty 절댓값 분포와 일치."""
+        from dashboard.holdings_chart import SUBS_10
+        df = _sample_holdings()
+        fig = make_figure(df, pct_mode="daily")
+        # row 3 는 yaxis="y4"
+        row3 = [t for t in fig.data if t.yaxis == "y4"]
+        assert len(row3) == 10
+        # _sample_holdings 첫 행: retail=100, foreign_registered=50 → 합=150
+        # retail 비중 = 100/150 * 100 ≈ 66.67%, foreign_registered ≈ 33.33%
+        # trace 순서는 SUBS_10 순서: foreign_registered, foreign_unregistered, ...
+        first_row_pcts = {t.name: t.y[0] for t in row3}
+        assert first_row_pcts["개인 (비중)"] == pytest.approx(66.6667, abs=0.01)
+        assert first_row_pcts["외국인(등록) (비중)"] == pytest.approx(33.3333, abs=0.01)
+        # 다른 sub 는 0
+        zero_subs = [n for s in SUBS_10
+                     for n in [SUBJECT_LABELS[s] + " (비중)"]
+                     if s not in ("retail", "foreign_registered")]
+        for name in zero_subs:
+            assert first_row_pcts[name] == 0.0
+
 
 # === load_holdings round trip ===
 

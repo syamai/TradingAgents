@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 
 import tradingagents  # noqa: F401 — dotenv 로딩
-from dashboard.holdings_chart import load_holdings, make_figure, save_html
+from dashboard.holdings_chart import PCT_MODES, load_holdings, make_figure, save_html
 
 _NOTEBOOKS_DIR = Path(__file__).resolve().parent.parent / "notebooks"
 
@@ -30,6 +30,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--start", help="시작일 YYYY-MM-DD (옵션)")
     p.add_argument("--end", help="종료일 YYYY-MM-DD (옵션)")
     p.add_argument("--output", help="출력 HTML 경로 (옵션)")
+    p.add_argument(
+        "--pct-mode", choices=list(PCT_MODES), default="cumulative",
+        help="Row 3 비중 분모: cumulative=누적, daily=그날 net_qty",
+    )
     return p.parse_args(argv)
 
 
@@ -51,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{df['date'].iloc[0]} ~ {df['date'].iloc[-1]} · {len(df)}일"
     )
 
-    fig = make_figure(df, title=title)
+    fig = make_figure(df, title=title, pct_mode=args.pct_mode)
 
     out_path = Path(args.output) if args.output else _default_output(ticker_norm, company_name)
     save_html(fig, out_path)
