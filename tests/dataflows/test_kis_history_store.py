@@ -23,9 +23,11 @@ def _investor_rows(dates, foreign_amount=None):
             "foreign_unregistered_qty": 0, "foreign_registered_amount": 0,
             "foreign_unregistered_amount": 0,
             "institution_qty": 0, "pension_qty": 0, "private_equity_qty": 0,
-            "investment_trust_qty": 0, "securities_qty": 0, "bank_insurance_qty": 0,
+            "investment_trust_qty": 0, "securities_qty": 0,
+            "bank_qty": 0, "insurance_qty": 0,
             "institution_amount": 0, "pension_amount": 0, "private_equity_amount": 0,
-            "investment_trust_amount": 0, "securities_amount": 0, "bank_insurance_amount": 0,
+            "investment_trust_amount": 0, "securities_amount": 0,
+            "bank_amount": 0, "insurance_amount": 0,
             "retail_qty": 0, "retail_amount": 0,
             "other_corp_qty": 0, "other_corp_amount": 0,
         }

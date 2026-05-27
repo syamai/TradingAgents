@@ -37,10 +37,10 @@ from tradingagents.dataflows.korean_utils import to_naver_code
 
 logger = logging.getLogger(__name__)
 
-Endpoint = Literal["investor", "program", "short"]
+Endpoint = Literal["investor", "program", "short", "holdings"]
 Backend = Literal["parquet", "sqlite"]
 
-_VALID_ENDPOINTS: tuple[Endpoint, ...] = ("investor", "program", "short")
+_VALID_ENDPOINTS: tuple[Endpoint, ...] = ("investor", "program", "short", "holdings")
 _VALID_BACKENDS: tuple[Backend, ...] = ("parquet", "sqlite")
 
 
@@ -111,7 +111,7 @@ class KisHistoryStore:
         for col in columns:
             if col == "date":
                 col_defs.append("date TEXT NOT NULL")
-            elif col.endswith("_ratio"):
+            elif col.endswith(("_ratio", "_pct")):
                 col_defs.append(f"{col} REAL")
             else:
                 col_defs.append(f"{col} INTEGER")
@@ -162,6 +162,10 @@ class KisHistoryStore:
         if "sqlite" in self.backends:
             self._write_sqlite(ticker, endpoint, merged)
         self._update_meta(ticker, endpoint, merged)
+        # raw investor 갱신 시 derived holdings도 자동 재계산.
+        # endpoint=="holdings" 일 때는 재귀 호출 안 됨 (raw → derived 한 방향).
+        if endpoint == "investor":
+            self._materialize_holdings(ticker, merged)
         return len(merged)
 
     def read(
@@ -293,3 +297,86 @@ class KisHistoryStore:
         path = self._meta_path(ticker)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # === Holdings derived (raw investor → cumsum/pct/price_change) ===
+
+    def _materialize_holdings(self, ticker: str, investor_df: pd.DataFrame) -> None:
+        """raw investor → holdings derived. ``write(endpoint='investor')`` 끝에 자동 호출.
+
+        ticker 는 정규화된 6자리. 한 ticker 분량 investor 데이터를 받아
+        ``compute_holdings`` 결과를 다시 ``write(endpoint='holdings')`` 로 영구화.
+        """
+        from tradingagents.dataflows.kis_holdings import compute_holdings
+        derived = compute_holdings(investor_df)
+        if derived.empty:
+            return
+        # write() 재진입 — endpoint=='holdings' 라 hook 재귀 없음.
+        self.write(ticker, "holdings", derived.to_dict("records"))
+
+    def materialize_holdings(self, ticker: str) -> int:
+        """기존 raw investor 데이터에서 holdings 재계산 (CLI 일괄 마이그레이션용).
+
+        Returns: holdings 테이블에 저장된 행 수 (0이면 raw 없음).
+        """
+        norm = _norm_ticker(ticker)
+        raw = self.read(norm, "investor")
+        if raw.empty:
+            return 0
+        self._materialize_holdings(norm, raw)
+        return len(raw)
+
+    # === Tickers meta (종목명·시장) ===
+
+    def _ensure_tickers_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tickers (
+                ticker TEXT PRIMARY KEY,
+                company_name TEXT NOT NULL,
+                market TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
+    def set_ticker_metadata(
+        self, ticker: str, company_name: str, market: str
+    ) -> None:
+        """tickers 메타 upsert. ``market`` 은 'KOSPI' 또는 'KOSDAQ'."""
+        if "sqlite" not in self.backends:
+            return
+        from datetime import datetime
+        norm = _norm_ticker(ticker)
+        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self._sqlite_conn() as conn:
+            self._ensure_tickers_table(conn)
+            conn.execute(
+                "INSERT INTO tickers (ticker, company_name, market, updated_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(ticker) DO UPDATE SET "
+                "  company_name=excluded.company_name, "
+                "  market=excluded.market, "
+                "  updated_at=excluded.updated_at",
+                (norm, company_name, market, now),
+            )
+
+    def get_ticker_metadata(self, ticker: str) -> Optional[dict]:
+        """단일 ticker의 메타 dict 반환. 없으면 None."""
+        if "sqlite" not in self.backends:
+            return None
+        norm = _norm_ticker(ticker)
+        if not self._sqlite_path().exists():
+            return None
+        with self._sqlite_conn() as conn:
+            try:
+                row = conn.execute(
+                    "SELECT ticker, company_name, market, updated_at "
+                    "FROM tickers WHERE ticker = ?",
+                    (norm,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                return None
+        if row is None:
+            return None
+        return {
+            "ticker": row[0], "company_name": row[1],
+            "market": row[2], "updated_at": row[3],
+        }
