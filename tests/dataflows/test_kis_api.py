@@ -317,14 +317,17 @@ class TestFetchInvestorTrend:
             assert r0["private_equity_qty"] == 60000
             assert r0["investment_trust_qty"] == 40000
             assert r0["securities_qty"] == 30000
-            assert r0["bank_insurance_qty"] == 15000 + 9567  # combined
+            # 은행/보험 분리 (이전엔 bank_insurance 합산이었음)
+            assert r0["bank_qty"] == 15000
+            assert r0["insurance_qty"] == 9567
             # retail + other corp
             assert r0["retail_qty"] == -111111
             assert r0["other_corp_qty"] == 5000
             # amounts (sample row 0)
             assert r0["foreign_amount"] == -9302092800
             assert r0["pension_amount"] == 6024000000
-            assert r0["bank_insurance_amount"] == 1129500000 + 720494100
+            assert r0["bank_amount"] == 1129500000
+            assert r0["insurance_amount"] == 720494100
 
     def test_lookback_3_truncates(self, isolated_cache, kis_env, monkeypatch):
         monkeypatch.setattr(kis_api, "_is_market_open", lambda *a: True)

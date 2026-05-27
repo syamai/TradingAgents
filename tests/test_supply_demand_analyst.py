@@ -95,15 +95,17 @@ class TestSafeWrapper:
 # === block formatters ===
 
 def _investor_row(date, close, fq, iq, rq, fa, ia, ra, **kwargs):
-    """Build a fetcher-shaped row with all 9-subject keys (defaults to 0)."""
+    """Build a fetcher-shaped row with all 11-subject keys (defaults to 0)."""
     base = {
         "date": date, "close": close,
         "foreign_qty": fq, "foreign_registered_qty": 0, "foreign_unregistered_qty": 0,
         "foreign_amount": fa, "foreign_registered_amount": 0, "foreign_unregistered_amount": 0,
         "institution_qty": iq, "pension_qty": 0, "private_equity_qty": 0,
-        "investment_trust_qty": 0, "securities_qty": 0, "bank_insurance_qty": 0,
+        "investment_trust_qty": 0, "securities_qty": 0,
+        "bank_qty": 0, "insurance_qty": 0,
         "institution_amount": ia, "pension_amount": 0, "private_equity_amount": 0,
-        "investment_trust_amount": 0, "securities_amount": 0, "bank_insurance_amount": 0,
+        "investment_trust_amount": 0, "securities_amount": 0,
+        "bank_amount": 0, "insurance_amount": 0,
         "retail_qty": rq, "retail_amount": ra,
         "other_corp_qty": 0, "other_corp_amount": 0,
     }
