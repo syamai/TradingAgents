@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
 from typing import Optional
 
@@ -616,17 +617,45 @@ def _render_llm_synthesis_section(
         f"🧠 최종 종합 의견 — {company_name} (로컬 LLM)", expanded=False,
     ):
         st.caption(
-            f"로컬 LLM (`{DEFAULT_PROVIDER}` · `{DEFAULT_MODEL}`)이 위 12 섹션 "
-            "자동 해석을 통합해 최종 의견을 작성합니다. 첫 호출에 10~30 초 "
-            "소요 후 1 시간 캐시. 매매 추천은 포함하지 않습니다."
+            f"LLM 이 위 12 섹션 자동 해석을 통합해 최종 의견을 작성합니다. "
+            f"로컬(Ollama) 모델은 무료지만 외부 API 모델(OpenAI/Anthropic 등)은 "
+            f"호출당 비용 발생. 첫 호출 10~30 초, 1 시간 캐시. 매매 추천 미포함."
         )
+
+        CUSTOM = "✏️ 직접 입력..."
+        PRESET_MODELS = [
+            # 로컬 (Ollama)
+            f"{DEFAULT_PROVIDER}:{DEFAULT_MODEL}",
+            "ollama:llama3.2:8b",
+            "ollama:qwen2.5:14b",
+            # OpenAI
+            "openai:gpt-5",
+            "openai:gpt-4.1",
+            "openai:gpt-4o",
+            "openai:gpt-4o-mini",
+            # Anthropic
+            "anthropic:claude-sonnet-4-6",
+            "anthropic:claude-haiku-4-5",
+            # Google
+            "google:gemini-2.5-pro",
+            CUSTOM,
+        ]
+
         col_a, col_b = st.columns([3, 1])
         with col_a:
-            model = st.text_input(
-                "모델 (provider:model 또는 model 만)",
-                value=f"{DEFAULT_PROVIDER}:{DEFAULT_MODEL}",
-                help="예: `ollama:gemma4:26b-a4b` 또는 `ollama:llama3.2:8b`",
+            selected = st.selectbox(
+                "모델 선택", PRESET_MODELS, index=0,
+                help="외부 API 모델(openai/anthropic/google) 은 해당 API_KEY "
+                     "환경변수가 .env 또는 셸에 설정되어 있어야 합니다.",
             )
+            if selected == CUSTOM:
+                model = st.text_input(
+                    "provider:model 직접 입력",
+                    value=f"{DEFAULT_PROVIDER}:{DEFAULT_MODEL}",
+                    help="예: `ollama:gemma2:27b`, `openai:o4-mini`",
+                )
+            else:
+                model = selected
         with col_b:
             st.write("")  # vertical spacer
             run = st.button("의견 생성", type="primary")
@@ -636,6 +665,21 @@ def _render_llm_synthesis_section(
             provider, _, model_name = model.partition(":")
         else:
             provider, model_name = DEFAULT_PROVIDER, model
+
+        # 외부 API provider 선택 시 키 부재 경고
+        _KEY_ENV = {
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "google": "GOOGLE_API_KEY",
+            "xai": "XAI_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+        }
+        key_env = _KEY_ENV.get(provider)
+        if key_env and not os.environ.get(key_env):
+            st.warning(
+                f"⚠️ 환경변수 `{key_env}` 가 설정되지 않았습니다. "
+                f"호출이 실패할 수 있습니다 — `.env` 파일에 키 추가 필요."
+            )
 
         if not run:
             st.info("'의견 생성' 버튼을 누르면 로컬 LLM 호출이 시작됩니다.")
