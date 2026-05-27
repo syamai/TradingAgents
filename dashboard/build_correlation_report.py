@@ -19,6 +19,9 @@ from datetime import date
 from pathlib import Path
 
 import tradingagents  # noqa: F401 — dotenv
+from dashboard.advanced_analysis import (
+    compute_advanced_report, render_advanced_markdown,
+)
 from dashboard.correlation_analysis import (
     compute_correlation_report, render_markdown,
 )
@@ -77,6 +80,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                    help="마크다운을 임의 경로에 추가 저장")
     p.add_argument("--print", action="store_true",
                    help="마크다운을 stdout에도 출력")
+    p.add_argument("--advanced", action="store_true",
+                   help="정교한 분석 6 종 (Granger·VAR·MI 등) 함께 계산·저장")
     return p.parse_args(argv)
 
 
@@ -96,7 +101,12 @@ def main(argv: list[str] | None = None) -> int:
         company_name=meta.get("company_name"),
         market=meta.get("market"),
     )
+    if args.advanced:
+        report["advanced"] = compute_advanced_report(df)
+
     md_body = render_markdown(report)
+    if args.advanced and report.get("advanced"):
+        md_body += "\n\n" + render_advanced_markdown(report["advanced"])
     md_full = _frontmatter(report) + md_body + "\n"
 
     saved_paths: list[str] = []
