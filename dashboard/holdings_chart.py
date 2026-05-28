@@ -62,15 +62,15 @@ SUBJECT_COLORS: dict[str, str] = {
     "foreign": "#d62728",
     "foreign_registered": "#ff7f0e",
     "foreign_unregistered": "#ffbb78",
-    # 기관 — blue/purple 계열
-    "pension": "#1f3b73",
+    # 기관 — blue/purple/earth 계열
+    # 연기금: 금융투자(#1f77b4 청)와 색상환 거리 확보를 위해 다크 브라운(어스톤)으로.
+    "pension": "#5d4037",
     "private_equity": "#8c6bb1",
     "investment_trust": "#17becf",
     "securities": "#1f77b4",
     "bank": "#7f8fa6",
-    # 보험: 기관 6 sub 안에서 연기금(#1f3b73 진청)과 톤이 비슷하지 않도록
-    # 자홍/장미 계열로. 외국인 red 계열(#d62728/#ff7f0e/#ffbb78)과 색상환에서
-    # 떨어져 있어 카테고리 혼동도 적다.
+    # 보험: 외국인 red 계열(#d62728/#ff7f0e/#ffbb78)과 색상환에서
+    # 떨어진 자홍/장미 계열.
     "insurance": "#c2185b",
     # 개인 — green
     "retail": "#2ca02c",
@@ -83,6 +83,17 @@ SUBJECT_LEGENDGROUP: dict[str, str] = {
     "pension": "기관", "private_equity": "기관", "investment_trust": "기관",
     "securities": "기관", "bank": "기관", "insurance": "기관",
     "retail": "개인", "other_corp": "기타법인",
+}
+
+# 차트 legend 전용 짧은 라벨 — 외국인 그룹 헤더 "외국인" 과 라벨이 중복돼서
+# (예: "외국인 > 외국인(통합)") legend 폭을 초과해 wrap 됐다. 그룹 헤더만으로
+# 외국인임이 명확하므로 sub-카테고리만 표기. 다른 그룹은 그대로 (이미 짧음).
+# 보고서·해석·hover 는 SUBJECT_LABELS (풀 라벨) 그대로 유지.
+LEGEND_LABELS: dict[str, str] = {
+    **SUBJECT_LABELS,
+    "foreign": "통합",
+    "foreign_registered": "등록",
+    "foreign_unregistered": "비등록",
 }
 
 # Sanity: 라벨·색상·legendgroup 11개 모두 정의되어 있어야 한다.
@@ -157,7 +168,7 @@ def make_figure(
     fig = make_subplots(
         rows=3, cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.04,
+        vertical_spacing=0.09,
         row_heights=[0.40, 0.35, 0.25],
         specs=[
             [{"secondary_y": True}],   # row 1: 종가 + 가격변동률
@@ -220,7 +231,7 @@ def make_figure(
         fig.add_trace(
             go.Scatter(
                 x=x, y=df[_cum_col(s)],
-                name=SUBJECT_LABELS[s],
+                name=LEGEND_LABELS[s],
                 mode="lines",
                 line=dict(color=SUBJECT_COLORS[s], width=1.6),
                 legendgroup=SUBJECT_LEGENDGROUP[s],
@@ -299,11 +310,9 @@ def make_figure(
         ),
     )
 
-    # x축(plot 영역)을 paper 좌표 0~0.65 로 제한 → 우측 35% 가 hover 박스
-    # 와 legend 전용 빈 공간. plotly 의 unified hover 박스가 cursor 옆에
-    # 자동 배치되는데, plot 영역 자체를 좌측으로 좁히면 박스가 우측 빈 공간에
-    # 자연스럽게 들어간다.
-    fig.update_xaxes(domain=[0.0, 0.65])
+    # x축(plot 영역)은 풀폭. legend 는 plot 아래 horizontal 배치
+    # → 가로 폭이 무한하므로 한국어 라벨 wrap·압축 문제 원천 차단.
+    fig.update_xaxes(domain=[0.0, 1.0])
 
     fig.update_layout(
         title=dict(text=title or "수급 보유 변화", x=0.01, xanchor="left"),
@@ -320,13 +329,18 @@ def make_figure(
         font=dict(family='"Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
                   size=12),
         legend=dict(
-            orientation="v",
-            yanchor="top", y=1.0,
-            # 좁아진 plot 우경계(0.65) 바로 옆
-            xanchor="left", x=0.66,
+            # plot 아래 horizontal — 한국어 라벨이 좁은 vertical legend 에서
+            # wrap 되며 세로로 겹쳐 보이는 문제를 가로 폭 무한으로 해결.
+            orientation="h",
+            yanchor="top", y=-0.15,
+            xanchor="left", x=0,
             groupclick="togglegroup",
+            itemsizing="constant",
+            itemwidth=40,
+            font=dict(size=12),
+            tracegroupgap=20,
         ),
-        margin=dict(l=70, r=30, t=70, b=80),
+        margin=dict(l=70, r=30, t=70, b=160),  # b 늘려 horizontal legend 공간
     )
     return fig
 

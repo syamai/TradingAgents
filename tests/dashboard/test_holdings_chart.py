@@ -55,14 +55,15 @@ class TestMakeFigure:
         assert len(fig.data) == 23
 
     def test_visible_subjects_legendonly(self):
+        from dashboard.holdings_chart import LEGEND_LABELS
         df = _sample_holdings()
         fig = make_figure(df, visible_subjects=["foreign", "retail"])
         # row 2 의 cum_qty trace 중 foreign·retail 만 True, 나머지 9 개는 'legendonly'.
         row2 = [t for t in fig.data if t.yaxis == "y3"]
         names_visible = [t.name for t in row2 if t.visible is True]
-        # 한국어 라벨로 매칭
-        assert SUBJECT_LABELS["foreign"] in names_visible
-        assert SUBJECT_LABELS["retail"] in names_visible
+        # Row 2 trace.name 은 LEGEND_LABELS (짧은 라벨) 사용 — 외국인은 "통합"
+        assert LEGEND_LABELS["foreign"] in names_visible
+        assert LEGEND_LABELS["retail"] in names_visible
         assert len(names_visible) == 2
 
     def test_title_propagates(self):
