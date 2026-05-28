@@ -20,6 +20,7 @@ from typing import Optional
 
 import pandas as pd
 import streamlit as st
+from streamlit_searchbox import st_searchbox
 
 import tradingagents  # noqa: F401 — dotenv
 import dashboard.interpretation as itp
@@ -43,15 +44,34 @@ st.set_page_config(
 
 # --- 데이터 로드 (캐시) ------------------------------------------------------
 
+def _tickers_db_mtime() -> float:
+    """``kis.db`` mtime — `_cached_tickers` 의 캐시 무효화 키.
+
+    데이터 수집/메타 변경 시 DB가 갱신되면 mtime이 바뀌어 캐시 자동 무효화.
+    """
+    db = KisHistoryStore()._sqlite_path()
+    return db.stat().st_mtime if db.exists() else 0.0
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
-def _cached_tickers() -> list[tuple[str, str, str]]:
-    """(ticker, company_name, market) 리스트. 회사명 가나다순."""
+def _cached_tickers(db_mtime: float) -> list[tuple[str, str, str]]:
+    """(ticker, company_name, market) 리스트. 회사명 가나다순.
+
+    ``tickers`` 메타에 등록된 종목만 노출 — investor 데이터 수집이 완료된
+    표식. parquet 디렉토리만 있고 메타 미등록인 종목(부분 수집)은 제외해
+    "회사명 -" + "holdings 데이터 없음" 동시 발생을 방지한다.
+
+    ``db_mtime`` 인자는 함수 본문에서 사용하지 않지만 cache key 의 일부 —
+    DB 가 갱신되면 캐시가 자동 무효화된다.
+    """
+    del db_mtime  # cache key only
     store = KisHistoryStore()
-    tickers = store.list_tickers()
     out: list[tuple[str, str, str]] = []
-    for t in tickers:
-        meta = store.get_ticker_metadata(t) or {}
-        out.append((t, meta.get("company_name") or "-", meta.get("market") or "-"))
+    for t in store.list_tickers():
+        meta = store.get_ticker_metadata(t)
+        if meta is None:
+            continue
+        out.append((t, meta["company_name"], meta["market"]))
     return sorted(out, key=lambda r: r[1])
 
 
@@ -108,6 +128,41 @@ def _df_height(n_rows: int) -> int:
     return min(35 * n_rows + 38 + 6, 800)
 
 
+# --- 검색 필터 ---------------------------------------------------------------
+
+_SEARCHBOX_MAX_RESULTS = 30
+
+
+def _filter_tickers(
+    tickers: list[tuple[str, str, str]], query: str,
+) -> list[tuple[str, str, str]]:
+    """검색어로 (ticker, company_name) 부분일치 필터. 공백/빈 문자열은 전체 반환.
+
+    대소문자 무시. 시장(market)은 검색 대상 아님 — "KOSPI"가 너무 광범위.
+    """
+    q = (query or "").strip().lower()
+    if not q:
+        return tickers
+    return [
+        (t, n, m) for t, n, m in tickers
+        if q in t.lower() or q in n.lower()
+    ]
+
+
+def _make_searchbox_options(
+    tickers: list[tuple[str, str, str]], query: str,
+) -> list[tuple[str, str]]:
+    """``st_searchbox`` 용 ``(label, value)`` 리스트. value 는 ticker 코드.
+
+    드롭다운 길이 제한 — 빈 query 면 가나다순 앞쪽 30종목만.
+    """
+    matches = _filter_tickers(tickers, query)
+    return [
+        (f"{t} — {n} ({m})", t)
+        for t, n, m in matches[:_SEARCHBOX_MAX_RESULTS]
+    ]
+
+
 # --- 기간 계산 ---------------------------------------------------------------
 
 def _period_to_start(period: str, last_date: Optional[date]) -> Optional[str]:
@@ -159,7 +214,7 @@ def main() -> None:
         "KIS 일별 투자자 매매동향 → 누적 보유량(cum_qty) + 비중(pct, 10 sub 합 = 100%)"
     )
 
-    tickers = _cached_tickers()
+    tickers = _cached_tickers(_tickers_db_mtime())
     if not tickers:
         st.error(
             "저장된 종목이 없습니다. 먼저 `collect_kis_history.py` 로 수집하세요."
@@ -167,15 +222,21 @@ def main() -> None:
         return
 
     # === Sidebar ===
+    ticker_lookup = {t: (t, n, m) for t, n, m in tickers}
+    default_primary = tickers[0]  # 가나다순 첫 종목
+
     with st.sidebar:
         st.header("종목·기간")
 
-        options = [f"{t} — {n} ({m})" for t, n, m in tickers]
-        selected_idx = st.selectbox(
-            "종목 선택", range(len(options)),
-            format_func=lambda i: options[i],
-            key="primary",
+        selected_primary = st_searchbox(
+            search_function=lambda q: _make_searchbox_options(tickers, q),
+            placeholder="이름 또는 코드",
+            label=f"종목 ({len(tickers)})",
+            default=default_primary[0],
+            default_options=_make_searchbox_options(tickers, ""),
+            key="primary_search",
         )
+        primary = ticker_lookup.get(selected_primary, default_primary)
 
         period = st.radio(
             "기간",
@@ -184,8 +245,7 @@ def main() -> None:
         )
 
         # primary 종목의 last_date 로 라디오 → start 변환
-        primary_ticker = tickers[selected_idx][0]
-        primary_df, _ = _cached_holdings(primary_ticker, None, None)
+        primary_df, _ = _cached_holdings(primary[0], None, None)
         last_dt = (
             date.fromisoformat(primary_df["date"].iloc[-1])
             if not primary_df.empty else None
@@ -224,29 +284,26 @@ def main() -> None:
 
         st.header("비교 모드")
         compare = st.checkbox("두 종목 비교", value=False)
-        compare_idx: Optional[int] = None
+        other: Optional[tuple[str, str, str]] = None
         if compare:
-            other_options = [
-                opt for i, opt in enumerate(options) if i != selected_idx
-            ]
-            other_map = [i for i in range(len(options)) if i != selected_idx]
-            j = st.selectbox(
-                "비교 종목", range(len(other_options)),
-                format_func=lambda i: other_options[i],
-                key="secondary",
+            others = [r for r in tickers if r[0] != primary[0]]
+            selected_other = st_searchbox(
+                search_function=lambda q: _make_searchbox_options(others, q),
+                placeholder="이름 또는 코드",
+                label="비교 종목",
+                default_options=_make_searchbox_options(others, ""),
+                key="secondary_search",
             )
-            compare_idx = other_map[j]
+            if selected_other:
+                other = ticker_lookup.get(selected_other)
 
     # === Main ===
-    primary = tickers[selected_idx]
-
-    if compare and compare_idx is not None:
+    if compare and other is not None:
         col1, col2 = st.columns(2)
         with col1:
             _render_panel(primary[0], primary[1], primary[2],
                           start_str, end_str, visible, pct_mode)
         with col2:
-            other = tickers[compare_idx]
             _render_panel(other[0], other[1], other[2],
                           start_str, end_str, visible, pct_mode)
     else:

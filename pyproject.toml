@@ -36,6 +36,7 @@ dependencies = [
     "streamlit>=1.40",
     "statsmodels>=0.14",
     "scikit-learn>=1.5",
+    "streamlit-searchbox>=0.1.24",
 ]
 
 [project.scripts]
