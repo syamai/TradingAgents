@@ -107,6 +107,15 @@ def compute_correlation_report(
         return out
 
     df = df.sort_values("date").reset_index(drop=True)
+    # 상장 전(close=0) 행 제거 — 신규 상장 종목 (예: 373220 LG에너지솔루션)
+    # 의 상장 전 0/NaN 데이터가 returns 통계와 회귀에 노이즈 유발.
+    df = df[df["close"] > 0].reset_index(drop=True)
+    if df.empty:
+        return out
+    # 상장 첫날 price_change_pct 는 (close - 0) / 0 = inf — 제거.
+    df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=["price_change_pct"]).reset_index(drop=True)
+    if df.empty:
+        return out
     ret = df["price_change_pct"].astype(float)
 
     p0 = float(df["close"].iloc[0])

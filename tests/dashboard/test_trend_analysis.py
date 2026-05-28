@@ -6,7 +6,12 @@ import pandas as pd
 import pytest
 
 from dashboard.trend_analysis import (
-    KEY_TREND_SUBJECTS,
+    ALL_TREND_SUBJECTS,
+    BASE_WINDOW,
+    MAX_WINDOW,
+    MIN_WINDOW,
+    TOP_N_TREND_SUBJECTS,
+    adaptive_window,
     compute_absorbers,
     compute_trend_report,
     detect_phases,
@@ -71,10 +76,38 @@ def _make_df(
         "bank_net_qty": np.zeros(n),
         "insurance_cum_qty": np.zeros(n),
         "insurance_net_qty": np.zeros(n),
-        "etc_corporate_cum_qty": np.zeros(n),
-        "etc_corporate_net_qty": np.zeros(n),
+        "other_corp_cum_qty": np.zeros(n),
+        "other_corp_net_qty": np.zeros(n),
     })
     return df
+
+
+@pytest.mark.unit
+class TestAdaptiveWindow:
+    def test_low_volatility_yields_longer_window(self):
+        # 가격 변동성 낮음 (σ=0.5%) → 윈도우 길어야 (base 60 → ~120)
+        df = _make_df(n=400, cum_pattern="monotone", seed=1)
+        df["close"] = 50000 + df.index * 5 + np.random.default_rng(0).normal(0, 50, len(df))
+        w = adaptive_window(df)
+        assert w >= BASE_WINDOW
+
+    def test_high_volatility_yields_shorter_window(self):
+        # 가격 변동성 높음 (σ~4%) → 윈도우 짧아야 (base 60 → ~30)
+        rng = np.random.default_rng(2)
+        df = _make_df(n=400, cum_pattern="up_down")
+        df["close"] = df["close"] * (1 + rng.normal(0, 0.04, len(df))).cumprod()
+        w = adaptive_window(df)
+        assert w <= BASE_WINDOW
+
+    def test_clamps_to_min_max(self):
+        df = _make_df(n=400, cum_pattern="up_down")
+        w = adaptive_window(df, min_w=40, max_w=80)
+        assert 40 <= w <= 80
+
+    def test_short_series_returns_base(self):
+        # 30 미만이면 base 그대로
+        df = _make_df(n=20, cum_pattern="up_down")
+        assert adaptive_window(df) == BASE_WINDOW
 
 
 @pytest.mark.unit
@@ -209,16 +242,39 @@ class TestTrendConcordance:
 
 @pytest.mark.unit
 class TestComputeTrendReport:
-    def test_returns_subjects_dict(self):
+    def test_returns_top_n_subjects(self):
         df = _make_df(n=400, cum_pattern="up_down")
         report = compute_trend_report(df)
         assert "subjects" in report
-        # KEY_TREND_SUBJECTS = (foreign, retail)
-        for s in KEY_TREND_SUBJECTS:
-            assert s in report["subjects"]
-            assert "phases" in report["subjects"][s]
-            assert "trend_concordance" in report["subjects"][s]
-            assert "label" in report["subjects"][s]
+        # 상위 N 만 phase 상세 — _make_df 는 foreign/retail 만 의미 있는 시리즈
+        # (다른 7 주체는 zeros) 라 동행성 계산에서 NaN/50% 가 되어 상위에서 밀려남.
+        # 따라서 foreign 은 반드시 상위에 포함.
+        assert "foreign" in report["subjects"]
+        # 각 selected 주체는 phases/trend_concordance/label 보유
+        for s, info in report["subjects"].items():
+            assert "phases" in info
+            assert "trend_concordance" in info
+            assert "label" in info
+
+    def test_concordance_ranking_covers_all_9(self):
+        df = _make_df(n=400, cum_pattern="up_down")
+        report = compute_trend_report(df)
+        ranking = report["concordance_ranking"]
+        # 9 주체 모두 (또는 컬럼 없는 경우 그 미만) 포함
+        ranking_subjects = {r["subject"] for r in ranking}
+        # _make_df 는 모든 cum_qty 컬럼 보유
+        assert ranking_subjects == set(ALL_TREND_SUBJECTS)
+        # 정렬: distance_from_50 내림차순
+        distances = [r["distance_from_50"] for r in ranking]
+        assert distances == sorted(distances, reverse=True)
+
+    def test_top_n_respects_parameter(self):
+        df = _make_df(n=400, cum_pattern="up_down")
+        report = compute_trend_report(df, top_n=3)
+        assert len(report["subjects"]) <= 3
+        # ranking 첫 3개와 subjects 키가 일치
+        top3 = [r["subject"] for r in report["concordance_ranking"][:3]]
+        assert list(report["subjects"].keys()) == top3
 
     def test_phase_dates_within_data_range(self):
         df = _make_df(n=400, cum_pattern="up_down")

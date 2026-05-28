@@ -38,6 +38,20 @@ ROLLING_WINDOW = 60        # rolling Pearson 윈도우 (≈ 3 개월 거래일)
 GRANGER_MAX_LAG = 5        # Granger F-test 최대 lag
 
 
+def _clean_series(s) -> pd.Series:
+    """NaN + ±inf 제거. statsmodels 함수 입력 전 필수.
+
+    ``pct_change()`` 로 만든 returns 가 종가 0/매우 작은 값 다음 큰 값 케이스
+    에서 ±inf 를 생성 — dropna() 만으로는 안 잡힘.
+    """
+    return (
+        pd.Series(s)
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna()
+        .reset_index(drop=True)
+    )
+
+
 # === 1. ADF 정상성 검정 =====================================================
 
 def adf_test(series: pd.Series) -> dict:
@@ -46,7 +60,7 @@ def adf_test(series: pd.Series) -> dict:
     return: ``{"adf_stat", "p_value", "is_stationary", "n_obs"}``.
     값이 짧거나 상수면 ``is_stationary=False``.
     """
-    s = pd.Series(series).dropna()
+    s = _clean_series(series)
     if len(s) < 20 or s.std() == 0:
         return {"adf_stat": None, "p_value": None,
                 "is_stationary": False, "n_obs": len(s)}
@@ -74,9 +88,13 @@ def granger_test(y: pd.Series, x: pd.Series, max_lag: int = GRANGER_MAX_LAG) -> 
     statsmodels 의 grangercausalitytests 는 ``DataFrame([Y, X])`` 를 받아
     "X causes Y" 를 테스트. 반환: lag별 dict.
     """
-    y = pd.Series(y).reset_index(drop=True)
-    x = pd.Series(x).reset_index(drop=True)
-    pair = pd.concat([y, x], axis=1).dropna()
+    y = _clean_series(y)
+    x = _clean_series(x)
+    pair = (
+        pd.concat([y, x], axis=1)
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna()
+    )
     if len(pair) < max_lag + 10 or pair.iloc[:, 0].std() == 0 or pair.iloc[:, 1].std() == 0:
         return []
     try:
@@ -111,7 +129,7 @@ def var_irf(
     return:
       ``{"order": p, "cols": cols, "irf_cum": {f"{i}->{j}": [v_0..v_horizon]}}``
     """
-    sub = df[cols].dropna()
+    sub = df[cols].replace([np.inf, -np.inf], np.nan).dropna()
     if len(sub) < (max_lag + 5) * len(cols) or any(sub[c].std() == 0 for c in cols):
         return {"order": None, "cols": cols, "irf_cum": {}}
 
@@ -144,8 +162,8 @@ def cointegration_test(y: pd.Series, x: pd.Series) -> dict:
     cum_qty 와 close 같은 비정상 시계열이 *함께 움직이는지* 정식 검정.
     공적분이면 spurious regression 위험이 낮아지고 level r 도 해석 가능.
     """
-    y = pd.Series(y).dropna().reset_index(drop=True)
-    x = pd.Series(x).dropna().reset_index(drop=True)
+    y = _clean_series(y)
+    x = _clean_series(x)
     n = min(len(y), len(x))
     if n < 30 or y.iloc[:n].std() == 0 or x.iloc[:n].std() == 0:
         return {"score": None, "p_value": None, "is_cointegrated": False, "n": n}
@@ -169,9 +187,13 @@ def mutual_info(x: pd.Series, y: pd.Series, random_state: int = 0) -> float:
     Pearson r 이 잡지 못하는 비선형 의존성. 0 = 독립, 클수록 의존.
     스케일은 데이터에 의존 — 한 종목 내 상대 비교용.
     """
-    x = pd.Series(x).reset_index(drop=True)
-    y = pd.Series(y).reset_index(drop=True)
-    pair = pd.concat([x, y], axis=1).dropna()
+    x = _clean_series(x)
+    y = _clean_series(y)
+    pair = (
+        pd.concat([x, y], axis=1)
+        .replace([np.inf, -np.inf], np.nan)
+        .dropna()
+    )
     if len(pair) < 20 or pair.iloc[:, 0].std() == 0 or pair.iloc[:, 1].std() == 0:
         return 0.0
     X = pair.iloc[:, 0].values.reshape(-1, 1)
@@ -231,6 +253,15 @@ def compute_advanced_report(df: pd.DataFrame) -> dict:
         return out
 
     df = df.sort_values("date").reset_index(drop=True)
+    # 상장 전(close=0) 또는 결측 close 행 제거 — pct_change 가 inf/NaN 발생해
+    # statsmodels (Granger/VAR/coint) 가 MissingDataError 던지는 원인.
+    df = df[df["close"] > 0].reset_index(drop=True)
+    # 상장 첫날 price_change_pct 가 inf — 제거.
+    df = df.replace([np.inf, -np.inf], np.nan).dropna(
+        subset=["price_change_pct"]
+    ).reset_index(drop=True)
+    if len(df) < 50:
+        return out
     ret = df["price_change_pct"].astype(float)
     close = df["close"].astype(float)
 
