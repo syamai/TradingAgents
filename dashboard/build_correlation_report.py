@@ -29,6 +29,9 @@ from dashboard.holdings_chart import load_holdings
 from dashboard.llm_synthesis import (
     DEFAULT_MODEL, DEFAULT_PROVIDER, synthesize_conclusion,
 )
+from dashboard.trend_analysis import (
+    compute_trend_report, render_trend_markdown,
+)
 from tradingagents.dataflows.kis_history_store import KisHistoryStore
 
 _OBSIDIAN_REL = Path("Projects/trading-ai/reports")
@@ -85,6 +88,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
                    help="마크다운을 stdout에도 출력")
     p.add_argument("--advanced", action="store_true",
                    help="정교한 분석 6 종 (Granger·VAR·MI 등) 함께 계산·저장")
+    p.add_argument("--trend", action="store_true",
+                   help="추세 분석 (누적 보유 phase 분할 + 동행성) 함께 계산·저장")
     p.add_argument("--llm-synthesis", action="store_true",
                    help=f"로컬 LLM ({DEFAULT_PROVIDER}/{DEFAULT_MODEL}) 으로 "
                         f"최종 종합 의견 생성·저장")
@@ -113,10 +118,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.advanced:
         report["advanced"] = compute_advanced_report(df)
+    if args.trend:
+        report["trend"] = compute_trend_report(df)
 
     md_body = render_markdown(report)
     if args.advanced and report.get("advanced"):
         md_body += "\n\n" + render_advanced_markdown(report["advanced"])
+    if args.trend and report.get("trend"):
+        md_body += "\n\n" + render_trend_markdown(report["trend"])
 
     if args.llm_synthesis:
         print(f"  → LLM synthesis ({args.llm_provider}/{args.llm_model})...",

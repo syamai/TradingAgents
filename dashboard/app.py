@@ -32,6 +32,7 @@ from dashboard.holdings_chart import (
 from dashboard.llm_synthesis import (
     DEFAULT_MODEL, DEFAULT_PROVIDER, synthesize_conclusion,
 )
+from dashboard.trend_analysis import compute_trend_report, render_trend_markdown
 from tradingagents.dataflows.kis_history_store import KisHistoryStore
 
 
@@ -100,6 +101,14 @@ def _cached_advanced(
 ) -> dict:
     df, _ = load_holdings(ticker, start=start, end=end)
     return compute_advanced_report(df)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_trend(
+    ticker: str, start: Optional[str], end: Optional[str],
+) -> dict:
+    df, _ = load_holdings(ticker, start=start, end=end)
+    return compute_trend_report(df)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -320,10 +329,11 @@ def main() -> None:
         with tab2:
             _render_methodology_guide()
     else:
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "ℹ️ 차트 해석 가이드",
             f"📊 상관 분석",
             f"🧬 정교한 분석",
+            f"📈 추세 분석",
             f"🧠 최종 종합 의견",
             "🧪 분석 방법",
         ])
@@ -334,8 +344,10 @@ def main() -> None:
         with tab3:
             _render_advanced_section(primary[0], primary[1], start_str, end_str)
         with tab4:
-            _render_llm_synthesis_section(primary[0], primary[1], start_str, end_str)
+            _render_trend_section(primary[0], primary[1], start_str, end_str)
         with tab5:
+            _render_llm_synthesis_section(primary[0], primary[1], start_str, end_str)
+        with tab6:
             _render_methodology_guide()
 
 
@@ -680,6 +692,21 @@ def _granger_df(rows: list[dict], direction_key: str) -> pd.DataFrame:
             row[f"lag {x['lag']}"] = x["p_value"]
         out_rows.append(row)
     return pd.DataFrame(out_rows)
+
+
+# === 추세 분석 패널 ---------------------------------------------------------
+
+def _render_trend_section(
+    ticker: str, company_name: str,
+    start: Optional[str], end: Optional[str],
+) -> None:
+    """누적 보유 추세 phase 분할 + 동행성 — 일별 Granger 가 못 잡는 중기 신호."""
+    with st.spinner("추세 phase 분할 중..."):
+        trend = _cached_trend(ticker, start, end)
+    if not trend.get("subjects"):
+        st.info("데이터 부족 — 분석 미수행.")
+        return
+    st.markdown(render_trend_markdown(trend))
 
 
 # === 최종 종합 의견 — 로컬 LLM 호출 -----------------------------------------
