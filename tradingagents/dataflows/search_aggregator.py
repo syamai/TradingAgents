@@ -9,7 +9,10 @@ API 키 환경변수:
   NAVER_CLIENT_ID / NAVER_CLIENT_SECRET   (naver_open)
   TAVILY_API_KEY                          (tavily)
   SERPER_API_KEY                          (serper)
-  ANTHROPIC_API_KEY                       (anthropic web_search)
+  TRADINGAGENTS_ANTHROPIC_API_KEY         (anthropic web_search; 미설정 시 ANTHROPIC_API_KEY 폴백)
+
+모델 override:
+  TRADINGAGENTS_SEARCH_ANTHROPIC_MODEL    (anthropic web_search 모델; 미설정 시 claude-sonnet-4-6)
 """
 from __future__ import annotations
 
@@ -48,6 +51,12 @@ DEFAULT_PROVIDER_ORDER = (
 )
 EARLY_STOP_RESULTS = 8     # 누적 8건 이상 시 다음 provider 미호출
 SNIPPET_MAX = 200
+
+# anthropic web_search 보강에 쓰는 모델. env 로 override, 미설정 시 trading-ai
+# 표준 Anthropic 모델. web_search_20250305 서버 툴이 Anthropic 모델 전용이라
+# deep/quick_think_llm config 를 재사용하지 않는다 (그쪽 기본값은 gpt 계열).
+_ANTHROPIC_SEARCH_MODEL_ENV = "TRADINGAGENTS_SEARCH_ANTHROPIC_MODEL"
+_DEFAULT_ANTHROPIC_SEARCH_MODEL = "claude-sonnet-4-6"
 
 # === 노이즈 필터 ==============================================================
 # 명백한 광고/스팸/리딩방 패턴 — 매칭 시 hit 제거. 제목+snippet 둘 다 검사.
@@ -323,9 +332,10 @@ def _search_serper(
 def _search_anthropic(
     query: str, since: date, until: date, *, max_results: int,
 ) -> list[NewsHit]:
-    key = os.environ.get("ANTHROPIC_API_KEY")
+    # trading-ai 전용 키 우선, 미설정 시 Hermes 공유 키 폴백 (anthropic_client 와 동일 순서).
+    key = os.environ.get("TRADINGAGENTS_ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        logger.info("anthropic skip — ANTHROPIC_API_KEY missing")
+        logger.info("anthropic skip — TRADINGAGENTS_ANTHROPIC_API_KEY/ANTHROPIC_API_KEY missing")
         return []
     try:
         import anthropic
@@ -336,7 +346,7 @@ def _search_anthropic(
     try:
         client = anthropic.Anthropic(api_key=key)
         msg = client.messages.create(
-            model="claude-sonnet-4-5",
+            model=os.environ.get(_ANTHROPIC_SEARCH_MODEL_ENV, _DEFAULT_ANTHROPIC_SEARCH_MODEL),
             max_tokens=2048,
             tools=[{
                 "type": "web_search_20250305",
