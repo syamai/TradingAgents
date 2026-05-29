@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -33,6 +34,14 @@ from dashboard.llm_synthesis import (
     DEFAULT_MODEL, DEFAULT_PROVIDER, synthesize_conclusion,
 )
 from dashboard.trend_analysis import compute_trend_report, render_trend_markdown
+from dashboard.event_retro import (
+    compute_event_retro, render_event_retro_markdown,
+)
+from dashboard.event_retro_synthesis import (
+    DEFAULT_PROVIDER as RETRO_SYN_PROVIDER,
+    DEFAULT_MODEL as RETRO_SYN_MODEL,
+    synthesize_event_retro, render_synthesis_markdown,
+)
 from tradingagents.dataflows.kis_history_store import KisHistoryStore
 
 
@@ -109,6 +118,48 @@ def _cached_trend(
 ) -> dict:
     df, _ = load_holdings(ticker, start=start, end=end)
     return compute_trend_report(df)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_event_retro(
+    ticker: str, start: str, end: str,
+    enable_search: bool, enable_macro: bool, enable_dart: bool,
+    enable_peers: bool,
+    industry_keyword: str,
+    peers_override_csv: str,
+) -> dict:
+    """이벤트 리뷰 dict 캐시 — 3주차: peers + LLM 분류는 후처리."""
+    peers_override = (
+        [p.strip() for p in peers_override_csv.split(",") if p.strip()]
+        if peers_override_csv else None
+    )
+    return compute_event_retro(
+        ticker, start, end,
+        enable_search=enable_search,
+        enable_macro=enable_macro,
+        enable_dart=enable_dart,
+        enable_peers=enable_peers,
+        industry_keyword=industry_keyword or None,
+        peers_override=peers_override,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_event_retro_synthesis(
+    ticker: str, start: str, end: str,
+    provider: str, model: str,
+    # report 캐시 키 — JSON 직렬화 해시. dict 는 hashable 아니라서 timeline 길이로 약한 키
+    timeline_len: int,
+    report_hash: str,
+) -> dict:
+    """LLM 합성 결과 캐시 — provider·model·timeline 길이 키. 부분 캐싱 한계."""
+    # 캐시 키 한계로 호출자가 report 를 인자로 못 넘김 — 별도 함수 _synthesize_now 사용.
+    raise RuntimeError("Use _synthesize_now instead — report dict is not hashable")
+
+
+def _synthesize_now(report: dict, provider: str, model: str) -> dict:
+    """LLM 합성 — 캐시 안 함 (report dict 가 hashable 아님)."""
+    return synthesize_event_retro(report, provider=provider, model=model)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -329,12 +380,13 @@ def main() -> None:
         with tab2:
             _render_methodology_guide()
     else:
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "ℹ️ 차트 해석 가이드",
             f"📊 상관 분석",
             f"🧬 정교한 분석",
             f"📈 추세 분석",
             f"🧠 최종 종합 의견",
+            "🔄 이벤트 리뷰",
             "🧪 분석 방법",
         ])
         with tab1:
@@ -348,6 +400,8 @@ def main() -> None:
         with tab5:
             _render_llm_synthesis_section(primary[0], primary[1], start_str, end_str)
         with tab6:
+            _render_event_retro_section(primary[0], primary[1])
+        with tab7:
             _render_methodology_guide()
 
 
@@ -707,6 +761,311 @@ def _render_trend_section(
         st.info("데이터 부족 — 분석 미수행.")
         return
     st.markdown(render_trend_markdown(trend))
+
+
+# === 이벤트 리뷰 — 가격·이벤트·뉴스·재무·거시·동종 통합 분석 -----------------
+
+_OBSIDIAN_REL = Path("Projects/trading-ai/reports")
+
+
+def _find_obsidian_vault() -> Optional[Path]:
+    """``~/Documents/*/.obsidian`` 첫 매치 vault root. 없으면 None."""
+    docs = Path.home() / "Documents"
+    if not docs.exists():
+        return None
+    for entry in docs.iterdir():
+        if (entry / ".obsidian").is_dir():
+            return entry
+    return None
+
+
+def _event_retro_frontmatter(report: dict) -> str:
+    meta = report.get("meta", {})
+    return "\n".join([
+        "---",
+        f"ticker: {meta.get('ticker', '')}",
+        f"company_name: {meta.get('company_name', '')}",
+        f"market: {meta.get('market', '')}",
+        f"report_kind: event_retro",
+        f"period_start: {meta.get('start', '')}",
+        f"period_end: {meta.get('end', '')}",
+        f"generated_at: {meta.get('generated_at', '')}",
+        f"tags: [analysis, event-retro]",
+        "---",
+        "",
+    ])
+
+
+def _event_retro_obsidian_path(
+    vault: Path, ticker: str, company_name: str, start: str, end: str,
+) -> Path:
+    safe = (company_name or "unknown").replace(" ", "_").replace("/", "_")
+    return vault / _OBSIDIAN_REL / f"event_{ticker}_{safe}_{start}_to_{end}.md"
+
+
+def _render_event_retro_section(
+    ticker: str, company_name: str,
+) -> None:
+    """이벤트 리뷰 탭 — 사이드바와 별도 기간.
+
+    내부 탭 2개:
+      📊 회고 생성 — 입력 + 기본 결과 (§0~§7 + 저장)
+      🧠 LLM 합성 — 모델 선택 + 합성 결과 (§8 자연어 단락)
+    """
+    st.markdown(f"### 🔄 이벤트 리뷰 — {company_name} ({ticker})")
+    st.caption(
+        "사이드바 기간과 *별도*로 회고할 사건 기간을 지정하세요. "
+        "가격·거래량 이상치 + 뉴스 검색 + 거시 + DART 공시 + 동종 비교 + LLM 합성까지."
+    )
+
+    inner_tab1, inner_tab2 = st.tabs(["📊 회고 생성", "🧠 LLM 합성"])
+    with inner_tab1:
+        _render_retro_generation_tab(ticker, company_name)
+    with inner_tab2:
+        _render_retro_synthesis_tab(ticker, company_name)
+
+
+def _render_retro_generation_tab(ticker: str, company_name: str) -> None:
+    """탭 1: 회고 생성 — 기간 입력 + 고급 옵션 + 본문 + 저장."""
+    col1, col2 = st.columns(2)
+    with col1:
+        retro_start = st.date_input(
+            "회고 시작일", value=date(2025, 2, 14),
+            key=f"retro_start_{ticker}",
+        )
+    with col2:
+        retro_end = st.date_input(
+            "회고 종료일", value=date(2025, 4, 14),
+            key=f"retro_end_{ticker}",
+        )
+
+    with st.expander("고급 옵션", expanded=False):
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            enable_search = st.checkbox(
+                "뉴스 검색", value=True, key=f"retro_search_{ticker}",
+            )
+        with c2:
+            enable_macro = st.checkbox(
+                "거시 지표", value=True, key=f"retro_macro_{ticker}",
+            )
+        with c3:
+            enable_dart = st.checkbox(
+                "DART 공시", value=True, key=f"retro_dart_{ticker}",
+            )
+        with c4:
+            enable_peers = st.checkbox(
+                "동종 비교", value=True, key=f"retro_peers_{ticker}",
+            )
+        industry_keyword = st.text_input(
+            "산업 키워드 (검색 보강)",
+            value="", placeholder="예: 손해보험, 반도체, 자동차",
+            key=f"retro_industry_{ticker}",
+        )
+        peers_override = st.text_input(
+            "동종 수동 (콤마 구분, 6자리 코드)",
+            value="", placeholder="예: 000810,001450,000060,000540",
+            key=f"retro_peers_override_{ticker}",
+            help="HARD_CODED_PEERS 자동 매칭 대신 직접 지정.",
+        )
+
+    run_btn = st.button(
+        "회고 생성", type="primary", key=f"retro_run_{ticker}",
+    )
+
+    state_key = f"retro_report_{ticker}"
+    start_str = retro_start.strftime("%Y-%m-%d")
+    end_str = retro_end.strftime("%Y-%m-%d")
+
+    if run_btn:
+        with st.status("회고 생성 중...", expanded=True) as status:
+            status.update(label="1/4 가격 데이터 로드 + 이벤트 탐지")
+            report = _cached_event_retro(
+                ticker, start_str, end_str,
+                enable_search, enable_macro, enable_dart, enable_peers,
+                industry_keyword, peers_override,
+            )
+            status.update(label="2/4 검색 + 거시 + DART + 동종 병렬 수집")
+            status.update(label="3/4 이벤트-뉴스 매칭 + 분해 계산")
+            status.update(label="4/4 마크다운 렌더", state="complete")
+        st.session_state[state_key] = report
+
+    report = st.session_state.get(state_key)
+    if not report:
+        st.info("기간 지정 후 **회고 생성** 버튼을 클릭하세요.")
+        return
+
+    # 경고
+    warnings = report.get("warnings") or []
+    if warnings:
+        with st.expander(f"⚠️ 경고 {len(warnings)}건", expanded=False):
+            for w in warnings:
+                st.write(f"- {w}")
+
+    # 본문 — LLM 합성 §8 포함 (있으면)
+    md_body = render_event_retro_markdown(report)
+    syn_md = render_synthesis_markdown(report)
+    if syn_md:
+        md_body += "\n\n" + syn_md
+
+    # §2-A 매칭 뉴스 섹션이 <details> 로 감싸여 있어 HTML 허용 필요
+    st.markdown(md_body, unsafe_allow_html=True)
+
+    # 저장 행
+    st.markdown("---")
+    save_col1, save_col2, save_col3 = st.columns(3)
+    file_name = f"event_{ticker}_{company_name}_{start_str}_to_{end_str}.md"
+    md_full = _event_retro_frontmatter(report) + md_body + "\n"
+
+    with save_col1:
+        st.download_button(
+            "📥 다운로드", data=md_full,
+            file_name=file_name, mime="text/markdown",
+            key=f"retro_download_{ticker}",
+        )
+    with save_col2:
+        save_db = st.checkbox(
+            "SQLite 저장", value=True, key=f"retro_save_db_{ticker}",
+        )
+        if st.button("💾 SQLite", key=f"retro_save_db_btn_{ticker}",
+                     disabled=not save_db):
+            try:
+                store = KisHistoryStore()
+                store.write_analysis_report(
+                    ticker, "event_retro", end_str, report,
+                )
+                st.success(
+                    f"SQLite analysis_reports[{ticker}, event_retro, {end_str}]"
+                )
+            except Exception as exc:
+                st.error(f"SQLite 저장 실패: {exc}")
+    with save_col3:
+        if st.button("🗒 옵시디언", key=f"retro_save_obs_{ticker}"):
+            vault = _find_obsidian_vault()
+            if vault is None:
+                st.error("옵시디언 vault 못 찾음 (~/Documents/*/.obsidian)")
+            else:
+                path = _event_retro_obsidian_path(
+                    vault, ticker, company_name, start_str, end_str,
+                )
+                path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    path.write_text(md_full, encoding="utf-8")
+                    st.success(f"저장: `{path}`")
+                except Exception as exc:
+                    st.error(f"옵시디언 저장 실패: {exc}")
+
+
+def _render_retro_synthesis_tab(ticker: str, company_name: str) -> None:
+    """탭 2: LLM 합성 — 모델 선택 + 합성 버튼 + §8 단락 + 분해표 갱신."""
+    state_key = f"retro_report_{ticker}"
+    report = st.session_state.get(state_key)
+    if not report:
+        st.info("📊 **회고 생성** 탭에서 먼저 회고를 만든 후 이 탭으로 돌아오세요.")
+        return
+
+    st.caption(
+        "LLM 1회(또는 chained 6회) 호출로 이벤트 분류 + 클러스터별 자연어 단락 생성. "
+        "분해표(§7)도 LLM 분류 기준으로 자동 재계산. ollama 디폴트는 무료(로컬)."
+    )
+
+    # === 모델 선택 ===
+    CUSTOM = "✏️ 직접 입력..."
+    PRESET_MODELS = [
+        f"{RETRO_SYN_PROVIDER}:{RETRO_SYN_MODEL}",
+        "anthropic:claude-sonnet-4-6",
+        "anthropic:claude-haiku-4-5",
+        "openai:gpt-5",
+        "openai:gpt-4.1",
+        "openai:gpt-4o",
+        "openai:gpt-4o-mini",
+        "google:gemini-2.5-pro",
+        "ollama:gemma4:26b-a4b",
+        "ollama:llama3.2:8b",
+        CUSTOM,
+    ]
+    seen = set(); PRESET_MODELS = [
+        x for x in PRESET_MODELS if not (x in seen or seen.add(x))
+    ]
+    selected = st.selectbox(
+        "모델 (provider:model)", PRESET_MODELS, index=0,
+        key=f"retro_llm_combo_{ticker}",
+        help="외부 API 모델은 해당 API_KEY 환경변수가 설정되어야 합니다. "
+             "ollama 는 로컬 무료 — chained 6회 호출로 단락 분량 자동 강화.",
+    )
+    if selected == CUSTOM:
+        combo = st.text_input(
+            "provider:model 직접 입력",
+            value=f"{RETRO_SYN_PROVIDER}:{RETRO_SYN_MODEL}",
+            key=f"retro_llm_custom_{ticker}",
+            help="예: `ollama:gemma2:27b`, `openai:o4-mini`",
+        )
+    else:
+        combo = selected
+
+    if ":" in combo:
+        llm_provider, _, llm_model = combo.partition(":")
+    else:
+        llm_provider, llm_model = RETRO_SYN_PROVIDER, combo
+
+    # 키 부재 경고
+    _RETRO_KEY_ENV = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GOOGLE_API_KEY",
+    }
+    key_env = _RETRO_KEY_ENV.get(llm_provider)
+    if key_env and not os.environ.get(key_env):
+        st.warning(
+            f"⚠️ 환경변수 `{key_env}` 미설정 — LLM 호출 실패 가능. "
+            f"룰베이스 키워드 fallback 으로 분류됩니다."
+        )
+
+    # === 합성 버튼 ===
+    syn_btn = st.button(
+        "🧠 LLM 합성 추가/재실행", type="primary",
+        key=f"retro_synthesize_{ticker}",
+        help="이미 합성된 결과를 다른 모델로 재실행할 때도 사용.",
+    )
+
+    if syn_btn:
+        with st.status("LLM 통합 호출 중...", expanded=True) as status:
+            status.update(label=f"{llm_provider}/{llm_model} 호출 (ollama=chained 6회)")
+            report = _synthesize_now(report, llm_provider, llm_model)
+            status.update(label="JSON 파싱 + 분해 재계산", state="complete")
+        st.session_state[state_key] = report
+
+    # === 결과 표시 ===
+    syn = report.get("synthesis") or {}
+    if not syn:
+        st.info("🧠 **LLM 합성 추가/재실행** 버튼을 눌러 합성을 시작하세요.")
+        return
+
+    # 메타
+    method = syn.get("method", "?")
+    st.caption(
+        f"**모델**: `{syn.get('provider')}:{syn.get('model')}` · "
+        f"**방식**: `{method}`"
+    )
+
+    # 갱신된 분해표 (LLM 분류 기준)
+    decomp = report.get("decomposition") or {}
+    if decomp:
+        from dashboard.event_retro import CLUSTER_ENUM, CLUSTER_LABEL_KO
+        decomp_lines = ["**§7. 분해 (LLM 분류 기준)**", "",
+                        "| 클러스터 | 변동 기여 |", "|---|---:|"]
+        for c in CLUSTER_ENUM:
+            v = decomp.get(c, 0.0)
+            decomp_lines.append(f"| {CLUSTER_LABEL_KO.get(c, c)} | {v:+.2f}% |")
+        total = sum(decomp.get(c, 0.0) for c in CLUSTER_ENUM)
+        decomp_lines.append(f"| **합계** | **{total:+.2f}%** |")
+        st.markdown("\n".join(decomp_lines))
+        st.markdown("")
+
+    # §8 자연어 단락
+    syn_md = render_synthesis_markdown(report)
+    if syn_md:
+        st.markdown(syn_md, unsafe_allow_html=True)
 
 
 # === 최종 종합 의견 — 로컬 LLM 호출 -----------------------------------------
