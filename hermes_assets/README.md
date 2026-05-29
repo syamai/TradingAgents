@@ -36,6 +36,35 @@ crontab -e
 # export HERMES_ANALYST_MODEL=claude-sonnet-4-6
 ```
 
+## ANTHROPIC 키 분리 (trading-ai vs Hermes)
+
+같은 ``ANTHROPIC_API_KEY`` 를 두 시스템이 공유하면 한쪽이 한도 도달 시 양쪽 동시 차단된다. 분리 권장:
+
+| 변수 | 사용처 | 설정 위치 |
+|---|---|---|
+| ``ANTHROPIC_API_KEY`` | **Hermes** (가설 통합 / `/feedback` / `/labels` / 메모리 진화) | ``.env`` (``set -a; source .env`` 로 환경 주입) 또는 ``hermes login anthropic`` |
+| ``TRADINGAGENTS_ANTHROPIC_API_KEY`` | **trading-ai** (LangGraph 트레이딩 흐름 / 대시보드 LLM 의견 / search_aggregator) | ``.env`` |
+
+trading-ai 코드 (``tradingagents/llm_clients/anthropic_client.py``) 는 ``TRADINGAGENTS_ANTHROPIC_API_KEY`` 가 있으면 우선 사용, 없으면 ``ANTHROPIC_API_KEY`` 폴백. Hermes 는 항상 ``ANTHROPIC_API_KEY`` 그대로.
+
+설정 예시 (``.env``):
+```
+# Hermes 가 쓰는 키 (높은 한도 / monitoring 분리)
+ANTHROPIC_API_KEY=sk-ant-api03-<hermes-key>
+
+# trading-ai 가 쓰는 키 (대시보드·CLI·LangGraph 흐름)
+TRADINGAGENTS_ANTHROPIC_API_KEY=sk-ant-api03-<ta-key>
+```
+
+검증:
+```bash
+# trading-ai 단 키 사용 확인
+uv run pytest tests/test_anthropic_key_separation.py -v
+
+# Hermes 단 키 사용 확인
+hermes -z "ANTHROPIC 키 사용 분리 테스트" --yolo
+```
+
 ## 배포 검증
 
 ```bash
