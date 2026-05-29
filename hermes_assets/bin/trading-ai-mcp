@@ -1,0 +1,6 @@
+#!/bin/bash
+# trading-ai MCP stdio server 진입점.
+# Hermes 가 `hermes mcp add` 로 등록 시 dash 시작 인자(--directory 등)를
+# 변수 인자로 전달하지 못하는 argparse 한계 우회용 wrapper.
+exec uv run --directory /Users/selab/Source/trading-ai \
+    python -m tradingagents.hermes.mcp_server "$@"
