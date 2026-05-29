@@ -418,7 +418,8 @@ class TestFetchProgramTrading:
             get.return_value = _mock_response(200, body)
             rows = kis_api.fetch_program_trading("005930", "2026-05-27")
             assert rows == [{
-                "date": "2026-05-27", "close": 75300,
+                "date": "2026-05-27",
+                "open": 0, "high": 0, "low": 0, "close": 75300, "volume": 0,
                 "net_qty": 150000, "net_amount": 11295000000,
             }]
 
@@ -442,7 +443,8 @@ class TestFetchShortInterest:
             get.return_value = _mock_response(200, body)
             rows = kis_api.fetch_short_interest("005930", "2026-05-20", "2026-05-27")
             assert rows == [{
-                "date": "2026-05-27", "close": 75300,
+                "date": "2026-05-27",
+                "open": 0, "high": 0, "low": 0, "close": 75300, "volume": 0,
                 "short_qty": 55555, "short_volume_ratio": pytest.approx(3.21),
                 "short_amount": 4181626500, "short_amount_ratio": pytest.approx(3.05),
             }]

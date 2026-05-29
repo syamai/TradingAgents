@@ -106,15 +106,19 @@ class KisHistoryStore:
             conn.close()
 
     def _ensure_sqlite_table(self, conn: sqlite3.Connection, endpoint: Endpoint, columns: list[str]) -> None:
-        """endpoint별 테이블 생성. (ticker, date)가 복합 primary key."""
-        col_defs = []
-        for col in columns:
+        """endpoint별 테이블 생성. (ticker, date)가 복합 primary key.
+
+        기존 테이블에 누락된 컬럼이 있으면 ``ALTER TABLE ADD COLUMN`` 으로
+        자동 마이그레이션 — OHLCV 5컬럼 같은 스키마 확장을 무중단으로 흡수.
+        """
+        def _col_type(col: str) -> str:
             if col == "date":
-                col_defs.append("date TEXT NOT NULL")
-            elif col.endswith(("_ratio", "_pct")):
-                col_defs.append(f"{col} REAL")
-            else:
-                col_defs.append(f"{col} INTEGER")
+                return "TEXT NOT NULL"
+            if col.endswith(("_ratio", "_pct")):
+                return "REAL"
+            return "INTEGER"
+
+        col_defs = [f"{col} {_col_type(col)}" for col in columns]
         col_def_sql = ",\n    ".join(col_defs)
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS {endpoint} (
@@ -126,6 +130,11 @@ class KisHistoryStore:
         conn.execute(
             f"CREATE INDEX IF NOT EXISTS idx_{endpoint}_date ON {endpoint}(date)"
         )
+        # 기존 테이블 누락 컬럼 마이그레이션
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({endpoint})").fetchall()}
+        for col in columns:
+            if col not in existing and col != "date":
+                conn.execute(f"ALTER TABLE {endpoint} ADD COLUMN {col} {_col_type(col)}")
 
     # === Public API ===
 

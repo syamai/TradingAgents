@@ -236,7 +236,11 @@ def _parse_investor_row(r: dict) -> dict:
     """
     return {
         "date": _format_date(r.get("stck_bsop_date", "")),
+        "open": _safe_int(r.get("stck_oprc")),
+        "high": _safe_int(r.get("stck_hgpr")),
+        "low": _safe_int(r.get("stck_lwpr")),
         "close": _safe_int(r.get("stck_clpr")),
+        "volume": _safe_int(r.get("acml_vol")),
         "foreign_qty": _safe_int(r.get("frgn_ntby_qty")),
         "foreign_registered_qty": _safe_int(r.get("frgn_reg_ntby_qty")),
         "foreign_unregistered_qty": _safe_int(r.get("frgn_nreg_ntby_qty")),
@@ -267,7 +271,11 @@ def _parse_investor_row(r: dict) -> dict:
 def _parse_program_row(r: dict) -> dict:
     return {
         "date": _format_date(r.get("stck_bsop_date", "")),
+        "open": _safe_int(r.get("stck_oprc")),
+        "high": _safe_int(r.get("stck_hgpr")),
+        "low": _safe_int(r.get("stck_lwpr")),
         "close": _safe_int(r.get("stck_clpr")),
+        "volume": _safe_int(r.get("acml_vol")),
         "net_qty": _safe_int(r.get("whol_smtn_ntby_qty")),
         "net_amount": _safe_int(r.get("whol_smtn_ntby_tr_pbmn")),
     }
@@ -276,7 +284,11 @@ def _parse_program_row(r: dict) -> dict:
 def _parse_short_row(r: dict) -> dict:
     return {
         "date": _format_date(r.get("stck_bsop_date", "")),
+        "open": _safe_int(r.get("stck_oprc")),
+        "high": _safe_int(r.get("stck_hgpr")),
+        "low": _safe_int(r.get("stck_lwpr")),
         "close": _safe_int(r.get("stck_clpr")),
+        "volume": _safe_int(r.get("acml_vol")),
         "short_qty": _safe_int(r.get("ssts_cntg_qty")),
         "short_volume_ratio": _safe_float(r.get("ssts_vol_rlim")),
         "short_amount": _safe_int(r.get("ssts_tr_pbmn")),
@@ -523,7 +535,11 @@ def fetch_program_trading(code6: str, end_date: str, lookback_days: int = 7) -> 
     rows = body.get("output") or []
     out = [{
         "date": _format_date(r.get("stck_bsop_date", "")),
+        "open": _safe_int(r.get("stck_oprc")),
+        "high": _safe_int(r.get("stck_hgpr")),
+        "low": _safe_int(r.get("stck_lwpr")),
         "close": _safe_int(r.get("stck_clpr")),
+        "volume": _safe_int(r.get("acml_vol")),
         "net_qty": _safe_int(r.get("whol_smtn_ntby_qty")),
         "net_amount": _safe_int(r.get("whol_smtn_ntby_tr_pbmn")),
     } for r in rows]
@@ -563,7 +579,11 @@ def fetch_short_interest(
     rows = body.get("output2") or []
     out = [{
         "date": _format_date(r.get("stck_bsop_date", "")),
+        "open": _safe_int(r.get("stck_oprc")),
+        "high": _safe_int(r.get("stck_hgpr")),
+        "low": _safe_int(r.get("stck_lwpr")),
         "close": _safe_int(r.get("stck_clpr")),
+        "volume": _safe_int(r.get("acml_vol")),
         "short_qty": _safe_int(r.get("ssts_cntg_qty")),
         "short_volume_ratio": _safe_float(r.get("ssts_vol_rlim")),
         "short_amount": _safe_int(r.get("ssts_tr_pbmn")),

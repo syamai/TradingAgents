@@ -50,8 +50,10 @@ def _pct_col(s: str) -> str:
     return f"{s}_pct"
 
 
+OHLCV_COLUMNS: list[str] = ["open", "high", "low", "close", "volume"]
+
 HOLDINGS_COLUMNS: list[str] = (
-    ["date", "close", "price_change_pct"]
+    ["date"] + OHLCV_COLUMNS + ["price_change_pct"]
     + [_net_col(s) for s in ALL_SUBJECTS]
     + [_cum_col(s) for s in ALL_SUBJECTS]
     + [_pct_col(s) for s in ALL_SUBJECTS]
@@ -70,7 +72,10 @@ def compute_holdings(investor_df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=HOLDINGS_COLUMNS)
 
     df = investor_df.sort_values("date").reset_index(drop=True)
-    out = pd.DataFrame({"date": df["date"], "close": df["close"]})
+    out = pd.DataFrame({"date": df["date"]})
+    # OHLCV — backfill 이전 종목은 close만 있을 수 있음. 누락은 NaN.
+    for col in OHLCV_COLUMNS:
+        out[col] = df[col] if col in df.columns else pd.NA
 
     # 가격 변동률 — 첫 행은 0 (이전 행 없음)
     prev = df["close"].shift(1)
@@ -140,10 +145,10 @@ def holdings_window(
     if df.empty:
         return df
 
-    out = pd.DataFrame({
-        "date": df["date"], "close": df["close"],
-        "price_change_pct": df["price_change_pct"],
-    })
+    out = pd.DataFrame({"date": df["date"]})
+    for col in OHLCV_COLUMNS:
+        out[col] = df[col] if col in df.columns else pd.NA
+    out["price_change_pct"] = df["price_change_pct"]
 
     for s in ALL_SUBJECTS:
         out[_net_col(s)] = df[_net_col(s)]
