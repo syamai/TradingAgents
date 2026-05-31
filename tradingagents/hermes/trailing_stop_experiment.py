@@ -44,7 +44,9 @@ def _simulate_trailing(
       stop_loss > **trailing_stop** > take_profit > signal > max_hold.
     ``keep_fixed_sl=False`` 면 고정 손절을 끄고 트레일링만 하방 보호로 쓴다.
     """
-    df = df[bt._num(df["close"]) > 0].reset_index(drop=True)
+    # close>0 + volume>0 — _simulate_v2 와 필터 정렬(거래량 0 유령행 제거).
+    # trail_pct=None 등가(회귀 불변식) 유지: 입력 필터가 엔진과 동일해야 함.
+    df = df[(bt._num(df["close"]) > 0) & (bt._num(df["volume"]) > 0)].reset_index(drop=True)
     df = v2._attach_market_columns(df, kospi)
     n = len(df)
     daily_ret = pd.Series(0.0, index=range(n))

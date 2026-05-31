@@ -26,6 +26,7 @@ from tradingagents.hermes import backtest_engine as bt
 from tradingagents.hermes.backtest_engine_v2 import _attach_market_columns, _simulate_v2
 from tradingagents.hermes.strategy_research_v2 import _preload
 from tradingagents.hermes.strategy_store_v2 import StrategyStoreV2
+from tradingagents.hermes.strategy_validation import engine_version
 
 IN_SAMPLE_PCT = bt.IN_SAMPLE_PCT  # 70 — 종목 분할과 동일 비율로 시간 분할(축만 다름)
 ROBUST_BAR = 0.5  # 견고성 기준: 두 split 양쪽 모두 sharpe 가 이 값보다 커야 함
@@ -127,8 +128,9 @@ def main() -> int:
     cutoff = _time_cutoff(holdings, IN_SAMPLE_PCT)
     span_lo = min(str(df["date"].iloc[0]) for df in holdings.values())
     span_hi = max(str(df["date"].iloc[-1]) for df in holdings.values())
+    ev = engine_version()
     print(f"[diag] universe={len(holdings)} kospi={'OK' if kospi is not None else 'NONE'} "
-          f"data={span_lo}~{span_hi} time-cutoff(@{IN_SAMPLE_PCT}%)={cutoff}", flush=True)
+          f"data={span_lo}~{span_hi} time-cutoff(@{IN_SAMPLE_PCT}%)={cutoff} engine={ev}", flush=True)
     print(f"[diag] 비교축: 현재엔진 종목분할(xsec, 같은기간·다른종목) vs "
           f"현재엔진 시간분할(time, IS<{cutoff}<=OOS=미래)", flush=True)
     print(f"[diag] 견고성 기준: 두 split 양쪽 모두 sharpe>{ROBUST_BAR} 여야 'robust'\n", flush=True)
@@ -194,7 +196,7 @@ def main() -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({
         "cutoff": cutoff, "in_sample_pct": IN_SAMPLE_PCT, "robust_bar": ROBUST_BAR,
-        "data_span": [span_lo, span_hi],
+        "engine_version": ev, "data_span": [span_lo, span_hi],
         "n_strategies": len(rows), "order": args.order,
         "summary": {
             "xsec_robust": len(xsec_robust), "time_robust": len(time_robust),

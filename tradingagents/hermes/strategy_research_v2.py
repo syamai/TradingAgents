@@ -23,6 +23,10 @@ from tradingagents.hermes.backtest_engine_v2 import run_universe_backtest_v2
 from tradingagents.hermes.strategy_spec import spec_hash
 from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
 from tradingagents.hermes.strategy_store_v2 import StrategyStoreV2
+from tradingagents.hermes.strategy_validation import (
+    engine_version,
+    run_time_split_validation,
+)
 
 # 한 실행에서 평가할 최대 후보 수. cron 단발 tick(120s 제한)에서는 환경변수
 # V2_LLMFREE_MAX 로 소량(예: 8)만 돌려 timeout 을 피한다. 미설정 시 100.
@@ -390,17 +394,25 @@ def main() -> int:
             break
         result = run_universe_backtest_v2(
             spec, tickers, loader=loader, kospi_fetcher=kospi_fetcher)
-        sid, is_new = store.save(spec, result, name=spec["name"])
+        # 시간분할 검증 동반 — MCP 경로와 동일한 결합 게이트(xsec AND time)로 단일화.
+        time_result = run_time_split_validation(
+            spec, tickers, loader=loader, kospi_fetcher=kospi_fetcher)
+        sid, is_new = store.save(spec, result, name=spec["name"],
+                                 time_result=time_result,
+                                 engine_version=engine_version())
         evaluated += 1
+        gate = result["gate_passed"] and time_result["gate_passed"]
         inm, outm = result["in_sample"], result["out_sample"]
-        flag = "PASS" if result["gate_passed"] else "    "
+        tim, tom = time_result["in_sample"], time_result["out_sample"]
+        flag = "PASS" if gate else "    "
         print(f"[{evaluated:>3}/{MAX_EVAL}] {flag} #{sid} {spec['name'][:38]:38} "
-              f"| in {_fmt(inm)} | out {_fmt(outm)}", flush=True)
-        if result["gate_passed"]:
+              f"| xsec in {_fmt(inm)} out {_fmt(outm)} "
+              f"| time IS {_fmt(tim)} OOS {_fmt(tom)}", flush=True)
+        if gate:
             passed.append((sid, spec, result))
-            print(f"\n🎯 GATE PASSED — #{sid} {spec['name']}", flush=True)
-            print(f"   in : {_fmt(inm)} cum{inm['cum_return_pct']}%", flush=True)
-            print(f"   out: {_fmt(outm)} cum{outm['cum_return_pct']}%", flush=True)
+            print(f"\n🎯 GATE PASSED (xsec∧time) — #{sid} {spec['name']}", flush=True)
+            print(f"   xsec in:{_fmt(inm)} out:{_fmt(outm)}", flush=True)
+            print(f"   time IS:{_fmt(tim)} OOS:{_fmt(tom)}", flush=True)
             break
 
     print(f"\n[research-v2] done. evaluated={evaluated} passed={len(passed)}", flush=True)
