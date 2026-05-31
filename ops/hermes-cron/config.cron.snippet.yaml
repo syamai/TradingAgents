@@ -1,0 +1,7 @@
+# ~/.hermes/config.yaml 의 cron: 블록에 추가한 설정 (전체 config 아님 — 시크릿/기타 설정 제외).
+# _get_script_timeout() 해석 우선순위: 모듈 _SCRIPT_TIMEOUT > env HERMES_CRON_SCRIPT_TIMEOUT
+#   > config.yaml cron.script_timeout_seconds > 기본값 120.
+# 이 값은 모든 no_agent 스크립트 잡 공통(per-job 아님).
+cron:
+  # wrap_response / max_parallel_jobs 등 기존 키는 그대로 두고 아래 한 줄만 추가:
+  script_timeout_seconds: 540  # 측정(2026-06-01): BATCH=7 tick 완주 66~421s → 최대×~1.3, 600s(10m 주기) 미만으로 겹침 없음

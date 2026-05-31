@@ -1,0 +1,163 @@
+From acd9aaa0c137a860d6fb2fb490b6c078d391f9cf Mon Sep 17 00:00:00 2001
+From: selab <selab@selabs-Mac-Studio.local>
+Date: Mon, 1 Jun 2026 05:42:37 +0900
+Subject: [PATCH] fix(cron): kill timed-out job's whole process group, not just
+ the child
+
+_run_job_script ran scripts via subprocess.run(timeout=), which on
+timeout SIGKILLs only the direct bash child. Any worker/MCP server the
+script spawned was orphaned (reparented to PID 1) and kept running, while
+the uncatchable SIGKILL bypassed the script's EXIT trap and left stale
+lock files behind.
+
+Run each job script in its own session (start_new_session=True on POSIX)
+and, on timeout, SIGTERM the whole process group, wait a grace window so
+the script's own TERM/EXIT trap can clean up (remove its lock, reap
+helpers), then escalate to SIGKILL on the group. Preserves the 120s
+default timeout, stdout/stderr capture, secret redaction, and the win32
+console-hide path.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ cron/scheduler.py | 91 +++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 81 insertions(+), 10 deletions(-)
+
+diff --git a/cron/scheduler.py b/cron/scheduler.py
+index a51ade8ef..cb734436f 100644
+--- a/cron/scheduler.py
++++ b/cron/scheduler.py
+@@ -15,6 +15,7 @@ import json
+ import logging
+ import os
+ import shutil
++import signal
+ import subprocess
+ import sys
+ from contextlib import contextmanager
+@@ -848,6 +849,65 @@ def _get_script_timeout() -> int:
+     return _DEFAULT_SCRIPT_TIMEOUT
+ 
+ 
++# Grace window (seconds) between the SIGTERM we send to a timed-out script's
++# process group and the SIGKILL escalation.  Lets the script's own TERM/EXIT
++# trap clean up (remove its lock, reap helpers it spawned) before we force the
++# whole group down.  Generous: an MCP stdio child self-exits on stdin EOF in
++# well under 1s once its parent dies.
++_TERM_GRACE_SECONDS = 10
++
++
++def _terminate_process_group(proc: "subprocess.Popen", grace_seconds: int) -> None:
++    """Gracefully tear down a timed-out child and its whole process group.
++
++    POSIX: SIGTERM the child's process group so a trap-aware script can run its
++    cleanup, wait up to ``grace_seconds``, then SIGKILL the group.  Without the
++    group, ``subprocess`` would SIGKILL only the direct child and orphan any
++    workers it spawned (and skip the script's trap, leaving stale locks).
++    Windows: no POSIX group model here — fall back to terminate()/kill() on the
++    direct child, matching the prior single-child behaviour.
++    """
++    if sys.platform == "win32":
++        try:
++            proc.terminate()
++            try:
++                proc.wait(timeout=grace_seconds)
++                return
++            except subprocess.TimeoutExpired:
++                proc.kill()
++        except Exception as exc:
++            logger.debug("Windows process termination failed: %s", exc)
++        try:
++            proc.communicate(timeout=grace_seconds)
++        except Exception:
++            pass
++        return
++
++    try:
++        pgid = os.getpgid(proc.pid)
++    except (ProcessLookupError, OSError):
++        return
++
++    try:
++        os.killpg(pgid, signal.SIGTERM)
++    except (ProcessLookupError, OSError) as exc:
++        logger.debug("killpg(SIGTERM) on pgid %s failed: %s", pgid, exc)
++
++    try:
++        proc.wait(timeout=grace_seconds)
++    except subprocess.TimeoutExpired:
++        try:
++            os.killpg(pgid, signal.SIGKILL)
++        except (ProcessLookupError, OSError) as exc:
++            logger.debug("killpg(SIGKILL) on pgid %s failed: %s", pgid, exc)
++
++    # Reap + drain so the child cannot zombie and its FDs are released.
++    try:
++        proc.communicate(timeout=grace_seconds)
++    except Exception:
++        pass
++
++
+ def _run_job_script(script_path: str) -> tuple[bool, str]:
+     """Execute a cron job's data-collection script and capture its output.
+ 
+@@ -938,18 +998,31 @@ def _run_job_script(script_path: str) -> tuple[bool, str]:
+         pass
+ 
+     try:
+-        popen_kwargs = {"creationflags": windows_hide_flags()} if sys.platform == "win32" else {}
+-        result = subprocess.run(
++        # POSIX: run the script in its OWN session/process group so a timeout
++        # can reap the ENTIRE subtree (bash + any worker/python it spawned),
++        # not just the direct child.  win32 keeps the prior console-hide flag
++        # (detach flags would sever stdout/stderr capture).
++        if sys.platform == "win32":
++            popen_kwargs = {"creationflags": windows_hide_flags()}
++        else:
++            popen_kwargs = {"start_new_session": True}
++        proc = subprocess.Popen(
+             argv,
+-            capture_output=True,
++            stdout=subprocess.PIPE,
++            stderr=subprocess.PIPE,
+             text=True,
+-            timeout=script_timeout,
+             cwd=str(path.parent),
+             env=run_env,
+             **popen_kwargs,
+         )
+-        stdout = (result.stdout or "").strip()
+-        stderr = (result.stderr or "").strip()
++        try:
++            out, err = proc.communicate(timeout=script_timeout)
++        except subprocess.TimeoutExpired:
++            _terminate_process_group(proc, _TERM_GRACE_SECONDS)
++            return False, f"Script timed out after {script_timeout}s: {path}"
++
++        stdout = (out or "").strip()
++        stderr = (err or "").strip()
+ 
+         # Redact secrets from both stdout and stderr before any return path.
+         try:
+@@ -959,8 +1032,8 @@ def _run_job_script(script_path: str) -> tuple[bool, str]:
+         except Exception:
+             pass
+ 
+-        if result.returncode != 0:
+-            parts = [f"Script exited with code {result.returncode}"]
++        if proc.returncode != 0:
++            parts = [f"Script exited with code {proc.returncode}"]
+             if stderr:
+                 parts.append(f"stderr:\n{stderr}")
+             if stdout:
+@@ -969,8 +1042,6 @@ def _run_job_script(script_path: str) -> tuple[bool, str]:
+ 
+         return True, stdout
+ 
+-    except subprocess.TimeoutExpired:
+-        return False, f"Script timed out after {script_timeout}s: {path}"
+     except Exception as exc:
+         return False, f"Script execution failed: {exc}"
+ 
+-- 
+2.53.0
+
