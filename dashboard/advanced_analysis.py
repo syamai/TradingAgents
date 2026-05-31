@@ -255,7 +255,9 @@ def compute_advanced_report(df: pd.DataFrame) -> dict:
     df = df.sort_values("date").reset_index(drop=True)
     # 상장 전(close=0) 또는 결측 close 행 제거 — pct_change 가 inf/NaN 발생해
     # statsmodels (Granger/VAR/coint) 가 MissingDataError 던지는 원인.
-    df = df[df["close"] > 0].reset_index(drop=True)
+    # volume=0 유령행(비유동·거래정지 구간 기준가 노이즈)도 제거 — close>0 만으로는
+    # 안 걸러져 returns 시계열을 오염시킴.
+    df = df[(df["close"] > 0) & (df["volume"] > 0)].reset_index(drop=True)
     # 상장 첫날 price_change_pct 가 inf — 제거.
     df = df.replace([np.inf, -np.inf], np.nan).dropna(
         subset=["price_change_pct"]

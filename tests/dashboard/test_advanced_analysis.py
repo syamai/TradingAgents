@@ -38,6 +38,7 @@ def _sample(n: int = 200, seed: int = 0) -> pd.DataFrame:
         rows.append({
             "date": d.strftime("%Y-%m-%d"),
             "close": new_close,
+            "volume": 1000,
             **{f"{s}_qty": 0 for s in SUBS_10},
             "retail_qty": int(round(-100 * delta)),
             "pension_qty": int(round(50 * delta)),
