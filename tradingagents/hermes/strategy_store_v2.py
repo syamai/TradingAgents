@@ -19,6 +19,11 @@ from tradingagents.hermes.strategy_store import StrategyStore
 # v3 추가 컬럼 — 시간분할 검증 결과 + 엔진 버전(provenance).
 # 기존 in_*/out_* 는 종목분할(xsec) 보조 지표로 유지, gate_passed 는 두 게이트
 # (xsec AND time) 결합으로 의미 확장. 기존 행은 새 컬럼 NULL(=pre-v3).
+#
+# engine_version: 백테스트 결과를 결정하는 소스(backtest_engine* + strategy_spec_v2
+#   + strategy_validation) 의 md5 단축본. 값이 다른 행끼리는 다른 엔진이 산출한
+#   메트릭이므로 **직접 비교 불가**(cross-version incomparable). NULL 은 provenance
+#   추적 이전 행. 엔진 드리프트로 옛 메트릭이 재현 안 될 수 있으니 비교 전 이 값을 확인할 것.
 _V3_COLUMNS = (
     ("time_in_sharpe", "REAL"),
     ("time_out_sharpe", "REAL"),
