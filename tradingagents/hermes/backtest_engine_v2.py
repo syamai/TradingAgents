@@ -287,10 +287,9 @@ def run_universe_backtest_v2(
             idx = cdf["date"].astype(str).to_numpy()
             ret_frames.append(pd.Series(daily.to_numpy(), index=idx, name=tk))
             act_frames.append(pd.Series(active.to_numpy(), index=idx, name=tk))
-        results[split] = bt._metrics(
-            all_trades,
-            bt._combine_korea_stock_portfolio(ret_frames, act_frames),
-        )
+        port = bt._combine_korea_stock_portfolio(ret_frames, act_frames)
+        excess = bt._excess_daily_korea(port, act_frames, kospi)
+        results[split] = bt._metrics(all_trades, port, excess_daily=excess)
 
     in_m, out_m = results["in"], results["out"]
     return {

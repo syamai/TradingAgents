@@ -231,6 +231,6 @@ class TestRunUniverseV2:
             spec, ["005930", "000660", "035720", "005380"],
             loader=loader, kospi_fetcher=None)
         assert set(out) == {"in_sample", "out_sample", "gate_passed",
-                            "universe_size", "n_in", "n_out"}
+                            "portfolio_policy", "universe_size", "n_in", "n_out"}
         assert isinstance(out["gate_passed"], bool)
         assert out["universe_size"] == 4

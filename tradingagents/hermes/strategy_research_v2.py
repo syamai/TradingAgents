@@ -25,7 +25,7 @@ from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
 from tradingagents.hermes.strategy_store_v2 import StrategyStoreV2
 from tradingagents.hermes.strategy_validation import (
     engine_version,
-    run_time_split_validation,
+    run_walk_forward_validation,
 )
 
 # 한 실행에서 평가할 최대 후보 수. cron 단발 tick(120s 제한)에서는 환경변수
@@ -332,7 +332,7 @@ def _fmt(m: dict) -> str:
     def g(k):
         v = m.get(k)
         return "  n/a" if v is None else f"{v:5.2f}"
-    return (f"win{g('win_rate')} shp{g('sharpe')} "
+    return (f"win{g('win_rate')} shp{g('sharpe')} exIR{g('excess_sharpe')} "
             f"mdd{g('mdd_pct')} n{m.get('n_trades', 0):>4}")
 
 
@@ -385,7 +385,8 @@ def main() -> int:
     tickers, loader, kospi_fetcher = _preload(raw_tickers)
     print(f"[research-v2] universe={len(tickers)} candidates={len(cands)} "
           f"(all={len(cands_all)} existing={len(existing_hashes)}) "
-          f"MAX_EVAL={MAX_EVAL} gate: win>0.50 sharpe>1.0", flush=True)
+          f"MAX_EVAL={MAX_EVAL} gate: walk-forward 초과수익 IR>0.5 (모든 OOS창 시장초과)",
+          flush=True)
 
     evaluated = 0
     passed = []
@@ -394,25 +395,28 @@ def main() -> int:
             break
         result = run_universe_backtest_v2(
             spec, tickers, loader=loader, kospi_fetcher=kospi_fetcher)
-        # 시간분할 검증 동반 — MCP 경로와 동일한 결합 게이트(xsec AND time)로 단일화.
-        time_result = run_time_split_validation(
+        # 공정 게이트 — walk-forward × 시장대비 초과수익 IR. 모든 OOS 창에서 시장을
+        # 이기고(IR>0) 중앙 IR>임계 여야 통과. 단일 분할 레짐편향·시장베타 오인을 제거.
+        wf_result = run_walk_forward_validation(
             spec, tickers, loader=loader, kospi_fetcher=kospi_fetcher)
         sid, is_new = store.save(spec, result, name=spec["name"],
-                                 time_result=time_result,
+                                 wf_result=wf_result,
                                  engine_version=engine_version())
         evaluated += 1
-        gate = result["gate_passed"] and time_result["gate_passed"]
+        gate = wf_result["gate_passed"]
         inm, outm = result["in_sample"], result["out_sample"]
-        tim, tom = time_result["in_sample"], time_result["out_sample"]
         flag = "PASS" if gate else "    "
-        print(f"[{evaluated:>3}/{MAX_EVAL}] {flag} #{sid} {spec['name'][:38]:38} "
+        print(f"[{evaluated:>3}/{MAX_EVAL}] {flag} #{sid} {spec['name'][:34]:34} "
               f"| xsec in {_fmt(inm)} out {_fmt(outm)} "
-              f"| time IS {_fmt(tim)} OOS {_fmt(tom)}", flush=True)
+              f"| wf nwin={wf_result['n_windows']} exIRmed={wf_result['oos_excess_ir_median']} "
+              f"exIRmin={wf_result['oos_excess_ir_min']}", flush=True)
         if gate:
             passed.append((sid, spec, result))
-            print(f"\n🎯 GATE PASSED (xsec∧time) — #{sid} {spec['name']}", flush=True)
+            print(f"\n🎯 GATE PASSED (walk-forward 초과수익 IR) — #{sid} {spec['name']}", flush=True)
+            print(f"   wf: nwin={wf_result['n_windows']} "
+                  f"exIR med={wf_result['oos_excess_ir_median']} "
+                  f"min={wf_result['oos_excess_ir_min']}", flush=True)
             print(f"   xsec in:{_fmt(inm)} out:{_fmt(outm)}", flush=True)
-            print(f"   time IS:{_fmt(tim)} OOS:{_fmt(tom)}", flush=True)
             break
 
     print(f"\n[research-v2] done. evaluated={evaluated} passed={len(passed)}", flush=True)

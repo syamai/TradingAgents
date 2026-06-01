@@ -10,6 +10,7 @@ from tradingagents.hermes.backtest_engine import (
     _attach_kospi,
     _bad_bar_mask,
     _combine,
+    _combine_korea_stock_portfolio,
     _eval_signal,
     _metrics,
     _simulate,
@@ -493,6 +494,26 @@ class TestCombine:
 
     def test_empty_returns_empty(self):
         assert _combine([], []).empty
+
+    def test_korea_stock_portfolio_keeps_cash_when_fewer_than_30_active(self):
+        rA = pd.Series([0.10], index=["d1"], name="A")
+        aA = pd.Series([True], index=["d1"], name="A")
+
+        port = _combine_korea_stock_portfolio([rA], [aA])
+
+        # 한국 개별주 모델: 기본 30종목/주식 90% → active 1종목은 3% 비중,
+        # 나머지 97%는 현금으로 둔다.
+        assert port.loc["d1"] == pytest.approx(0.003)
+
+    def test_korea_stock_portfolio_caps_total_stock_exposure_at_90_percent(self):
+        rets = [pd.Series([0.10], index=["d1"], name=f"T{i}") for i in range(40)]
+        acts = [pd.Series([True], index=["d1"], name=f"T{i}") for i in range(40)]
+
+        port = _combine_korea_stock_portfolio(rets, acts)
+
+        # 40개가 active 여도 한국 주식 85~90% + 현금 10~15% 원칙에 따라
+        # 주식 총노출은 90%로 제한된다. 모두 +10%면 포트 수익률은 +9%.
+        assert port.loc["d1"] == pytest.approx(0.09)
 
 
 # === _simulate 경계 ===

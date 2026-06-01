@@ -269,15 +269,44 @@ def _max_drawdown(equity: np.ndarray) -> float:
     return float((equity / peak - 1).min())
 
 
-def _metrics(trades: list, port_daily: pd.Series) -> dict:
-    """trades(pooled) + 포트폴리오 일별 수익률 → 메트릭 dict (JSON 직렬화 가능)."""
-    n = len(trades)
-    empty = {
-        "n_trades": 0, "win_rate": None, "avg_net_ret_pct": None,
-        "avg_hold_days": None, "cum_return_pct": 0.0, "sharpe": None,
-        "mdd_pct": 0.0, "avg_excess_ret_pct": None,
+def _sharpe(r: np.ndarray, n_trades: int) -> Optional[float]:
+    """일별 수익률 배열 → 연율 Sharpe. 거래 부족·무변동이면 None."""
+    if n_trades >= SHARPE_MIN_TRADES and len(r) and r.std(ddof=0) > 0:
+        return float(r.mean() / r.std(ddof=0) * np.sqrt(TRADING_DAYS_PER_YEAR))
+    return None
+
+
+def _excess_fields(excess_daily: pd.Series, n_trades: int) -> dict:
+    """초과수익(시장 대비) 일별 시계열 → IR/누적/MDD. raw sharpe 와 동일 식이되
+    입력이 ``port - 투입비중×시장수익`` 이라 시장 베타가 제거된 알파 측정값이다."""
+    er = excess_daily.to_numpy(dtype=float)
+    ir = _sharpe(er, n_trades)
+    eq = np.cumprod(1.0 + er) if len(er) else np.array([])
+    return {
+        "excess_sharpe": round(ir, 4) if ir is not None else None,
+        "excess_cum_return_pct": round(float(eq[-1] - 1) * 100, 4) if len(eq) else 0.0,
+        "excess_mdd_pct": round(_max_drawdown(eq) * 100, 4),
     }
+
+
+def _metrics(
+    trades: list, port_daily: pd.Series, *, excess_daily: Optional[pd.Series] = None,
+) -> dict:
+    """trades(pooled) + 포트폴리오 일별 수익률 → 메트릭 dict (JSON 직렬화 가능).
+
+    ``excess_daily`` 가 주어지면(시장 대비 초과수익 일별 시계열) ``excess_sharpe``
+    (정보비율)·``excess_cum_return_pct``·``excess_mdd_pct`` 를 추가한다. 미지정 시
+    기존 출력 그대로 — 하위호환.
+    """
+    n = len(trades)
     if n == 0:
+        empty = {
+            "n_trades": 0, "win_rate": None, "avg_net_ret_pct": None,
+            "avg_hold_days": None, "cum_return_pct": 0.0, "sharpe": None,
+            "mdd_pct": 0.0, "avg_excess_ret_pct": None,
+        }
+        if excess_daily is not None:
+            empty.update(_excess_fields(excess_daily, 0))
         return empty
 
     nets = [t["net_ret_pct"] for t in trades]
@@ -287,12 +316,9 @@ def _metrics(trades: list, port_daily: pd.Series) -> dict:
     r = port_daily.to_numpy(dtype=float)
     equity = np.cumprod(1.0 + r) if len(r) else np.array([])
     cum = float(equity[-1] - 1) if len(equity) else 0.0
+    sharpe = _sharpe(r, n)
 
-    sharpe = None
-    if n >= SHARPE_MIN_TRADES and len(r) and r.std(ddof=0) > 0:
-        sharpe = float(r.mean() / r.std(ddof=0) * np.sqrt(TRADING_DAYS_PER_YEAR))
-
-    return {
+    out = {
         "n_trades": n,
         "win_rate": round(wins / n, 4),
         "avg_net_ret_pct": round(sum(nets) / n, 4),
@@ -302,6 +328,9 @@ def _metrics(trades: list, port_daily: pd.Series) -> dict:
         "mdd_pct": round(_max_drawdown(equity) * 100, 4),
         "avg_excess_ret_pct": round(sum(excesses) / len(excesses), 4) if excesses else None,
     }
+    if excess_daily is not None:
+        out.update(_excess_fields(excess_daily, n))
+    return out
 
 
 def passes_single_gate(m: dict) -> bool:
@@ -351,6 +380,111 @@ def _combine(ret_frames: list, act_frames: list) -> pd.Series:
     count = A.sum(axis=1)
     port = R.sum(axis=1) / count.where(count > 0)
     return port.fillna(0.0)
+
+
+KOREA_STOCK_PORTFOLIO_POLICY = {
+    "stock_weight": 0.90,          # 한국 개별주 85~90% + 현금 10~15%: 기본 90% 주식
+    "cash_weight": 0.10,
+    "target_positions": 30,       # 25~35개 중간값
+    "max_single_weight": 0.05,    # 단일 종목 원칙 5% 이하
+}
+
+
+def _combine_korea_stock_portfolio(
+    ret_frames: list,
+    act_frames: list,
+    *,
+    stock_weight: float = KOREA_STOCK_PORTFOLIO_POLICY["stock_weight"],
+    target_positions: int = KOREA_STOCK_PORTFOLIO_POLICY["target_positions"],
+    max_single_weight: float = KOREA_STOCK_PORTFOLIO_POLICY["max_single_weight"],
+) -> pd.Series:
+    """한국 개별주 포트폴리오 원칙을 반영한 일별 수익률 결합.
+
+    기본 정책은 사용자가 제공한 ``korea_stock_only_portfolio_principles.md`` 를
+    백테스트용으로 단순화한 것이다.
+
+    - 주식 총노출 기본 90%, 현금 10%는 0% 수익률로 둔다.
+    - 목표 종목 수는 30개다(권장 25~35개 중간값).
+    - 단일 종목 비중은 원칙값 5%를 넘기지 않는다.
+    - active 종목 수가 목표보다 적으면 부족분은 현금으로 남긴다.
+
+    업종/코스닥/테마 비중 제한은 현재 holdings 메타데이터에 일별 섹터·시장 구분이
+    없어서 여기서는 적용하지 않는다. 이 함수는 자금배분/현금/단일종목 비중 원칙만
+    결정론적으로 반영한다.
+    """
+    if not ret_frames:
+        return pd.Series(dtype=float)
+    if target_positions <= 0:
+        raise ValueError("target_positions must be positive")
+    if not (0.0 <= stock_weight <= 1.0):
+        raise ValueError("stock_weight must be between 0 and 1")
+    if max_single_weight <= 0:
+        raise ValueError("max_single_weight must be positive")
+
+    R = pd.concat(ret_frames, axis=1).sort_index()
+    A = (pd.concat(act_frames, axis=1).sort_index() == True)  # noqa: E712
+    R = R.where(A, 0.0)
+
+    per_position_weight = min(max_single_weight, stock_weight / target_positions)
+    active_count = A.sum(axis=1)
+    raw_weighted = R.sum(axis=1) * per_position_weight
+
+    # active_count 가 너무 많아 per-position 합이 stock_weight 를 넘는 날은
+    # 전체 active basket 을 stock_weight 로 재스케일한다.
+    unscaled_weight_sum = active_count * per_position_weight
+    scale = stock_weight / unscaled_weight_sum.where(unscaled_weight_sum > stock_weight)
+    scale = scale.fillna(1.0)
+    port = raw_weighted * scale
+
+    # active_weight_sum 에 포함되지 않은 나머지는 현금이며 수익률 0%.
+    return port.fillna(0.0)
+
+
+def _invested_weight_korea(
+    act_frames: list,
+    *,
+    stock_weight: float = KOREA_STOCK_PORTFOLIO_POLICY["stock_weight"],
+    target_positions: int = KOREA_STOCK_PORTFOLIO_POLICY["target_positions"],
+    max_single_weight: float = KOREA_STOCK_PORTFOLIO_POLICY["max_single_weight"],
+) -> pd.Series:
+    """``_combine_korea_stock_portfolio`` 와 동일 정책의 *일별 주식 투입비중*.
+
+    그날 active 종목 수 × per-position weight, 단 stock_weight 상한. 초과수익 계산에서
+    "투입한 자본만큼만 시장수익을 차감"하기 위한 베타 노출이다(현금일은 0).
+    """
+    if not act_frames:
+        return pd.Series(dtype=float)
+    A = (pd.concat(act_frames, axis=1).sort_index() == True)  # noqa: E712
+    per_position_weight = min(max_single_weight, stock_weight / target_positions)
+    return (A.sum(axis=1) * per_position_weight).clip(upper=stock_weight)
+
+
+def _market_daily_returns(kospi: Optional[pd.DataFrame], index) -> pd.Series:
+    """KOSPI 종가 → 주어진 날짜 인덱스에 정렬된 일별 수익률(trailing, look-ahead 0).
+
+    종목 거래일 그리드에 종가를 ffill 한 뒤 pct_change 한다(이전 그리드일→당일).
+    KOSPI 결손 시 0 으로 둬 초과수익이 raw 수익과 같아지게 한다(보수적).
+    """
+    zero = pd.Series(0.0, index=index)
+    if kospi is None or len(kospi) == 0 or "date" not in kospi.columns or "close" not in kospi.columns:
+        return zero
+    k = kospi.loc[:, ["date", "close"]].copy()
+    k["date"] = k["date"].astype(str)
+    k = k.sort_values("date").drop_duplicates("date", keep="last")
+    close = pd.Series(_num(k["close"]).to_numpy(dtype=float), index=k["date"].to_numpy())
+    aligned = close.reindex(index).ffill()
+    return aligned.pct_change().replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+
+def _excess_daily_korea(
+    port_daily: pd.Series, act_frames: list, kospi: Optional[pd.DataFrame],
+) -> pd.Series:
+    """포트폴리오 일별수익 − (그날 투입비중 × 시장수익) = 베타 제거 알파 일별수익."""
+    if port_daily.empty:
+        return port_daily
+    w = _invested_weight_korea(act_frames).reindex(port_daily.index).fillna(0.0)
+    m = _market_daily_returns(kospi, port_daily.index)
+    return port_daily - w * m
 
 
 def run_universe_backtest(

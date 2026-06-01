@@ -45,6 +45,7 @@ from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
 IN_SAMPLE_PCT = 70           # 시간축 IS 비율(종목분할과 동일 — 축만 다름)
 DEFAULT_EMBARGO_DAYS = 12    # IS↔OOS 갭(거래일). López de Prado h≈1%·T 권장에 부합.
 _HI_SENTINEL = "9999-12-31"  # 마지막 날짜까지 포함하기 위한 상한
+GATE_EXCESS_MIN_IR = 0.5     # 채택 게이트: 시장(KOSPI) 대비 초과수익 정보비율(IR) 하한
 
 
 def _universe_dates(holdings: dict[str, pd.DataFrame]) -> list[str]:
@@ -76,7 +77,9 @@ def _window_metrics(spec: dict, holdings: dict, kospi, lo: str, hi: str) -> dict
         act_frames.append(pd.Series(active.to_numpy(), index=idx, name=tk))
         all_trades.extend(trades)
         n_tk += 1
-    m = bt._metrics(all_trades, bt._combine(ret_frames, act_frames))
+    port = bt._combine_korea_stock_portfolio(ret_frames, act_frames)
+    excess = bt._excess_daily_korea(port, act_frames, kospi)
+    m = bt._metrics(all_trades, port, excess_daily=excess)
     m["_window"] = [lo, hi if hi != _HI_SENTINEL else "end"]
     m["_n_tickers"] = n_tk
     return m
@@ -211,25 +214,37 @@ def run_walk_forward_validation(
             "window_gate": passes_full_gate_v2(is_m, oos_m),
         })
 
-    oos_sharpes = [r["out_sample"]["sharpe"] for r in results
-                   if r["out_sample"]["sharpe"] is not None]
     import statistics as _st
-    oos_median = round(_st.median(oos_sharpes), 4) if oos_sharpes else None
-    oos_min = round(min(oos_sharpes), 4) if oos_sharpes else None
+
+    # 채택 기준은 *시장 대비 초과수익 IR*(베타 제거 알파). raw sharpe 는 진단용으로만 함께 보고.
+    oos_excess = [r["out_sample"].get("excess_sharpe") for r in results]
+    valid_excess = [s for s in oos_excess if s is not None]
+    oos_ex_median = round(_st.median(valid_excess), 4) if valid_excess else None
+    oos_ex_min = round(min(valid_excess), 4) if valid_excess else None
+    # 모든 OOS 윈도우가 시장을 이기고(IR>0) 중앙값이 임계 초과해야 통과.
     passed = bool(
         len(results) >= 2
-        and oos_sharpes and len(oos_sharpes) == len(results)
-        and oos_min is not None and oos_min > 0
-        and oos_median is not None and oos_median > GATE_V2_MIN_SHARPE
+        and len(valid_excess) == len(results)
+        and oos_ex_min is not None and oos_ex_min > 0
+        and oos_ex_median is not None and oos_ex_median > GATE_EXCESS_MIN_IR
     )
+
+    oos_sharpes = [r["out_sample"]["sharpe"] for r in results
+                   if r["out_sample"]["sharpe"] is not None]
+    oos_median = round(_st.median(oos_sharpes), 4) if oos_sharpes else None
+    oos_min = round(min(oos_sharpes), 4) if oos_sharpes else None
 
     return {
         "mode": mode,
         "n_windows": len(results),
         "windows": results,
-        "oos_sharpe_median": oos_median,
-        "oos_sharpe_min": oos_min,
+        "oos_excess_ir_median": oos_ex_median,
+        "oos_excess_ir_min": oos_ex_min,
+        "oos_sharpe_median": oos_median,    # 진단용(raw)
+        "oos_sharpe_min": oos_min,          # 진단용(raw)
         "gate_passed": passed,
+        "gate_metric": "excess_ir",
+        "gate_min_ir": GATE_EXCESS_MIN_IR,
         "data_span": [min_d, max_d],
     }
 

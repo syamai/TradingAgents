@@ -30,7 +30,7 @@ from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
 from tradingagents.hermes.strategy_store_v2 import StrategyStoreV2
 from tradingagents.hermes.strategy_validation import (
     engine_version,
-    run_time_split_validation,
+    run_walk_forward_validation,
 )
 
 
@@ -42,9 +42,10 @@ def _v2_store() -> StrategyStoreV2:
 mcp = FastMCP("trading-ai-hermes-v2")
 
 
-def _combined_gate(xsec: dict, time_r: dict) -> bool:
-    """xsec(종목분할) AND time(시간분할) 게이트 결합 — 둘 다 통과해야 True."""
-    return bool(xsec["gate_passed"]) and bool(time_r["gate_passed"])
+def _fair_gate(wf: dict) -> bool:
+    """공정 게이트 — walk-forward × 시장대비 초과수익 IR. 모든 OOS 창에서 시장을
+    이기고(IR>0) 중앙 IR>임계 여야 True. 단일 분할 레짐편향·시장베타 오인 제거."""
+    return bool(wf["gate_passed"])
 
 
 @mcp.tool()
@@ -84,16 +85,18 @@ def backtest_strategy_v2(spec: dict, universe: Optional[list[str]] = None) -> di
     validate_spec_v2(spec)
     tickers = universe if universe else _universe()
     xsec = run_universe_backtest_v2(spec, tickers, loader=_engine_loader)
-    time_r = run_time_split_validation(spec, tickers, loader=_engine_loader)
+    wf = run_walk_forward_validation(spec, tickers, loader=_engine_loader)
     return {
-        "in_sample": xsec["in_sample"],          # 종목분할(보조)
+        "in_sample": xsec["in_sample"],          # 종목분할(진단)
         "out_sample": xsec["out_sample"],
         "xsec_gate_passed": xsec["gate_passed"],
-        "time_in_sample": time_r["in_sample"],   # 시간분할(1차 관문)
-        "time_out_sample": time_r["out_sample"],
-        "time_gate_passed": time_r["gate_passed"],
-        "split": time_r["split"],
-        "gate_passed": _combined_gate(xsec, time_r),
+        "wf_n_windows": wf["n_windows"],         # 공정 게이트(1차 관문)
+        "wf_excess_ir_median": wf["oos_excess_ir_median"],
+        "wf_excess_ir_min": wf["oos_excess_ir_min"],
+        "wf_oos_sharpe_median": wf["oos_sharpe_median"],   # raw(진단)
+        "gate_passed": _fair_gate(wf),
+        "gate_min_ir": wf["gate_min_ir"],
+        "portfolio_policy": xsec.get("portfolio_policy"),
         "universe_size": xsec["universe_size"],
     }
 
@@ -126,20 +129,20 @@ def save_strategy_v2(spec: dict, name: Optional[str] = None) -> dict:
         }
     tickers = _universe()
     result = run_universe_backtest_v2(spec, tickers, loader=_engine_loader)
-    time_result = run_time_split_validation(spec, tickers, loader=_engine_loader)
+    wf_result = run_walk_forward_validation(spec, tickers, loader=_engine_loader)
     sid, _is_new = store.save(
         spec, result, name=name,
-        time_result=time_result, engine_version=engine_version(),
+        wf_result=wf_result, engine_version=engine_version(),
     )
     return {
         "strategy_id": sid,
         "duplicate": False,
-        "gate_passed": _combined_gate(result, time_result),
+        "gate_passed": _fair_gate(wf_result),
         "in_sample": result["in_sample"],
         "out_sample": result["out_sample"],
-        "time_in_sample": time_result["in_sample"],
-        "time_out_sample": time_result["out_sample"],
-        "time_gate_passed": time_result["gate_passed"],
+        "wf_n_windows": wf_result["n_windows"],
+        "wf_excess_ir_median": wf_result["oos_excess_ir_median"],
+        "wf_excess_ir_min": wf_result["oos_excess_ir_min"],
         "universe_size": result["universe_size"],
     }
 
@@ -166,24 +169,23 @@ def list_strategies_v2(
     rows = _v2_store().list(gate_passed=gate_passed)
     if not brief:
         return rows
-    passed = sum(1 for r in rows if r["gate_passed"])  # 결합 게이트(xsec AND time)
-    # 시간분할 IS·OOS sharpe 최소값 기준 정렬 — '두 시간구간 모두 강한' 후보가 위로.
-    def _time_min(r):
-        ti, to = r.get("time_in_sharpe"), r.get("time_out_sharpe")
-        if ti is None or to is None:
-            return -999.0
-        return min(ti, to)
-    top = sorted(rows, key=_time_min, reverse=True)[:5]
+    passed = sum(1 for r in rows if r["gate_passed"])  # 공정 게이트(walk-forward 초과수익 IR)
+    # walk-forward OOS 초과수익 IR 최소값(최악 구간 알파) 기준 정렬 — '모든 구간에서
+    # 시장을 이긴' 후보가 위로.
+    def _wf_min(r):
+        v = r.get("wf_excess_ir_min")
+        return v if v is not None else -999.0
+    top = sorted(rows, key=_wf_min, reverse=True)[:5]
     top_brief = [{
         "id": r["id"], "name": r["name"],
-        "in_sharpe": r["in_sharpe"], "out_sharpe": r["out_sharpe"],  # xsec(보조)
-        "time_in_sharpe": r.get("time_in_sharpe"),
-        "time_out_sharpe": r.get("time_out_sharpe"),
-        "time_gate": r.get("time_gate_passed"),
+        "in_sharpe": r["in_sharpe"], "out_sharpe": r["out_sharpe"],  # xsec raw(진단)
+        "wf_excess_ir_median": r.get("wf_excess_ir_median"),
+        "wf_excess_ir_min": r.get("wf_excess_ir_min"),
+        "wf_n_windows": r.get("wf_n_windows"),
         "gate": r["gate_passed"],
     } for r in top]
     return {"total": len(rows), "passed": passed,
-            "top_by_time_min_sharpe": top_brief}
+            "top_by_wf_excess_ir_min": top_brief}
 
 
 def main():

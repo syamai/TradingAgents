@@ -32,6 +32,18 @@ _V3_COLUMNS = (
     ("time_result_json", "TEXT"),
 )
 
+# v4 추가 컬럼 — 공정 게이트(walk-forward × 시장대비 초과수익 IR) 결과.
+# gate_passed 의미가 v4 부터 **walk-forward 초과수익 IR 게이트**로 단일화된다
+# (기존 xsec AND single-time-split → 다중구간 시장중립 알파). time_* (v3, single
+# split) 와 xsec in_*/out_* 는 진단용으로 유지.
+_V4_COLUMNS = (
+    ("wf_excess_ir_median", "REAL"),
+    ("wf_excess_ir_min", "REAL"),
+    ("wf_n_windows", "INTEGER"),
+    ("wf_gate_passed", "INTEGER"),
+    ("wf_result_json", "TEXT"),
+)
+
 
 class StrategyStoreV2(StrategyStore):
     """v2 전략 저장 — ``strategies_v2.db`` 분리, v2 검증 + v3 시간분할 컬럼."""
@@ -45,7 +57,7 @@ class StrategyStoreV2(StrategyStore):
         super()._init_schema()
         with self._conn() as c:
             cols = {r[1] for r in c.execute("PRAGMA table_info(strategies)")}
-            for name, decl in _V3_COLUMNS:
+            for name, decl in (*_V3_COLUMNS, *_V4_COLUMNS):
                 if name not in cols:
                     c.execute(f"ALTER TABLE strategies ADD COLUMN {name} {decl}")
 
@@ -56,29 +68,44 @@ class StrategyStoreV2(StrategyStore):
         *,
         name: Optional[str] = None,
         time_result: Optional[dict] = None,
+        wf_result: Optional[dict] = None,
         engine_version: Optional[str] = None,
     ):
         """전략 + 백테스트 result 저장. 반환 ``(strategy_id, is_new)``.
 
-        ``result`` 는 종목분할(xsec) 백테스트(``run_universe_backtest_v2``).
-        ``time_result`` 가 주어지면(``run_time_split_validation``) 시간분할 IS/OOS
-        를 함께 저장하고 ``gate_passed`` 컬럼을 **xsec AND time 결합**으로 기록한다.
-        ``time_result`` 가 없으면 기존 동작(xsec 게이트만) — 하위호환.
+        ``result`` 는 종목분할(xsec) 백테스트(``run_universe_backtest_v2``, 진단용).
+        ``wf_result`` 가 주어지면(``run_walk_forward_validation``) **공정 게이트**
+        — walk-forward × 시장대비 초과수익 IR — 결과를 기록하고 ``gate_passed`` 를
+        그 게이트로 단일화한다(v4). ``time_result``(single split, v3)는 주어지면
+        진단 컬럼으로만 저장. 둘 다 없으면 xsec 게이트(레거시 하위호환).
         spec_hash 중복이면 재실행 없이 기존 id 와 ``is_new=False``.
         """
         validate_spec_v2(spec)
         h = spec_hash(spec)
         in_m, out_m = result["in_sample"], result["out_sample"]
-        xsec_gate = bool(result["gate_passed"])
+
+        # v3 single-split 진단 컬럼(있을 때만).
         if time_result is not None:
-            time_gate = bool(time_result["gate_passed"])
-            gate = xsec_gate and time_gate
             t_in = time_result["in_sample"]["sharpe"]
             t_out = time_result["out_sample"]["sharpe"]
+            t_gate = 1 if time_result["gate_passed"] else 0
             t_json = json.dumps(time_result, ensure_ascii=False)
         else:
-            time_gate = gate = xsec_gate
-            t_in = t_out = t_json = None
+            t_in = t_out = t_gate = t_json = None
+
+        # v4 공정 게이트(walk-forward 초과수익 IR). 있으면 이게 gate_passed 의 단일 출처.
+        if wf_result is not None:
+            gate = bool(wf_result["gate_passed"])
+            wf_med = wf_result.get("oos_excess_ir_median")
+            wf_min = wf_result.get("oos_excess_ir_min")
+            wf_nw = wf_result.get("n_windows")
+            wf_json = json.dumps(wf_result, ensure_ascii=False)
+        else:
+            # 레거시: wf 없으면 xsec(AND time) 결합 — 기존 의미 유지.
+            gate = bool(result["gate_passed"]) and (
+                bool(time_result["gate_passed"]) if time_result is not None else True)
+            wf_med = wf_min = wf_nw = wf_json = None
+
         with self._conn() as c:
             existing = c.execute(
                 "SELECT id FROM strategies WHERE spec_hash=?", (h,)
@@ -95,8 +122,10 @@ class StrategyStoreV2(StrategyStore):
                     out_avg_hold_days, out_n_trades, out_excess_return_pct,
                     gate_passed, universe_size,
                     time_in_sharpe, time_out_sharpe, time_gate_passed,
-                    engine_version, time_result_json
-                ) VALUES (?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?, ?,?,?,?,?)
+                    engine_version, time_result_json,
+                    wf_excess_ir_median, wf_excess_ir_min, wf_n_windows,
+                    wf_gate_passed, wf_result_json
+                ) VALUES (?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?, ?,?,?,?,?, ?,?,?,?,?)
                 """,
                 (
                     name or spec.get("name", "unnamed"),
@@ -111,8 +140,10 @@ class StrategyStoreV2(StrategyStore):
                     out_m["n_trades"], out_m["avg_excess_ret_pct"],
                     1 if gate else 0,
                     result.get("universe_size"),
-                    t_in, t_out, (1 if time_gate else 0) if time_result is not None else None,
+                    t_in, t_out, t_gate,
                     engine_version, t_json,
+                    wf_med, wf_min, wf_nw,
+                    (1 if gate else 0) if wf_result is not None else None, wf_json,
                 ),
             )
             return cur.lastrowid, True
