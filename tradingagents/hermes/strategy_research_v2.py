@@ -60,10 +60,11 @@ _ABBR = {
 
 
 def _candidates() -> list[dict]:
-    """12개 아키타입 × 그리드 → 후보 spec 리스트 (라운드로빈 인터리브)."""
+    """13개 아키타입 × 그리드 → 후보 spec 리스트 (라운드로빈 인터리브)."""
     a1, a2, a3, a4 = [], [], [], []
     a5, a6, a7, a8 = [], [], [], []
     a9, a10, a11, a12 = [], [], [], []
+    a13: list[dict] = []  # 신규: 저공매도압력 (short_ratio 신호)
 
     # A1 DIP_SUPPORT: 눌림목 + 수급 매수 지지 (기존 100-run 재현용)
     for subj in SUBJECTS:
@@ -289,9 +290,39 @@ def _candidates() -> list[dict]:
                     "exit": {"take_profit_pct": 5.0, "stop_loss_pct": 3.0, "max_hold_days": 5},
                 })
 
-    # 라운드로빈 인터리브 — KOSPI 레짐 신규 아키타입을 최우선 배치.
+    # A13 SHORT_PRESSURE: 저공매도압력(공매도 비중 낮음) + 추세/매집 — 신규 short_ratio 신호.
+    # 학술 근거: 고공매도 종목은 저수익(Boehmer-Huszar-Jordan) → long-only 는 저공매도 선호.
+    # 시드 백테스트에서 공정 게이트 통과한 템플릿(short_ratio<=v AND 추세) 의 그리드 변형.
+    for subj in ("foreign", "foreign_registered", "pension"):
+        for sw, sv in [(10, 10.0), (20, 15.0), (10, 15.0)]:
+            for TP, SL, MH in [(15.0, 8.0, 40), (10.0, 5.0, 20)]:
+                a13.append({
+                    "spec_version": 2,
+                    "name": f"shortp-{_ABBR[subj]}-sr{sw}_{int(sv)}-tr60-tp{int(TP)}sl{int(SL)}h{MH}",
+                    "direction": "long",
+                    "entry": {"all_of": [
+                        {"signal": "short_ratio", "window": sw, "op": "<=", "value": sv},
+                        {"signal": "trend_slope", "subject": subj, "window": 60, "direction": "up"},
+                    ]},
+                    "exit": {"take_profit_pct": TP, "stop_loss_pct": SL, "max_hold_days": MH},
+                })
+    # 주체 무관 가격추세 버전 (저공매도 + 60일선 위).
+    for sw, sv in [(10, 10.0), (20, 15.0), (5, 10.0)]:
+        for TP, SL, MH in [(15.0, 8.0, 40), (10.0, 5.0, 20)]:
+            a13.append({
+                "spec_version": 2,
+                "name": f"shortp-px-sr{sw}_{int(sv)}-ma60-tp{int(TP)}sl{int(SL)}h{MH}",
+                "direction": "long",
+                "entry": {"all_of": [
+                    {"signal": "short_ratio", "window": sw, "op": "<=", "value": sv},
+                    {"signal": "price_filter", "mode": "above_ma", "window": 60},
+                ]},
+                "exit": {"take_profit_pct": TP, "stop_loss_pct": SL, "max_hold_days": MH},
+            })
+
+    # 라운드로빈 인터리브 — 신규 아키타입(A13 short_ratio, A9~A12 KOSPI 레짐)을 최우선 배치.
     out: list[dict] = []
-    for tup in zip_longest(a9, a10, a11, a12, a5, a6, a7, a8, a1, a2, a3, a4):
+    for tup in zip_longest(a13, a9, a10, a11, a12, a5, a6, a7, a8, a1, a2, a3, a4):
         for s in tup:
             if s is not None:
                 out.append(s)
@@ -320,6 +351,7 @@ def _phase_filter(specs: list[dict], existing_count: int) -> list[dict]:
     if existing_count < 400:
         return specs
     advanced_prefixes = (
+        "shortp-",
         "mrp-", "mconc-", "mfscale-", "defrot-",
         "rgx-", "frev-", "fscale-", "orot-",
     )
@@ -343,18 +375,41 @@ def _existing_hashes(store: StrategyStoreV2) -> set[str]:
     return {r[0] for r in rows}
 
 
+def _merge_short(df, ticker: str, store) -> object:
+    """holdings df 에 short 엔드포인트의 공매도 비중 컬럼을 date 기준 left-merge.
+
+    same-day 값(close 시점 확정)이라 look-ahead 0. short 데이터 부재/실패 시 df 원본
+    반환 → ``short_ratio`` 신호는 컬럼 부재로 False(하위호환).
+    """
+    try:
+        sdf = store.read(ticker, "short")
+    except Exception:        # noqa: BLE001
+        return df
+    if sdf is None or getattr(sdf, "empty", True) or "short_volume_ratio" not in sdf.columns:
+        return df
+    cols = ["date", "short_volume_ratio"]
+    if "short_amount_ratio" in sdf.columns:
+        cols.append("short_amount_ratio")
+    sdf = sdf[cols].copy()
+    sdf["date"] = sdf["date"].astype(str)
+    out = df.copy()
+    out["date"] = out["date"].astype(str)
+    return out.merge(sdf, on="date", how="left")
+
+
 def _preload(tickers: list[str]):
-    """holdings 전부 1회 로딩(메모리 캐시) + KOSPI 1회 — spec 당 재IO 방지.
+    """holdings 전부 1회 로딩(메모리 캐시) + short 비중 머지 + KOSPI 1회 — spec 당 재IO 방지.
 
     반환 ``(loaded_tickers, cached_loader, cached_kospi_fetcher)``.
     """
     holdings: dict[str, object] = {}
     min_d = max_d = None
+    _short_store = KisHistoryStore()
     for tk in tickers:
         df, _meta = load_holdings(tk)
         if df is None or df.empty:
             continue
-        holdings[tk] = df
+        holdings[tk] = _merge_short(df, tk, _short_store)
         d0, d1 = str(df["date"].iloc[0]), str(df["date"].iloc[-1])
         min_d = d0 if (min_d is None or d0 < min_d) else min_d
         max_d = d1 if (max_d is None or d1 > max_d) else max_d

@@ -82,6 +82,12 @@ def _eval_signal_v2(df: pd.DataFrame, sig: dict) -> pd.Series:
         retail = bt._num(df["retail_net_qty"]).fillna(0).rolling(sig["window"]).sum()
         return (smart > 0) & (retail < 0)
 
+    if t == "short_ratio":
+        if "short_volume_ratio" not in df.columns:
+            return pd.Series(False, index=df.index)   # short 데이터 미배선 → 신호 off (하위호환)
+        sr = bt._num(df["short_volume_ratio"]).rolling(sig["window"]).mean()  # trailing W일 평균 공매도 비중%
+        return sr >= sig["value"] if sig["op"] == ">=" else sr <= sig["value"]
+
     raise ValueError(f"unknown signal type: {t!r}")
 
 

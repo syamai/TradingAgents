@@ -16,6 +16,8 @@
                         장기를 상회하면 매집 가속(A<B 강제)
   - ``flow_divergence``: 지정 주체 W일 순매수 누적 > 0 AND 개인(retail) W일 누적 < 0
                         (주체 간 로테이션 — smart-money 매집 + 개인 매도)
+  - ``short_ratio``   : 공매도 거래량 비중(short_volume_ratio %)의 W일 trailing 평균
+                        임계 — 낮은 공매도 압력(<=) 선호. short 데이터 부재 시 False.
 
 ``rolling_corr`` 는 무방향(|r|)이 아니라 양의 동조(r>=min_r)만 — "이 주체가
 사면 이 종목이 오른다"는 확인 필터. 방향은 entry 의 net_streak buy 와 AND 로
@@ -45,6 +47,8 @@ FLOW_ZSCORE_MIN_Z_GRID: tuple[float, ...] = (1.0, 1.5, 2.0, 2.5)
 FLOW_ACCEL_SHORT_GRID: tuple[int, ...] = (3, 5, 10)
 FLOW_ACCEL_LONG_GRID: tuple[int, ...] = (20, 60)
 FLOW_DIVERGENCE_WINDOW_GRID: tuple[int, ...] = (3, 5, 10, 20)
+# 공매도 압력 신호 그리드 (short_volume_ratio = 공매도 거래량 비중 %, 이산).
+SHORT_RATIO_VALUE_GRID: tuple[float, ...] = (5.0, 10.0, 15.0, 20.0, 30.0)
 
 _DIRECTIONS: frozenset[str] = frozenset({"up", "down"})
 
@@ -121,6 +125,16 @@ def _validate_signal_v2(sig: dict, where: str) -> None:
         base._check_subject(sig, where)
         base._in_grid(
             base._need(sig, "window", where), FLOW_DIVERGENCE_WINDOW_GRID, where, "window"
+        )
+
+    elif stype == "short_ratio":
+        base._in_grid(
+            base._need(sig, "window", where), base.WINDOW_GRID, where, "window"
+        )
+        if base._need(sig, "op", where) not in base._OPS:
+            raise ValueError(f"{where}: op must be one of {sorted(base._OPS)}")
+        base._in_grid(
+            base._need(sig, "value", where), SHORT_RATIO_VALUE_GRID, where, "value"
         )
 
     else:
