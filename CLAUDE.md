@@ -144,6 +144,14 @@ Lookup order in `anthropic_client.py`: explicit `api_key` kwarg → `TRADINGAGEN
 - **Don't add an automated sync from `~/.hermes/{memories,skills}/` back to `hermes_assets/`.** Phase 2 introduces a human approval gate for Hermes's self-evolving memory; auto-sync would defeat it. Run the `cp` manually when promoting a vetted change.
 - **`statsmodels` (advanced_analysis, Granger, VAR) hates `inf`/NaN.** Pre-IPO `close=0` rows produce `±inf` via `pct_change`. Filter at entry: `df[df["close"] > 0].replace([np.inf, -np.inf], np.nan).dropna(subset=["price_change_pct"])`.
 - **`hermes -z` returns exit 0 on API errors** (rate limit, expired key). Never trust the exit code alone — check `~/.hermes/sessions/request_dump_*.json`'s `error` field or `state.db` `sessions.output_tokens`.
+- **전문용어·약어는 사용자 응답에서 처음 쓸 때 반드시 풀어서 설명한다.** 백테스트/평가 지표를 약어만 던지지 말 것 (예: "ir_med 1.63" → "ir_med(walk-forward OOS 창들의 시장초과 IR 중앙값) 1.63"). 자주 쓰는 용어 풀이:
+  - **IR (Information Ratio, 정보비율)** = 초과수익 평균 ÷ 초과수익 변동성(연율화). 본 프로젝트에선 KOSPI 대비 초과수익 기준.
+  - **ir_med / ir_min** = walk-forward 여러 OOS 창의 시장초과 IR의 **중앙값 / 최솟값**.
+  - **walk-forward** = 학습구간(IS)→검증구간(OOS) 창을 시간순으로 굴리며 반복 검증(레짐 운 제거).
+  - **IS / OOS** = In-Sample(학습 구간) / Out-Of-Sample(표본 외 = 미래 검증 구간).
+  - **xsec / time split** = 종목 해시 분할(횡단면 일반화) / 시간 분할(시기 일반화).
+  - **MDD** = Maximum Drawdown(최대 낙폭, %). **win_rate** = 수익 거래 비율. **sharpe** = 위험조정 수익(수익/변동성).
+  - **fair gate(공정 게이트)** = 채택 합격선. 모든 OOS 창 시장초과 IR>0 **AND** 중앙 IR>0.5(`GATE_EXCESS_MIN_IR`).
 
 ## Issue tracker
 
