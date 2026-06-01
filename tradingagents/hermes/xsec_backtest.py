@@ -71,21 +71,25 @@ def run_xsec_rank_backtest(holdings: dict, kospi, *, kind: str, window: int,
                            date_lo: str | None = None,
                            date_hi: str | None = SCORE_DATE_HI,
                            liq_window: int = 20, min_liq_pct: float = 0.0,
-                           min_liq_krw: float = 0.0) -> dict:
+                           min_liq_krw: float = 0.0,
+                           min_liq_median_mult: float = 0.0) -> dict:
     """횡단면 랭킹 백테스트. 반환: 메트릭 dict (excess IR 게이트 포함).
 
     채점 구간은 [date_lo, date_hi]. 기본 상한 2025-06-30(급등구간 제외). char 는
     full 시계열에서 trailing 계산 후 구간만 채점하므로 date_lo 근처도 look-ahead 0.
     forward 관찰은 date_lo=SCORE_DATE_HI, date_hi=None 로 호출.
 
-    유동성 필터(둘 다 trailing, look-ahead 0):
-      - min_liq_pct>0 : 그 시점 eligible 내 거래대금 백분위 하위 제외(상대 기준).
-      - min_liq_krw>0 : trailing 거래대금이 절대 임계(원) 미만 종목 제외(절대 기준).
+    유동성 필터(전부 trailing, look-ahead 0):
+      - min_liq_pct>0        : 그 시점 eligible 내 거래대금 백분위 하위 제외(상대).
+      - min_liq_krw>0        : trailing 거래대금 절대 임계(원) 미만 제외(고정 절대 — 시기편향).
+      - min_liq_median_mult>0: 그날 eligible 거래대금 중앙값의 배수 미만 제외
+                               (절대 성격이되 시장 수준에 따라 자동 스케일 → 시기 일관).
     """
     if direction not in ("low", "high"):
         raise ValueError("direction must be low|high")
     close_m, char_m = _wide(holdings, kind, window)
-    liq_m = _liq_wide(holdings, liq_window) if (min_liq_pct > 0 or min_liq_krw > 0) else None
+    _use_liq = min_liq_pct > 0 or min_liq_krw > 0 or min_liq_median_mult > 0
+    liq_m = _liq_wide(holdings, liq_window) if _use_liq else None
     if date_lo is not None:
         close_m, char_m = close_m[close_m.index >= date_lo], char_m[char_m.index >= date_lo]
     if date_hi is not None:
@@ -112,8 +116,11 @@ def run_xsec_rank_backtest(holdings: dict, kospi, *, kind: str, window: int,
             keep = pd.Series(True, index=names.index)
             if min_liq_pct > 0:
                 keep &= (liq_rank >= min_liq_pct).reindex(names.index).fillna(False)
-            if min_liq_krw > 0:                                   # 절대 거래대금(원) 임계
+            if min_liq_krw > 0:                                   # 고정 절대 거래대금(원) 임계
                 keep &= (liq_row >= min_liq_krw).reindex(names.index).fillna(False)
+            if min_liq_median_mult > 0:                           # 그날 중앙값 배수(시기 일관 절대)
+                thr = min_liq_median_mult * float(liq_row.median())
+                keep &= (liq_row >= thr).reindex(names.index).fillna(False)
             names = names[keep]
         if len(names) < 10:                              # 랭킹 의미 없는 얇은 날 제외
             continue
@@ -159,6 +166,7 @@ def run_xsec_rank_backtest(holdings: dict, kospi, *, kind: str, window: int,
         "kind": kind, "window": window, "quantile": quantile, "rebalance": rebalance,
         "direction": direction, "n_periods": n, "avg_picks": round(float(np.mean(n_pick)), 1),
         "min_liq_pct": min_liq_pct, "min_liq_krw": min_liq_krw,
+        "min_liq_median_mult": min_liq_median_mult,
         "avg_pick_liq_pct": round(float(np.mean(pick_liq)), 3) if pick_liq else None,
         "sharpe": None if sharpe is None else round(sharpe, 3),
         "mdd_pct": round(mdd, 2), "cum_return_pct": round(cum, 1),
