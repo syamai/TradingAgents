@@ -144,6 +144,7 @@ Lookup order in `anthropic_client.py`: explicit `api_key` kwarg → `TRADINGAGEN
 - **Don't add an automated sync from `~/.hermes/{memories,skills}/` back to `hermes_assets/`.** Phase 2 introduces a human approval gate for Hermes's self-evolving memory; auto-sync would defeat it. Run the `cp` manually when promoting a vetted change.
 - **`statsmodels` (advanced_analysis, Granger, VAR) hates `inf`/NaN.** Pre-IPO `close=0` rows produce `±inf` via `pct_change`. Filter at entry: `df[df["close"] > 0].replace([np.inf, -np.inf], np.nan).dropna(subset=["price_change_pct"])`.
 - **`hermes -z` returns exit 0 on API errors** (rate limit, expired key). Never trust the exit code alone — check `~/.hermes/sessions/request_dump_*.json`'s `error` field or `state.db` `sessions.output_tokens`.
+- **2025-06 이후 데이터는 테스트(OOS/검증) 데이터로 쓰지 않는다.** 2025-06 이후 약 1년간 한국 증시가 비정상적으로 급등해(생존자 풀 동일가중 누적 ~18.8배 vs KOSPI ~4.3배의 상당분이 이 구간), 이 구간을 OOS/검증에 넣으면 성과가 구조적으로 과대평가된다. walk-forward·time-split 의 **OOS 윈도우 상한을 2025-06-30** 으로 두고, 그 이후 데이터는 채점에서 제외해 **forward 관찰 전용**으로 남긴다. (walk-forward 에선 최신 데이터가 OOS 이므로, 데이터 그리드를 2025-06-30 에서 잘라 채점하면 충족. in-sample 도 이 상한 이전만 사용.)
 - **전문용어·약어는 사용자 응답에서 처음 쓸 때 반드시 풀어서 설명한다.** 백테스트/평가 지표를 약어만 던지지 말 것 (예: "ir_med 1.63" → "ir_med(walk-forward OOS 창들의 시장초과 IR 중앙값) 1.63"). 자주 쓰는 용어 풀이:
   - **IR (Information Ratio, 정보비율)** = 초과수익 평균 ÷ 초과수익 변동성(연율화). 본 프로젝트에선 KOSPI 대비 초과수익 기준.
   - **ir_med / ir_min** = walk-forward 여러 OOS 창의 시장초과 IR의 **중앙값 / 최솟값**.
