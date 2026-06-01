@@ -88,6 +88,18 @@ def _eval_signal_v2(df: pd.DataFrame, sig: dict) -> pd.Series:
         sr = bt._num(df["short_volume_ratio"]).rolling(sig["window"]).mean()  # trailing W일 평균 공매도 비중%
         return sr >= sig["value"] if sig["op"] == ">=" else sr <= sig["value"]
 
+    if t == "price_return":
+        close = bt._num(df["close"])
+        ret_w = close / close.shift(sig["window"]) - 1          # trailing W일 수익률
+        thr = sig["value"] / 100.0
+        return ret_w >= thr if sig["op"] == ">=" else ret_w <= thr
+
+    if t == "realized_vol":
+        close = bt._num(df["close"])
+        dr = close.pct_change()
+        vol = dr.rolling(sig["window"]).std() * (252 ** 0.5) * 100.0  # trailing 연율화 변동성%
+        return vol >= sig["value"] if sig["op"] == ">=" else vol <= sig["value"]
+
     raise ValueError(f"unknown signal type: {t!r}")
 
 

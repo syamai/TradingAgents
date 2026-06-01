@@ -18,6 +18,10 @@
                         (주체 간 로테이션 — smart-money 매집 + 개인 매도)
   - ``short_ratio``   : 공매도 거래량 비중(short_volume_ratio %)의 W일 trailing 평균
                         임계 — 낮은 공매도 압력(<=) 선호. short 데이터 부재 시 False.
+  - ``price_return``  : 종가의 W일 trailing 수익률(%) 임계 — 장기 모멘텀(>= 양수) /
+                        역추세(<=) 신호. 긴 윈도우(120/250)로 12-1 류 모멘텀 표현.
+  - ``realized_vol``  : 일별수익률의 W일 trailing 실현변동성(연율화 %) 임계 — 저변동성
+                        팩터(<=) / 고변동성(>=). close 만 사용.
 
 ``rolling_corr`` 는 무방향(|r|)이 아니라 양의 동조(r>=min_r)만 — "이 주체가
 사면 이 종목이 오른다"는 확인 필터. 방향은 entry 의 net_streak buy 와 AND 로
@@ -49,6 +53,12 @@ FLOW_ACCEL_LONG_GRID: tuple[int, ...] = (20, 60)
 FLOW_DIVERGENCE_WINDOW_GRID: tuple[int, ...] = (3, 5, 10, 20)
 # 공매도 압력 신호 그리드 (short_volume_ratio = 공매도 거래량 비중 %, 이산).
 SHORT_RATIO_VALUE_GRID: tuple[float, ...] = (5.0, 10.0, 15.0, 20.0, 30.0)
+# 장기 가격 모멘텀 신호 그리드 (긴 윈도우 — 12-1 류 모멘텀, 이산).
+PRICE_RETURN_WINDOW_GRID: tuple[int, ...] = (20, 60, 120, 250)
+PRICE_RETURN_VALUE_GRID: tuple[float, ...] = (0.0, 5.0, 10.0, 20.0, 30.0)
+# 실현변동성(저변동성 팩터) 신호 그리드 (연율화 %, 이산).
+REALIZED_VOL_WINDOW_GRID: tuple[int, ...] = (20, 60, 120)
+REALIZED_VOL_VALUE_GRID: tuple[float, ...] = (20.0, 30.0, 40.0, 50.0)
 
 _DIRECTIONS: frozenset[str] = frozenset({"up", "down"})
 
@@ -135,6 +145,26 @@ def _validate_signal_v2(sig: dict, where: str) -> None:
             raise ValueError(f"{where}: op must be one of {sorted(base._OPS)}")
         base._in_grid(
             base._need(sig, "value", where), SHORT_RATIO_VALUE_GRID, where, "value"
+        )
+
+    elif stype == "price_return":
+        base._in_grid(
+            base._need(sig, "window", where), PRICE_RETURN_WINDOW_GRID, where, "window"
+        )
+        if base._need(sig, "op", where) not in base._OPS:
+            raise ValueError(f"{where}: op must be one of {sorted(base._OPS)}")
+        base._in_grid(
+            base._need(sig, "value", where), PRICE_RETURN_VALUE_GRID, where, "value"
+        )
+
+    elif stype == "realized_vol":
+        base._in_grid(
+            base._need(sig, "window", where), REALIZED_VOL_WINDOW_GRID, where, "window"
+        )
+        if base._need(sig, "op", where) not in base._OPS:
+            raise ValueError(f"{where}: op must be one of {sorted(base._OPS)}")
+        base._in_grid(
+            base._need(sig, "value", where), REALIZED_VOL_VALUE_GRID, where, "value"
         )
 
     else:

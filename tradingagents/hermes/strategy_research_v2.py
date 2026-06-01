@@ -65,6 +65,8 @@ def _candidates() -> list[dict]:
     a5, a6, a7, a8 = [], [], [], []
     a9, a10, a11, a12 = [], [], [], []
     a13: list[dict] = []  # 신규: 저공매도압력 (short_ratio 신호)
+    a14: list[dict] = []  # 신규: 장기 가격 모멘텀 (price_return 신호)
+    a15: list[dict] = []  # 신규: 저변동성 방어 (realized_vol 신호)
 
     # A1 DIP_SUPPORT: 눌림목 + 수급 매수 지지 (기존 100-run 재현용)
     for subj in SUBJECTS:
@@ -320,9 +322,41 @@ def _candidates() -> list[dict]:
                 "exit": {"take_profit_pct": TP, "stop_loss_pct": SL, "max_hold_days": MH},
             })
 
-    # 라운드로빈 인터리브 — 신규 아키타입(A13 short_ratio, A9~A12 KOSPI 레짐)을 최우선 배치.
+    # A14 MOMENTUM: 장기 가격 모멘텀(price_return) + 추세/시장 레짐 — 신규 price_return 신호.
+    # 학술 근거: 횡단면 모멘텀(Jegadeesh-Titman) — 검증 최강 이상현상. long-only leg + 레짐필터로
+    # 모멘텀 폭락(Daniel-Moskowitz) 완화. rw=120/250 으로 6~12개월 모멘텀 표현.
+    for rw, rv in [(120, 10.0), (250, 20.0), (120, 20.0), (250, 30.0)]:
+        for maw in (20, 60):
+            for TP, SL, MH in [(15.0, 8.0, 40), (20.0, 10.0, 60)]:
+                a14.append({
+                    "spec_version": 2,
+                    "name": f"mom-pr{rw}_{int(rv)}-ma{maw}-tp{int(TP)}sl{int(SL)}h{MH}",
+                    "direction": "long",
+                    "entry": {"all_of": [
+                        {"signal": "price_return", "window": rw, "op": ">=", "value": rv},
+                        {"signal": "price_filter", "mode": "above_ma", "window": maw},
+                    ]},
+                    "exit": {"take_profit_pct": TP, "stop_loss_pct": SL, "max_hold_days": MH},
+                })
+
+    # A15 LOW_VOL: 저변동성 방어(realized_vol 낮음) + 추세 — 신규 realized_vol 신호.
+    # 학술 근거: 저변동성 이상현상(Baker-Bradley-Wurgler, Frazzini-Pedersen). long-only leg 가 더 견고.
+    for vw, vv in [(60, 30.0), (120, 30.0), (60, 40.0), (120, 40.0)]:
+        for TP, SL, MH in [(15.0, 8.0, 40), (10.0, 5.0, 20)]:
+            a15.append({
+                "spec_version": 2,
+                "name": f"lowvol-rv{vw}_{int(vv)}-ma60-tp{int(TP)}sl{int(SL)}h{MH}",
+                "direction": "long",
+                "entry": {"all_of": [
+                    {"signal": "realized_vol", "window": vw, "op": "<=", "value": vv},
+                    {"signal": "price_filter", "mode": "above_ma", "window": 60},
+                ]},
+                "exit": {"take_profit_pct": TP, "stop_loss_pct": SL, "max_hold_days": MH},
+            })
+
+    # 라운드로빈 인터리브 — 신규 아키타입(A13~A15 팩터, A9~A12 KOSPI 레짐)을 최우선 배치.
     out: list[dict] = []
-    for tup in zip_longest(a13, a9, a10, a11, a12, a5, a6, a7, a8, a1, a2, a3, a4):
+    for tup in zip_longest(a13, a14, a15, a9, a10, a11, a12, a5, a6, a7, a8, a1, a2, a3, a4):
         for s in tup:
             if s is not None:
                 out.append(s)
@@ -351,7 +385,7 @@ def _phase_filter(specs: list[dict], existing_count: int) -> list[dict]:
     if existing_count < 400:
         return specs
     advanced_prefixes = (
-        "shortp-",
+        "shortp-", "mom-", "lowvol-",
         "mrp-", "mconc-", "mfscale-", "defrot-",
         "rgx-", "frev-", "fscale-", "orot-",
     )
