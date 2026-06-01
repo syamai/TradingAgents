@@ -63,6 +63,25 @@ def _eval_signal_v2(df: pd.DataFrame, sig: dict) -> pd.Series:
             return close > ma
         return close < ma
 
+    if t == "flow_zscore":
+        x = bt._num(df[f"{sig['subject']}_net_qty"]).fillna(0)
+        roll = x.rolling(sig["window"]).sum()                # trailing W일 누적
+        mu = roll.rolling(sig["lookback"]).mean()            # 자기 과거 N일 분포
+        sd = roll.rolling(sig["lookback"]).std()
+        z = (roll - mu) / sd.where(sd > 0)                   # sd<=0 → NaN → False
+        return z >= sig["min_z"]
+
+    if t == "flow_accel":
+        x = bt._num(df[f"{sig['subject']}_net_qty"]).fillna(0)
+        ma_s = x.rolling(sig["short"]).mean()                # 단기 평균
+        ma_l = x.rolling(sig["long"]).mean()                 # 장기 평균
+        return (ma_s - ma_l) > 0
+
+    if t == "flow_divergence":
+        smart = bt._num(df[f"{sig['subject']}_net_qty"]).fillna(0).rolling(sig["window"]).sum()
+        retail = bt._num(df["retail_net_qty"]).fillna(0).rolling(sig["window"]).sum()
+        return (smart > 0) & (retail < 0)
+
     raise ValueError(f"unknown signal type: {t!r}")
 
 
@@ -268,13 +287,17 @@ def run_universe_backtest_v2(
             idx = cdf["date"].astype(str).to_numpy()
             ret_frames.append(pd.Series(daily.to_numpy(), index=idx, name=tk))
             act_frames.append(pd.Series(active.to_numpy(), index=idx, name=tk))
-        results[split] = bt._metrics(all_trades, bt._combine(ret_frames, act_frames))
+        results[split] = bt._metrics(
+            all_trades,
+            bt._combine_korea_stock_portfolio(ret_frames, act_frames),
+        )
 
     in_m, out_m = results["in"], results["out"]
     return {
         "in_sample": in_m,
         "out_sample": out_m,
         "gate_passed": passes_full_gate_v2(in_m, out_m),
+        "portfolio_policy": bt.KOREA_STOCK_PORTFOLIO_POLICY,
         "universe_size": len(loaded),
         "n_in": sum(1 for tk in loaded if bt.split_of(tk) == "in"),
         "n_out": sum(1 for tk in loaded if bt.split_of(tk) == "out"),

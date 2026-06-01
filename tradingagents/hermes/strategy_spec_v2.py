@@ -10,6 +10,12 @@
   - ``rolling_corr`` : ``{subject}_net_qty`` vs ``price_change_pct`` 의 W일 trailing
                        Pearson r >= min_r (수급-가격 동조 필터)
   - ``market_filter``: KOSPI 종가가 N일 이평 위/아래인지 확인하는 시장 레짐 필터
+  - ``flow_zscore``   : ``{subject}_net_qty`` W일 누적의 자기 과거(N일) 분포 대비
+                        z-score >= min_z (수급 서프라이즈 = 이례적 순매수)
+  - ``flow_accel``    : ``{subject}_net_qty`` 단기(A일)·장기(B일) 평균 교차 — 단기가
+                        장기를 상회하면 매집 가속(A<B 강제)
+  - ``flow_divergence``: 지정 주체 W일 순매수 누적 > 0 AND 개인(retail) W일 누적 < 0
+                        (주체 간 로테이션 — smart-money 매집 + 개인 매도)
 
 ``rolling_corr`` 는 무방향(|r|)이 아니라 양의 동조(r>=min_r)만 — "이 주체가
 사면 이 종목이 오른다"는 확인 필터. 방향은 entry 의 net_streak buy 와 AND 로
@@ -32,6 +38,13 @@ CORR_LOOKBACK_GRID: tuple[int, ...] = (20, 60, 120)
 CORR_MIN_R_GRID: tuple[float, ...] = (0.1, 0.2, 0.3, 0.5)
 MARKET_FILTER_WINDOW_GRID: tuple[int, ...] = (20, 60, 120)
 MARKET_FILTER_MODE_GRID: frozenset[str] = frozenset({"above_ma", "below_ma"})
+# 수급 흐름-변화 신호 3종 그리드 (이산 — 과최적화 방어).
+FLOW_ZSCORE_WINDOW_GRID: tuple[int, ...] = (3, 5, 10, 20)
+FLOW_ZSCORE_LOOKBACK_GRID: tuple[int, ...] = (60, 120, 250)
+FLOW_ZSCORE_MIN_Z_GRID: tuple[float, ...] = (1.0, 1.5, 2.0, 2.5)
+FLOW_ACCEL_SHORT_GRID: tuple[int, ...] = (3, 5, 10)
+FLOW_ACCEL_LONG_GRID: tuple[int, ...] = (20, 60)
+FLOW_DIVERGENCE_WINDOW_GRID: tuple[int, ...] = (3, 5, 10, 20)
 
 _DIRECTIONS: frozenset[str] = frozenset({"up", "down"})
 
@@ -81,6 +94,33 @@ def _validate_signal_v2(sig: dict, where: str) -> None:
             )
         base._in_grid(
             base._need(sig, "window", where), MARKET_FILTER_WINDOW_GRID, where, "window"
+        )
+
+    elif stype == "flow_zscore":
+        base._check_subject(sig, where)
+        base._in_grid(
+            base._need(sig, "window", where), FLOW_ZSCORE_WINDOW_GRID, where, "window"
+        )
+        base._in_grid(
+            base._need(sig, "lookback", where), FLOW_ZSCORE_LOOKBACK_GRID, where, "lookback"
+        )
+        base._in_grid(
+            base._need(sig, "min_z", where), FLOW_ZSCORE_MIN_Z_GRID, where, "min_z"
+        )
+
+    elif stype == "flow_accel":
+        base._check_subject(sig, where)
+        short = base._need(sig, "short", where)
+        long = base._need(sig, "long", where)
+        base._in_grid(short, FLOW_ACCEL_SHORT_GRID, where, "short")
+        base._in_grid(long, FLOW_ACCEL_LONG_GRID, where, "long")
+        if not short < long:
+            raise ValueError(f"{where}: short({short}) must be < long({long})")
+
+    elif stype == "flow_divergence":
+        base._check_subject(sig, where)
+        base._in_grid(
+            base._need(sig, "window", where), FLOW_DIVERGENCE_WINDOW_GRID, where, "window"
         )
 
     else:
