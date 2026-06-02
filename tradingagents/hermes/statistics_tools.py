@@ -89,6 +89,7 @@ def compute_advanced(
 def get_holdings_window(
     ticker: str,
     days: int = 30,
+    end_date: Optional[str] = None,
 ) -> list[dict]:
     """ticker 의 holdings 최근 ``days`` 거래일 raw 시계열.
 
@@ -99,12 +100,14 @@ def get_holdings_window(
     args:
         ticker: 종목 코드.
         days: 최근 거래일 수 (디폴트 30).
+        end_date: 이 날짜 이하만 ("YYYY-MM-DD"). ``None`` 이면 최신까지
+            (백테스트 시점 컷오프에 사용).
 
     return:
         list[dict] (각 행 = 1 거래일). 데이터 없는 ticker 는 빈 리스트.
         ``date`` 필드는 ISO 문자열 형식.
     """
-    df, _meta = load_holdings(ticker)
+    df, _meta = load_holdings(ticker, end=end_date)
     if df.empty:
         return []
     tail = df.tail(max(0, days)).copy()

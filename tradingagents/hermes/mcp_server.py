@@ -36,7 +36,10 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from tradingagents.dataflows.kis_history_store import KisHistoryStore
+from tradingagents.hermes import backtest as _bt
 from tradingagents.hermes.analyst_runner import run_analyst
+from tradingagents.hermes.backtest_engine import run_universe_backtest
 from tradingagents.hermes.hypothesis_store import HypothesisStore
 from tradingagents.hermes.statistics_tools import (
     compute_advanced as _compute_advanced,
@@ -44,17 +47,53 @@ from tradingagents.hermes.statistics_tools import (
     compute_trend as _compute_trend,
     get_holdings_window as _get_holdings_window,
 )
+from tradingagents.hermes.strategy_spec import spec_hash, validate_spec
+from tradingagents.hermes.strategy_store import StrategyStore
 from tradingagents.llm_clients.factory import create_llm_client
 
 # 사용자 피드백 시점 분기 임계값 — 가설 as_of_date 와 today 차이가 이 일수
 # 이내면 ``user_immediate`` (즉시 직관), 초과면 ``user_followup`` (사후 추가).
 FEEDBACK_IMMEDIATE_THRESHOLD_DAYS = 14
 
+# analyst_supply_demand 의 kis_api fetcher 를 무조건 patch (idempotent).
+# 패치된 함수는 호출 시점에 백테스트 활성 여부를 보고 kis.db / 라이브를 분기 —
+# MCP 서버가 백테스트 상태 파일보다 먼저 떠도 동적으로 반영. 운영 시 무영향.
+_bt.install_kis_history_patch()
 
-@lru_cache(maxsize=1)
+
 def _hypothesis_store() -> HypothesisStore:
-    """HypothesisStore — 프로세스당 1번 (lazy). 디폴트 경로 사용."""
-    return HypothesisStore()
+    """HypothesisStore — 호출 시점에 root 결정 (lru_cache 금지).
+
+    백테스트 상태 파일이 MCP 서버 기동 이후 쓰일 수 있으므로 캐시하면 안 됨.
+    백테스트 모드면 격리 root, 아니면 디폴트 (운영 db).
+    """
+    return HypothesisStore(root=_bt.store_root())
+
+
+def _strategy_store() -> StrategyStore:
+    """StrategyStore — 디폴트 경로(``~/.tradingagents/hermes/strategies.db``).
+
+    전략 연구는 시간 만기 대기가 없어 백테스트 격리(store_root)가 불필요.
+    """
+    return StrategyStore()
+
+
+@lru_cache(maxsize=512)
+def _load_holdings_cached(ticker: str):
+    """ticker holdings 캐시 — 연구 루프가 같은 종목군을 반복 백테스트하므로."""
+    from dashboard.holdings_chart import load_holdings
+    df, _meta = load_holdings(ticker)
+    return df
+
+
+def _engine_loader(ticker: str):
+    return _load_holdings_cached(ticker), {}
+
+
+def _universe() -> list[str]:
+    """백테스트 대상 종목군 — KIS 히스토리에 적재된 전체 종목(6자리)."""
+    return KisHistoryStore().list_tickers()
+
 
 DEFAULT_ANALYST_PROVIDER = os.environ.get("HERMES_ANALYST_PROVIDER", "ollama")
 DEFAULT_ANALYST_MODEL = os.environ.get(
@@ -65,19 +104,23 @@ DEFAULT_ANALYST_BASE_URL = os.environ.get(
 )
 
 
-@lru_cache(maxsize=1)
-def _analyst_llm():
-    """분석가 LLM — 프로세스당 1번만 생성 (lazy).
+@lru_cache(maxsize=4)
+def _analyst_llm_for(model: str):
+    """모델명별 분석가 LLM (lazy, 모델당 1번).
 
     MCP 서버 import 시점에 LLM 인스턴스를 만들면 Ollama 미기동 환경에서
-    import 자체가 실패. lru_cache 로 첫 도구 호출 시점까지 지연.
+    import 자체가 실패 → 첫 도구 호출 시점까지 지연. 모델별로 캐시해 백테스트
+    override(경량 모델)가 캐시된 기본 모델에 가려지지 않게 한다.
     """
     client = create_llm_client(
-        DEFAULT_ANALYST_PROVIDER,
-        DEFAULT_ANALYST_MODEL,
-        base_url=DEFAULT_ANALYST_BASE_URL,
+        DEFAULT_ANALYST_PROVIDER, model, base_url=DEFAULT_ANALYST_BASE_URL,
     )
     return client.get_llm()
+
+
+def _analyst_llm():
+    """현재 분석가 LLM — 백테스트면 경량 override, 아니면 기본 모델."""
+    return _analyst_llm_for(_bt.analyst_model() or DEFAULT_ANALYST_MODEL)
 
 
 mcp = FastMCP("trading-ai-hermes")
@@ -97,7 +140,7 @@ def analyst_supply_demand(ticker: str, date: str) -> str:
         한국어 마크다운 보고서. 데이터 결손 블록 (KIS API 실패 등) 은
         "<unavailable: ...>" 마커로 명시.
     """
-    return run_analyst(ticker, date, "supply_demand", llm=_analyst_llm())
+    return run_analyst(ticker, _bt.clamp_date(date), "supply_demand", llm=_analyst_llm())
 
 
 @mcp.tool()
@@ -114,7 +157,7 @@ def analyst_sentiment(ticker: str, date: str) -> str:
     returns:
         sentiment 점수·근거 마크다운 보고서.
     """
-    return run_analyst(ticker, date, "sentiment", llm=_analyst_llm())
+    return run_analyst(ticker, _bt.clamp_date(date), "sentiment", llm=_analyst_llm())
 
 
 @mcp.tool()
@@ -131,7 +174,7 @@ def analyst_market(ticker: str, date: str) -> str:
     returns:
         기술 지표 (MA/RSI/MACD/볼린저) + 추세 해석 마크다운.
     """
-    return run_analyst(ticker, date, "market", llm=_analyst_llm())
+    return run_analyst(ticker, _bt.clamp_date(date), "market", llm=_analyst_llm())
 
 
 @mcp.tool()
@@ -147,7 +190,7 @@ def analyst_news(ticker: str, date: str) -> str:
     returns:
         뉴스 요약 + 시장 영향 해석 마크다운.
     """
-    return run_analyst(ticker, date, "news", llm=_analyst_llm())
+    return run_analyst(ticker, _bt.clamp_date(date), "news", llm=_analyst_llm())
 
 
 @mcp.tool()
@@ -165,7 +208,7 @@ def analyst_fundamentals(ticker: str, date: str) -> str:
     returns:
         펀더멘털 분석 마크다운. 한국 종목이면 "데이터 결손" 가능.
     """
-    return run_analyst(ticker, date, "fundamentals", llm=_analyst_llm())
+    return run_analyst(ticker, _bt.clamp_date(date), "fundamentals", llm=_analyst_llm())
 
 
 @mcp.tool()
@@ -188,7 +231,7 @@ def compute_correlation(
     returns:
         dict (JSON 직렬화 가능). ``n_days=0`` 이면 데이터 없음.
     """
-    return _compute_correlation(ticker, start_date, end_date)
+    return _compute_correlation(ticker, start_date, _bt.clamp_end_date(end_date))
 
 
 @mcp.tool()
@@ -209,7 +252,7 @@ def compute_trend(
         ``subjects`` (top-N 주체 phase 상세) + ``concordance_ranking`` (9 주체
         동행성 |agreement-50| 랭킹) + adaptive 윈도우 입력.
     """
-    return _compute_trend(ticker, start_date, end_date)
+    return _compute_trend(ticker, start_date, _bt.clamp_end_date(end_date))
 
 
 @mcp.tool()
@@ -230,7 +273,7 @@ def compute_advanced(
     returns:
         6 섹션 dict.
     """
-    return _compute_advanced(ticker, start_date, end_date)
+    return _compute_advanced(ticker, start_date, _bt.clamp_end_date(end_date))
 
 
 @mcp.tool()
@@ -247,7 +290,7 @@ def get_holdings_window(ticker: str, days: int = 30) -> list[dict]:
     returns:
         list[dict] (한 행 = 1 거래일). 빈 리스트면 데이터 없음.
     """
-    return _get_holdings_window(ticker, days)
+    return _get_holdings_window(ticker, days, end_date=_bt.as_of())
 
 
 # === 가설/라벨 영구 저장 도구 (G4) ===
@@ -358,6 +401,88 @@ def get_hypothesis_with_labels(hypothesis_id: int) -> Optional[dict]:
         가설 dict + ``labels`` 리스트. 없으면 None.
     """
     return _hypothesis_store().get_with_labels(hypothesis_id)
+
+
+# === 전략 백테스트·저장 도구 (수급 룰 자율 연구) ===
+
+
+@mcp.tool()
+def backtest_strategy(spec: dict, universe: Optional[list[str]] = None) -> dict:
+    """파라미터화 수급 룰 전략을 종목군에 백테스트 (탐색용 — 저장 안 함).
+
+    ``spec`` 은 strategy_spec 스키마(entry/exit 신호 + 손절/익절/보유일).
+    종목군을 해시로 in/out-sample 분할해 각각 집계하고 채택 게이트를 판정한다.
+    look-ahead 0 (신호 row i → 체결 close[i+1]), 거래비용 편도 0.23% 반영.
+
+    args:
+        spec: 전략 spec dict. 스키마 위반 시 ValueError (그리드 밖 값 등).
+        universe: 종목 코드 리스트 (예: ["005930", "000660"]).
+            None 이면 KIS 히스토리 전체 종목.
+
+    returns:
+        ``{in_sample: {win_rate, sharpe, mdd_pct, cum_return_pct, n_trades, ...},
+           out_sample: {...}, gate_passed: bool, universe_size, n_in, n_out}``.
+        게이트(승률≥0.60·샤프≥1.2·MDD≥-20%·거래≥50·in/out 격차≤10%p)는 in/out
+        양쪽 충족 시에만 True.
+    """
+    validate_spec(spec)
+    tickers = universe if universe else _universe()
+    return run_universe_backtest(spec, tickers, loader=_engine_loader)
+
+
+@mcp.tool()
+def save_strategy(spec: dict, name: Optional[str] = None) -> dict:
+    """전략을 *내부 재백테스트* 후 영구 저장 — 메트릭 무결성 보장.
+
+    전달된 메트릭을 신뢰하지 않고 spec 으로 직접 재백테스트해 저장한다(LLM 이
+    성능을 위조 저장하는 것 방지). 동일 로직(spec_hash) 전략이 이미 있으면
+    재실행 없이 기존 id 를 ``duplicate`` 로 반환. 게이트 미통과 전략도 저장
+    (연구 로그 + 시도 카운트 + 재시도 차단).
+
+    args:
+        spec: 전략 spec dict. 스키마 위반 시 ValueError.
+        name: 사람이 읽는 식별자 (옵션 — spec.name 사용).
+
+    returns:
+        신규: ``{strategy_id, duplicate: False, gate_passed, in_sample,
+        out_sample, universe_size}``. 중복: ``{strategy_id, duplicate: True,
+        gate_passed}``.
+    """
+    validate_spec(spec)
+    store = _strategy_store()
+    existing = store.get_by_hash(spec_hash(spec))
+    if existing is not None:
+        return {
+            "strategy_id": existing["id"],
+            "duplicate": True,
+            "gate_passed": existing["gate_passed"],
+        }
+    result = run_universe_backtest(spec, _universe(), loader=_engine_loader)
+    sid, _is_new = store.save(spec, result, name=name)
+    return {
+        "strategy_id": sid,
+        "duplicate": False,
+        "gate_passed": result["gate_passed"],
+        "in_sample": result["in_sample"],
+        "out_sample": result["out_sample"],
+        "universe_size": result["universe_size"],
+    }
+
+
+@mcp.tool()
+def list_strategies(gate_passed: Optional[bool] = None) -> list[dict]:
+    """저장된 전략 메타 리스트 — 연구 루프 진행/통과 카운트의 single source.
+
+    args:
+        gate_passed: True 면 채택(게이트 통과) 전략만, False 면 미통과만,
+            None 이면 전체 시도.
+
+    returns:
+        list[dict] 각 항목: ``id``, ``name``, ``spec``, ``direction``,
+        ``gate_passed``, in/out-sample 메트릭 컬럼, ``universe_size``,
+        ``created_at``.
+    """
+    return _strategy_store().list(gate_passed=gate_passed)
 
 
 def main():

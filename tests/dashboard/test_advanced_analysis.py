@@ -10,8 +10,8 @@ import pytest
 
 from dashboard.advanced_analysis import (
     KEY_SUBJECTS, adf_test, cointegration_test, compute_advanced_report,
-    granger_test, mutual_info, render_advanced_markdown, rolling_correlation,
-    rolling_correlation_summary, var_irf,
+    granger_test, mutual_info, pnl_attribution, render_advanced_markdown,
+    rolling_correlation, rolling_correlation_summary, var_irf,
 )
 from tradingagents.dataflows.kis_holdings import SUBS_10, compute_holdings
 
@@ -157,6 +157,108 @@ class TestRolling:
         assert s["n"] > 0
 
 
+@pytest.mark.unit
+class TestPnlAttribution:
+    def _df_with_amounts(self) -> pd.DataFrame:
+        # 3 거래일, retail 만 거래: +100주@100, 무거래, -50주@120
+        rows = [
+            _investor_row("2024-01-01", 100, retail_qty=100),
+            _investor_row("2024-01-02", 110, retail_qty=0),
+            _investor_row("2024-01-03", 120, retail_qty=-50),
+        ]
+        df = compute_holdings(pd.DataFrame(rows))
+        # 거래대금 병합 — KEY_SUBJECTS 5 주체 컬럼 모두 있어야 계산됨
+        for s in KEY_SUBJECTS:
+            df[f"{s}_amount"] = 0.0
+        df.loc[0, "retail_amount"] = 100 * 100    # +100주 @100
+        df.loc[2, "retail_amount"] = -50 * 120    # -50주 @120
+        return df
+
+    def test_buy_sell_split_avg(self):
+        # 순매수일: +100주@100 (amt 10000) / 순매도일: -50주@120 (amt -6000)
+        by = {r["subject"]: r for r in pnl_attribution(self._df_with_amounts())}
+        retail = by["retail"]
+        assert retail["buy_qty"] == 100
+        assert retail["buy_avg"] == 100.0           # 10000 / 100
+        assert retail["sell_qty"] == 50             # 절댓값 표기
+        assert retail["sell_avg"] == 120.0          # -6000 / -50
+        assert retail["net_qty"] == 50              # 100 - 50
+        assert retail["last_close"] == 120.0
+        # pnl = 120*50 - (10000-6000) = 2000
+        assert retail["pnl"] == pytest.approx(2000.0)
+        # 무거래 주체 → 양 방향 None, pnl 0
+        assert by["pension"]["buy_avg"] is None
+        assert by["pension"]["sell_avg"] is None
+        assert by["pension"]["pnl"] == pytest.approx(0.0)
+
+    def test_realized_unrealized_split(self):
+        # matched=min(100,50)=50주 왕복. 실현 = 50×(120−100)=1000.
+        # 남은 순매수 50주 미실현 = 50×(120−100)=1000. 합 = pnl 2000.
+        retail = {r["subject"]: r
+                  for r in pnl_attribution(self._df_with_amounts())}["retail"]
+        assert retail["realized_pnl"] == pytest.approx(1000.0)
+        assert retail["unrealized_pnl"] == pytest.approx(1000.0)
+        assert retail["unrealized_kind"] == "평가"      # net 순매수 → 보유 평가
+        assert retail["realized_pnl"] + retail["unrealized_pnl"] == pytest.approx(
+            retail["pnl"]
+        )
+
+    def test_net_seller_unrealized_is_opportunity(self):
+        # 순매도 초과(net_qty<0) → 미실현은 보유 평가가 아니라 기회손익
+        rows = [_investor_row("2024-01-01", 100, retail_qty=30),
+                _investor_row("2024-01-02", 120, retail_qty=-100)]
+        df = compute_holdings(pd.DataFrame(rows))
+        for s in KEY_SUBJECTS:
+            df[f"{s}_amount"] = 0.0
+        df.loc[0, "retail_amount"] = 30 * 100         # 매수 30주 @100
+        df.loc[1, "retail_amount"] = -100 * 120       # 매도 100주 @120
+        retail = {r["subject"]: r for r in pnl_attribution(df)}["retail"]
+        assert retail["net_qty"] == -70               # 30 - 100
+        assert retail["unrealized_kind"] == "기회"
+
+    def test_only_buy_is_all_unrealized(self):
+        # 매도 없이 매수만 → 실현 0, 전부 미실현
+        rows = [_investor_row("2024-01-01", 100, retail_qty=100),
+                _investor_row("2024-01-02", 150, retail_qty=0)]
+        df = compute_holdings(pd.DataFrame(rows))
+        for s in KEY_SUBJECTS:
+            df[f"{s}_amount"] = 0.0
+        df.loc[0, "retail_amount"] = 100 * 100      # 100주 @100
+        retail = {r["subject"]: r for r in pnl_attribution(df)}["retail"]
+        assert retail["realized_pnl"] == pytest.approx(0.0)
+        # 미실현 = 100×(150−100) = 5000
+        assert retail["unrealized_pnl"] == pytest.approx(5000.0)
+
+    def test_split_avgs_always_positive(self):
+        # 고가 매도 > 저가 매수: 단일 net 평단이면 음수지만, 분리 평단은 둘 다 양수.
+        rows = [
+            _investor_row("2024-01-01", 50_000, retail_qty=100),
+            _investor_row("2024-01-02", 100_000, retail_qty=-90),
+        ]
+        df = compute_holdings(pd.DataFrame(rows))
+        for s in KEY_SUBJECTS:
+            df[f"{s}_amount"] = 0.0
+        df.loc[0, "retail_amount"] = 100 * 50_000     # +5,000,000
+        df.loc[1, "retail_amount"] = -90 * 100_000    # -9,000,000
+        retail = {r["subject"]: r for r in pnl_attribution(df)}["retail"]
+        assert retail["buy_avg"] == 50_000.0
+        assert retail["sell_avg"] == 100_000.0        # -9,000,000 / -90
+        # net_qty=10, net_amt=-4,000,000 → pnl = 100,000*10 + 4,000,000
+        assert retail["pnl"] == pytest.approx(5_000_000.0)
+
+    def test_sorted_by_pnl_desc(self):
+        rows = pnl_attribution(self._df_with_amounts())
+        pnls = [r["pnl"] for r in rows]
+        assert pnls == sorted(pnls, reverse=True)
+
+    def test_empty_without_amount_columns(self):
+        # holdings 단독(amount 미병합) → 빈 리스트
+        df = compute_holdings(pd.DataFrame([
+            _investor_row("2024-01-01", 100, retail_qty=100),
+        ]))
+        assert pnl_attribution(df) == []
+
+
 # === 통합 ===
 
 @pytest.mark.unit
@@ -183,5 +285,5 @@ class TestComputeAdvancedReport:
         md = render_advanced_markdown(adv)
         for h in ["7-1. ADF", "7-2. Granger", "7-3. VAR",
                   "7-4. Cointegration", "7-5. Mutual",
-                  "7-6. Rolling", "구현하지 않은 4 종"]:
+                  "7-6. Rolling", "7-7. 주체별 손익", "구현하지 않은 4 종"]:
             assert h in md

@@ -25,7 +25,7 @@ from streamlit_searchbox import st_searchbox
 
 import tradingagents  # noqa: F401 — dotenv
 import dashboard.interpretation as itp
-from dashboard.advanced_analysis import compute_advanced_report
+from dashboard.advanced_analysis import compute_advanced_report, pnl_attribution
 from dashboard.correlation_analysis import compute_correlation_report
 from dashboard.holdings_chart import (
     PLOTLY_CONFIG, SUBJECTS_ORDER, SUBJECT_LABELS, load_holdings, make_figure,
@@ -104,12 +104,61 @@ def _cached_correlation(
     )
 
 
+# 핵심 주체 → raw investor 거래대금(amount) 컬럼. foreign 은 holdings net_qty
+# (등록+비등록 합) 와 단가 기준을 맞추려 등록+비등록 amount 를 합산한다.
+_PNL_AMOUNT_SOURCES: dict[str, tuple[str, ...]] = {
+    "foreign": ("foreign_registered_amount", "foreign_unregistered_amount"),
+    "pension": ("pension_amount",),
+    "securities": ("securities_amount",),
+    "private_equity": ("private_equity_amount",),
+    "retail": ("retail_amount",),
+}
+
+# KIS ``*_ntby_tr_pbmn`` 필드는 백만원(百萬) 단위 → close(원) 와 맞추려 ×1e6.
+_PBMN_TO_KRW = 1_000_000
+
+
+def _load_holdings_with_amounts(
+    ticker: str, start: Optional[str], end: Optional[str],
+) -> tuple[pd.DataFrame, dict]:
+    """holdings df + 핵심 주체별 거래대금(amount, 원 환산) 병합 — 손익 근사용.
+
+    amount 는 raw ``investor`` 테이블에만 있어 holdings 에 별도 병합한다
+    (``compute_holdings`` 는 qty 만 derive). raw 는 백만원 단위라 ``close``(원)
+    와 단위를 맞추려 ×1e6 환산해 넘긴다. 병합 실패해도 holdings 만 반환해
+    기존 분석은 정상 동작.
+    """
+    df, meta = load_holdings(ticker, start=start, end=end)
+    if df.empty:
+        return df, meta
+    inv = KisHistoryStore().read(ticker, "investor", start_date=start, end_date=end)
+    if inv.empty or "date" not in inv.columns:
+        return df, meta
+    amt = pd.DataFrame({"date": inv["date"]})
+    for subj, cols in _PNL_AMOUNT_SOURCES.items():
+        present = [c for c in cols if c in inv.columns]
+        if present:
+            amt[f"{subj}_amount"] = _PBMN_TO_KRW * sum(
+                pd.to_numeric(inv[c], errors="coerce").fillna(0) for c in present
+            )
+    return df.merge(amt, on="date", how="left"), meta
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _cached_advanced(
     ticker: str, start: Optional[str], end: Optional[str],
 ) -> dict:
-    df, _ = load_holdings(ticker, start=start, end=end)
+    df, _ = _load_holdings_with_amounts(ticker, start, end)
     return compute_advanced_report(df)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_pnl(
+    ticker: str, start: Optional[str], end: Optional[str],
+) -> list[dict]:
+    """손익 근사만 — 정교한 분석(50행 컷오프·statsmodels)과 분리해 짧은 구간도 계산."""
+    df, _ = _load_holdings_with_amounts(ticker, start, end)
+    return pnl_attribution(df)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -168,7 +217,7 @@ def _cached_llm_synthesis(
     provider: str, model: str,
 ) -> str:
     """LLM 호출 결과 캐시 — provider·model 도 캐시 키."""
-    df, meta = load_holdings(ticker, start=start, end=end)
+    df, meta = _load_holdings_with_amounts(ticker, start, end)
     report = compute_correlation_report(
         df, ticker=ticker,
         company_name=meta.get("company_name"),
@@ -373,15 +422,15 @@ def main() -> None:
     # === 탭 구조 — 차트 아래 ===
     st.divider()
     if compare:
-        # 비교 모드: 종목별 분석 의미 약함. 정적 가이드/방법 2 탭만.
-        tab1, tab2 = st.tabs(["ℹ️ 차트 해석 가이드", "🧪 분석 방법"])
+        # 비교 모드: 손익 근사는 기준 종목 기준. 방법 가이드와 2 탭.
+        tab1, tab2 = st.tabs(["💰 주체별 손익 근사", "🧪 분석 방법"])
         with tab1:
-            _render_chart_guide()
+            _render_pnl_section(primary[0], primary[1], start_str, end_str)
         with tab2:
             _render_methodology_guide()
     else:
         tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "ℹ️ 차트 해석 가이드",
+            "💰 주체별 손익 근사",
             f"📊 상관 분석",
             f"🧬 정교한 분석",
             f"📈 추세 분석",
@@ -390,7 +439,7 @@ def main() -> None:
             "🧪 분석 방법",
         ])
         with tab1:
-            _render_chart_guide()
+            _render_pnl_section(primary[0], primary[1], start_str, end_str)
         with tab2:
             _render_correlation_section(primary[0], primary[1], start_str, end_str)
         with tab3:
@@ -405,26 +454,73 @@ def main() -> None:
             _render_methodology_guide()
 
 
-def _render_chart_guide() -> None:
-    """탭 안에서 호출 — expander 없이 markdown 만."""
-    st.markdown(
-        """
-- **Row 1** — 종가(line, 좌측 y) + 가격 변동률(bar, 우측 y, 양수 빨강 / 음수 파랑)
-- **Row 2** — 11 주체 *누적* 보유량. 라인 기울기 = 매수·매도 강도.
-  카테고리(외국인 / 기관 / 개인 / 기타법인)별 범례 그룹 클릭으로 한 번에 토글.
-- **Row 3** — 10 sub 의 *비중* 100% 누적영역. 외국인은 통합이 아니라 등록 + 비등록으로 분해되어 합 = 100%.
-  - **누적 모드** — 첫 거래일부터의 매매 영향력 누적 비중. 시간이 지나면 안정됨.
-  - **일별 모드** — 그날 하루의 매매 비중. 누적과 달리 일변동이 크고, 거래가 없는 주체는 즉시 0%.
-- 첫 거래일 근처는 누적이 작아 row 3 (누적 모드) 비중이 흔들리는 게 정상.
-
-**조작법**
-
-- **마우스 스크롤** — 호버 중인 패널 확대/축소
-- **드래그(박스)** — 선택 영역 확대
-- **더블클릭** — 줌 리셋
-- **우상단 modebar** — 줌인/아웃 버튼, 카메라(PNG), 팬/줌 모드 전환
-        """.strip()
+def _render_pnl_section(
+    ticker: str, company_name: str,
+    start: Optional[str], end: Optional[str],
+) -> None:
+    """탭 안에서 호출 — 주체별 손익 근사(구간 mark-to-market)."""
+    st.markdown(f"### 💰 주체별 손익 근사 — 구간 mark-to-market ({company_name})")
+    with st.spinner("손익 근사 계산 중..."):
+        pnl_rows = _cached_pnl(ticker, start, end)
+    if not pnl_rows:
+        st.info("거래대금(amount) 데이터 없음 — 손익 추정 생략.")
+        return
+    lc = pnl_rows[0]["last_close"]
+    st.caption(
+        f"구간 net 흐름을 **순매수일/순매도일로 분리**한 거래량가중 평단 "
+        f"(현재가 {lc:,.0f}원).  \n"
+        "**실현손익** = 왕복 매칭분 `min(순매수,순매도)×(매도평단−매수평단)`.  \n"
+        "**미실현 평가손익** = 순매수 잔여(실제 보유)의 현재가 평가. "
+        "**미실현 기회손익** = 순매도 초과분의 매도 타이밍 평가(보유 아님, 현재가 "
+        "대비 잘 팔았나). net·구간 상대 **근사치**."
     )
+    pnl_df = pd.DataFrame([
+        {"주체": r["label"],
+         "순매수량": r["buy_qty"], "순매수평단": r["buy_avg"],
+         "순매도량": r["sell_qty"], "순매도평단": r["sell_avg"],
+         "실현손익(억)": r["realized_pnl"] / 1e8,
+         "미실현 평가손익(억)":
+             r["unrealized_pnl"] / 1e8 if r["unrealized_kind"] == "평가" else None,
+         "미실현 기회손익(억)":
+             r["unrealized_pnl"] / 1e8 if r["unrealized_kind"] == "기회" else None}
+        for r in pnl_rows
+    ])
+    st.dataframe(
+        pnl_df, use_container_width=True, hide_index=True,
+        height=_df_height(len(pnl_df)),
+        column_config={
+            "순매수량": st.column_config.NumberColumn(format="%,d"),
+            "순매수평단": st.column_config.NumberColumn(format="%,.0f"),
+            "순매도량": st.column_config.NumberColumn(format="%,d"),
+            "순매도평단": st.column_config.NumberColumn(format="%,.0f"),
+            "실현손익(억)": st.column_config.NumberColumn(format="%+.1f"),
+            "미실현 평가손익(억)": st.column_config.NumberColumn(format="%+.1f"),
+            "미실현 기회손익(억)": st.column_config.NumberColumn(format="%+.1f"),
+        },
+    )
+    top, bot = pnl_rows[0], pnl_rows[-1]
+    st.info(
+        f"구간 추정 최대 이익(실현+미실현): **{top['label']}** "
+        f"{top['pnl'] / 1e8:+,.1f}억 · 최대 손실: **{bot['label']}** "
+        f"{bot['pnl'] / 1e8:+,.1f}억."
+    )
+
+    with st.expander("ℹ️ 미실현 평가손익 / 기회손익 부호 해석"):
+        st.markdown(
+            "**A. 순매수 잔여 (net_qty > 0) — 실제로 들고 있는 물량**  \n"
+            "기준단가 = 매수평단. 정석적인 \"보유 평가손익\".\n\n"
+            "| 부호 | 조건 | 의미 |\n"
+            "|:---:|---|---|\n"
+            "| **+** | 현재가 > 매수평단 | 산 값보다 올라서 **평가이익** (지금 팔면 이익) |\n"
+            "| **−** | 현재가 < 매수평단 | 산 값보다 내려서 **평가손실** (물려있음) |\n\n"
+            "**B. 순매도 초과 (net_qty < 0) — 비워버린 포지션 (기회손익)**  \n"
+            "기준단가 = 매도평단. 실제 보유가 아니라(구간 시작 이전 물량까지 순매도한 "
+            "notional 상태), \"그때 판 게 지금 기준으로 잘한 거냐\"는 기회손익.\n\n"
+            "| 부호 | 조건 | 의미 |\n"
+            "|:---:|---|---|\n"
+            "| **+** | 현재가 < 매도평단 | 판 값보다 지금이 쌈 → **잘 팔았다** (기회이익) |\n"
+            "| **−** | 현재가 > 매도평단 | 판 값보다 지금이 비쌈 → **싸게 팔아버렸다** (기회손실) |\n"
+        )
 
 
 # === 상관 분석 패널 ----------------------------------------------------------

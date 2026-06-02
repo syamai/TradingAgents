@@ -124,3 +124,31 @@
 §
 
 [학습-기준] 가설 적중 평가 = KOSPI 상대 수익률 기준 (절대 아닌). 호라이즌별 임계값: 2주 ±2%, 4주 ±3%, 8주 ±5%. direction=bullish & 상대 +임계값↑ = right. neutral & |상대| ≤ 임계값/2 = right. bearish & 상대 -임계값↓ = right. 그 외 = wrong. predicted_relative_return_pct 는 이 호라이즌·임계값에 맞춰 *합리적* 값으로 (지어내지 말 것 — 근거 약하면 confidence 낮추고 임계값 근처로).
+
+§
+
+[전략-시드-외국인등록-지속매수] strategy-researcher 의 1순위 후보. foreign_registered net_streak buy min_days 5~10 = 장기 자금 지속 유입. 대형주(외국인등록 비중 60~80%)에서 스윙 강세 베이스 시그널. pct_threshold(foreign_registered >= 30~40) 와 AND 결합 시 "지배적 주체의 지속 매집" 으로 신호 강도 ↑. 단발성 매수(min_days 2~3)는 노이즈 — 지속성이 핵심.
+
+§
+
+[전략-시드-사모-외국인비등록-동반] private_equity + foreign_unregistered 두 단기 자금이 동시 net_streak buy = 단기 모멘텀. entry.all_of 에 두 신호 AND. max_hold_days 10~20(2~4주) 짧게 — 둘 다 빠른 차익 실현 성향이라 보유 길면 모멘텀 소멸. 중소형주에서 특히 유의미.
+
+§
+
+[전략-시드-비중추세] pct_delta(window 10~20, op >=, value 5~10) = 특정 주체의 누적 영향력 비중이 상승 추세. "그 주체가 시장을 장악해 가는 중" 의 정량 표현. net_streak(부호) 보다 느리지만 추세 지속성 포착. 비중 하락(op <=)은 long 진입 신호로 부적합.
+
+§
+
+[전략-시드-추세동조필터] price_filter above_ma(window 20~60) 를 entry 에 AND 로 추가 = 하락장 진입 회피. 수급 신호가 좋아도 전체 추세가 꺾이면 승률 급락 — MEMORY 의 "phase 전환 false breakout" 위험. 하락 구간 진입을 거르면 보통 승률·샤프 동시 개선. long-only 전략의 거의 필수 보조 필터.
+
+§
+
+[전략-시드-거래량강도] net_vol_ratio(window 5~10, op >=, value 0.1~0.2) = net 매수가 거래량 대비 의미있는 규모. 절대 주수는 종목 간 비교 불가(시총 차이) — 거래량 대비 비율이 scale-free 라 종목군 일반화에 적합. "단주 vs 거래대금 격차" 시드의 정량판. 작은 net 매수(ratio 0.05 미만)는 신호로 약함.
+
+§
+
+[전략-시드-청산규칙] exit 는 max_hold_days(필수, 무한보유 방지) + stop_loss_pct(권장, 5~8% — 한국 변동성 고려) 조합이 기본. take_profit 는 모멘텀을 일찍 끊어 누적수익 낮출 수 있어 신중(없거나 10~20%). 수급 청산(exit.signal_all_of: 매수 주체의 net_streak sell)은 "진입 논리가 깨졌을 때" 청산 — 가격 손절과 상호보완.
+
+§
+
+[전략-시드-과최적화경계] in/out-sample 양쪽 게이트 통과가 채택 조건(승률≥60%·샤프≥1.2·MDD≥-20%·거래≥50). in 만 통과하면 곡선맞춤 의심 — out 메트릭으로 파라미터를 *재튜닝하지 말 것*(holdout 누수). 승률 in/out 격차 >10%p 면 폐기. 그리드 밖 값은 validate_spec 가 거부하므로 변이는 그리드 인접값으로만. 시도 30회 또는 통과 3개에서 종료.

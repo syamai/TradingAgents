@@ -231,6 +231,101 @@ def rolling_correlation_summary(
     }
 
 
+# === 7. 주체별 손익 근사 (구간 mark-to-market) ==============================
+
+PNL_AMOUNT_COLS: tuple[str, ...] = tuple(f"{s}_amount" for s in KEY_SUBJECTS)
+
+
+def pnl_attribution(df: pd.DataFrame) -> list[dict]:
+    """주체별 구간 손익 근사 — 순매수/순매도 분리 평단 + mark-to-market.
+
+    표시 구간 [start, end] 의 일별 net 흐름을 *순매수일*(net_qty>0)과
+    *순매도일*(net_qty<0)로 나눠 각 방향의 거래량가중 평단을 따로 낸다::
+
+        순매수 평단 = Σ(순매수일 net_amt) / Σ(순매수일 net_qty)   (매집 평균가)
+        순매도 평단 = Σ(순매도일 net_amt) / Σ(순매도일 net_qty)   (분산 평균가)
+
+    각 버킷 안에서는 수량·대금 부호가 일관(순매수일=둘다+, 순매도일=둘다−)이라
+    두 평단 모두 **양수**로 나오고, 단일 net 평단의 음수/가격범위 이탈 왜곡이
+    사라진다. 두 평단 차이(매도−매수)가 왕복 거래의 수익성 방향을 보여준다.
+
+    손익은 실현/미실현으로 분해한다. 왕복으로 맞물린 수량은 실현, 남은 순포지션은
+    현재가 평가(미실현)::
+
+        net_qty = 순매수일 + 순매도일 수량 합 (구간 순포지션 변화)
+        net_amt = 순매수일 + 순매도일 대금 합 (구간 순투입 현금, 매수 +)
+        matched = min(순매수량, 순매도량)              (왕복 청산 수량)
+        실현손익  = matched × (순매도평단 − 순매수평단)
+        미실현손익 = net_qty × (현재가 − 기준단가)
+                    순매수 잔여(net_qty>0)→매수평단 기준, **평가손익**(실제 보유)
+                    순매도 초과(net_qty<0)→매도평단 기준, **기회손익**(보유 아님,
+                      현재가 대비 매도 타이밍 평가. 현재가 따라 변하는 MTM)
+        pnl = 실현 + 미실현 = last_close × net_qty − net_amt  (항등식)
+
+    ``unrealized_kind`` 로 두 경우를 구분("평가"/"기회"/None) — 호출자가 라벨 분기.
+
+    ``{s}_amount`` 는 ``close`` 와 같은 단위(원)로 들어온다고 가정(호출자가 KIS
+    백만원 단위를 ×1e6 환산 — `dashboard.app._load_holdings_with_amounts`).
+
+    한계: net 데이터라 일중 회전은 안 보이고, 구간 시작 이전 포지션을
+    베이스라인 0 으로 둔 *구간 상대* 손익 — 절대 손익이 아니다.
+
+    ``{s}_amount`` 미병합 시 빈 리스트 반환(holdings 단독 df).
+    """
+    if df.empty or "close" not in df.columns:
+        return []
+    if any(c not in df.columns for c in PNL_AMOUNT_COLS):
+        return []
+    closes = df["close"].astype(float)
+    closes = closes[closes > 0]
+    if closes.empty:
+        return []
+    last_close = float(closes.iloc[-1])
+
+    rows: list[dict] = []
+    for s in KEY_SUBJECTS:
+        nq = pd.to_numeric(df[f"{s}_net_qty"], errors="coerce").fillna(0)
+        na = pd.to_numeric(df[f"{s}_amount"], errors="coerce").fillna(0)
+        buy, sell = nq > 0, nq < 0           # 순매수일 / 순매도일
+        buy_qty, buy_amt = float(nq[buy].sum()), float(na[buy].sum())
+        sell_qty, sell_amt = float(nq[sell].sum()), float(na[sell].sum())  # 둘 다 −
+        sell_mag = -sell_qty                 # 순매도 수량 절댓값
+        net_qty, net_amt = buy_qty + sell_qty, buy_amt + sell_amt
+        buy_avg = (buy_amt / buy_qty) if buy_qty != 0 else None
+        sell_avg = (sell_amt / sell_qty) if sell_qty != 0 else None  # −/− = +
+
+        # 실현: 왕복 매칭분(매도평단 − 매수평단). 미실현: 남은 순포지션 현재가 평가.
+        matched = min(buy_qty, sell_mag)
+        realized = matched * (sell_avg - buy_avg) if matched > 0 else 0.0
+        if net_qty > 0:                      # 순매수 잔여 → 매수평단 기준, 보유 평가손익
+            unrealized = net_qty * (last_close - buy_avg)
+            unrealized_kind = "평가"
+        elif net_qty < 0:                    # 순매도 초과분 → 매도평단 기준, 기회손익
+            unrealized = net_qty * (last_close - sell_avg)
+            unrealized_kind = "기회"
+        else:
+            unrealized = 0.0
+            unrealized_kind = None
+        pnl = realized + unrealized          # = last_close*net_qty − net_amt (항등식)
+        rows.append({
+            "subject": s,
+            "label": SUBJECT_LABELS[s],
+            "buy_qty": int(buy_qty),
+            "buy_avg": round(buy_avg, 1) if buy_avg is not None else None,
+            "sell_qty": int(sell_mag),       # 양수 표기
+            "sell_avg": round(sell_avg, 1) if sell_avg is not None else None,
+            "net_qty": int(net_qty),
+            "net_amount": net_amt,
+            "last_close": round(last_close, 1),
+            "realized_pnl": realized,
+            "unrealized_pnl": unrealized,
+            "unrealized_kind": unrealized_kind,  # "평가"(순매수 보유) / "기회"(순매도) / None
+            "pnl": pnl,
+        })
+    rows.sort(key=lambda r: r["pnl"], reverse=True)
+    return rows
+
+
 # === 통합 리포트 =============================================================
 
 def compute_advanced_report(df: pd.DataFrame) -> dict:
@@ -241,7 +336,7 @@ def compute_advanced_report(df: pd.DataFrame) -> dict:
     """
     out: dict = {
         "adf": [], "granger": [], "var_irf": None,
-        "cointegration": [], "mutual_info": [], "rolling_r": [],
+        "cointegration": [], "mutual_info": [], "rolling_r": [], "pnl": [],
         "config": {
             "key_subjects": list(KEY_SUBJECTS),
             "granger_max_lag": GRANGER_MAX_LAG,
@@ -330,6 +425,9 @@ def compute_advanced_report(df: pd.DataFrame) -> dict:
         rolling_rows.append({"subject": s, "label": SUBJECT_LABELS[s],
                              **summary})
     out["rolling_r"] = rolling_rows
+
+    # [7] 주체별 손익 근사 — {s}_amount 가 병합돼 있을 때만 채워짐
+    out["pnl"] = pnl_attribution(df)
 
     return out
 
@@ -482,6 +580,33 @@ def render_advanced_markdown(adv: dict) -> str:
     lines.append("*std 가 크면 상관 강도가 시기마다 크게 변동(regime 변화).*")
     lines.append("")
     lines.append(f"> **자동 해석**: {itp.interpret_rolling(adv)}")
+    lines.append("")
+
+    # 7-7. 주체별 손익 근사
+    lines.append("### 7-7. 주체별 손익 근사 (구간 mark-to-market)")
+    lines.append("")
+    if not adv.get("pnl"):
+        lines.append("*거래대금(amount) 미병합 — 손익 추정 생략.*")
+    else:
+        lc = adv["pnl"][0]["last_close"]
+        lines.append(f"구간 net 흐름을 순매수일/순매도일로 분리(현재가 "
+                     f"{lc:,.0f}원). **실현** = 왕복 매칭분(매도평단−매수평단). "
+                     "**미실현 평가** = 순매수 잔여 보유의 현재가 평가, "
+                     "**미실현 기회** = 순매도 초과분의 매도 타이밍 평가(보유 아님).")
+        lines.append("")
+        lines.append("| 주체 | 순매수량 | 순매수평단 | 순매도량 | 순매도평단 | 실현(억) | 미실현 평가(억) | 미실현 기회(억) |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+        for r in adv["pnl"]:
+            ba = "—" if r["buy_avg"] is None else f"{r['buy_avg']:,.0f}"
+            sa = "—" if r["sell_avg"] is None else f"{r['sell_avg']:,.0f}"
+            u = r["unrealized_pnl"] / 1e8
+            ev = f"{u:+,.1f}" if r["unrealized_kind"] == "평가" else "—"
+            op = f"{u:+,.1f}" if r["unrealized_kind"] == "기회" else "—"
+            lines.append(
+                f"| {r['label']} | {r['buy_qty']:,} | {ba} | "
+                f"{r['sell_qty']:,} | {sa} | {r['realized_pnl'] / 1e8:+,.1f} | "
+                f"{ev} | {op} |"
+            )
     lines.append("")
 
     lines.append("---")
