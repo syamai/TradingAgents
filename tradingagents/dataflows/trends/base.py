@@ -54,6 +54,7 @@ class SignalRow:
     source: str
     metric: str
     leadingness: str
+    entity_type: str = "ticker"  # 'ticker' | 'sector' | 'theme'
     raw_value: Optional[float] = None
     abnormal_value: Optional[float] = None
     rank: Optional[int] = None

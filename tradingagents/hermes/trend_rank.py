@@ -50,6 +50,8 @@ def fade_ranking(
     """
     store = store or TrendStore()
     snap = store.hot_list(market, asof_date=asof_date, top=10_000)
+    if not snap.empty and "entity_type" in snap.columns:
+        snap = snap[snap["entity_type"] == "ticker"]  # fade 는 개별종목만(섹터/테마 제외)
     empty_cols = [
         "entity", "fade_score", "n_sources", "sources", "leadingness", "asof_date",
     ]
@@ -85,6 +87,34 @@ def fade_ranking(
     )
 
 
+def rotation_ranking(
+    market: str,
+    *,
+    asof_date: Optional[str] = None,
+    top_n: int = 11,
+    store: Optional[TrendStore] = None,
+) -> pd.DataFrame:
+    """섹터 로테이션 — RS-momentum 상위(Improving→Leading). entity_type='sector'.
+
+    반환 컬럼: ``entity, rs_momentum, rank, leadingness, asof_date``.
+    """
+    store = store or TrendStore()
+    df = store.read(market=market, source="sector_rotation")
+    cols = ["entity", "rs_momentum", "rank", "leadingness", "asof_date"]
+    if df.empty:
+        return pd.DataFrame(columns=cols)
+    asof = asof_date or df["asof_date"].max()
+    df = df[df["asof_date"] == asof].copy()
+    if df.empty:
+        return pd.DataFrame(columns=cols)
+    df = df.rename(columns={"abnormal_value": "rs_momentum"})
+    return (
+        df.sort_values("rs_momentum", ascending=False)
+        .head(top_n)[cols]
+        .reset_index(drop=True)
+    )
+
+
 def format_digest(
     market: str,
     *,
@@ -92,23 +122,32 @@ def format_digest(
     top_n: int = 10,
     store: Optional[TrendStore] = None,
 ) -> str:
-    """Telegram 일일 다이제스트 텍스트(fade 와치리스트)."""
-    df = fade_ranking(
+    """Telegram 일일 다이제스트 — 섹터 로테이션(방향) + 종목 fade 와치리스트(군집 경고)."""
+    store = store or TrendStore()
+    mkt = market.upper()
+    fade = fade_ranking(
         market, asof_date=asof_date, top_n=top_n, store=store, min_sources=MIN_SOURCES
     )
-    mkt = market.upper()
-    if df.empty:
-        return f"[트렌드 {mkt}] 다중소스 동의 종목 없음(≥{MIN_SOURCES}소스)."
-    asof = df["asof_date"].iloc[0]
-    lines = [
-        f"📊 트렌드 와치리스트 [{mkt}] {asof}",
-        "(여러 소스 동시 과열 = 군집/천장 경고 — 추격 아닌 페이드/리스크 플래그)",
-        "",
-    ]
-    for i, row in df.iterrows():
-        flag = "🟢" if row["leadingness"] == "L" else "⚠️"
-        lines.append(
-            f"{i + 1}. {flag} {row['entity']}  score={row['fade_score']} "
-            f"({row['n_sources']}소스: {row['sources']}, {row['leadingness']})"
-        )
+    rot = rotation_ranking(market, asof_date=asof_date, top_n=3, store=store)
+    if fade.empty and rot.empty:
+        return f"[트렌드 {mkt}] 신호 없음."
+
+    lines: list[str] = []
+    # 섹터 로테이션 먼저 — durable·방향(노트: 테마로 방향, 종목으로 군집 회피)
+    if not rot.empty:
+        lines.append(f"🔄 섹터 로테이션 [{mkt}] (RS-momentum, Improving→Leading)")
+        for _, r in rot.iterrows():
+            lines.append(f"  {r['entity']} {r['rs_momentum']:+.1f}%")
+        lines.append("")
+    # 개별종목 fade 와치리스트 — 군집/천장 경고
+    if not fade.empty:
+        asof = fade["asof_date"].iloc[0]
+        lines.append(f"📊 종목 와치리스트 [{mkt}] {asof}")
+        lines.append("(여러 소스 동시 과열 = 군집/천장 경고 — 추격 아닌 페이드/리스크 플래그)")
+        for i, row in fade.iterrows():
+            flag = "🟢" if row["leadingness"] == "L" else "⚠️"
+            lines.append(
+                f"{i + 1}. {flag} {row['entity']}  score={row['fade_score']} "
+                f"({row['n_sources']}소스: {row['sources']}, {row['leadingness']})"
+            )
     return "\n".join(lines)

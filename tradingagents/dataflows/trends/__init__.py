@@ -15,12 +15,23 @@ from typing import Callable
 from .apewisdom import collect_apewisdom
 from .base import COINCIDENT, LAGGING, LEADING, SignalRow
 from .finviz_unusual import collect_finviz_unusual
+from .google_trends import collect_google_trends
+from .sector_rotation import collect_sector_rotation
+from .stocktwits_delta import collect_stocktwits_delta
 
 # source 이름 -> (collect 함수, 기본 market). trend_collect 가 --source 로 조회.
+# 순서 주의: per-ticker universe 소스(google_trends/stocktwits_delta)는 hot_candidates
+# 를 읽으므로 apewisdom/finviz 뒤에 둔다(같은 tick 에서 후보가 먼저 적재되도록).
 SOURCE_REGISTRY: dict[str, dict] = {
     "apewisdom": {"fn": collect_apewisdom, "market": "us"},
     "finviz_unusual": {"fn": collect_finviz_unusual, "market": "us"},
+    "sector_rotation": {"fn": collect_sector_rotation, "market": "us"},
+    "google_trends": {"fn": collect_google_trends, "market": "us"},
+    "stocktwits_delta": {"fn": collect_stocktwits_delta, "market": "us"},
 }
+
+# universe(hot_candidates)를 주입받는 소스
+UNIVERSE_SOURCES: frozenset[str] = frozenset({"google_trends", "stocktwits_delta"})
 
 __all__ = [
     "SignalRow",
@@ -28,6 +39,10 @@ __all__ = [
     "COINCIDENT",
     "LAGGING",
     "SOURCE_REGISTRY",
+    "UNIVERSE_SOURCES",
     "collect_apewisdom",
     "collect_finviz_unusual",
+    "collect_sector_rotation",
+    "collect_google_trends",
+    "collect_stocktwits_delta",
 ]

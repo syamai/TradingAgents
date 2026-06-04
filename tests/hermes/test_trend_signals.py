@@ -10,10 +10,14 @@
 import pytest
 
 from tradingagents.dataflows.trend_store import TrendStore
-from tradingagents.dataflows.trends import apewisdom
+from tradingagents.dataflows.trends import apewisdom, google_trends, stocktwits_delta
 from tradingagents.dataflows.trends.base import COINCIDENT, SignalRow
 from tradingagents.hermes import trend_collect
-from tradingagents.hermes.trend_rank import fade_ranking, format_digest
+from tradingagents.hermes.trend_rank import (
+    fade_ranking,
+    format_digest,
+    rotation_ranking,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -121,3 +125,89 @@ def test_signalrow_validation():
         SignalRow("d", "d", "us", "NVDA", "s", "m", "BOGUS")  # 잘못된 leadingness
     with pytest.raises(ValueError):
         SignalRow("d", "d", "jp", "NVDA", "s", "m", COINCIDENT)  # 잘못된 market
+
+
+def _sector_row(entity, mom, rank, asof="2026-06-05"):
+    return SignalRow(
+        release_date=asof, asof_date=asof, market="us", entity=entity,
+        entity_type="sector", source="sector_rotation", metric="rs_momentum",
+        leadingness="L", raw_value=None, abnormal_value=mom, rank=rank,
+    )
+
+
+def test_entity_type_stored_and_migrated(tmp_path):
+    s = TrendStore(root=tmp_path)
+    s.write([_sector_row("Technology", 10.0, 1)])
+    df = s.read(market="us", source="sector_rotation")
+    assert df.iloc[0]["entity_type"] == "sector"
+    # 기본값: ticker 행도 정상
+    s.write([_row("NVDA", "apewisdom")])
+    assert s.read(market="us", source="apewisdom").iloc[0]["entity_type"] == "ticker"
+
+
+def test_rotation_ranking(tmp_path):
+    s = TrendStore(root=tmp_path)
+    s.write([_sector_row("Technology", 10.0, 1), _sector_row("Utilities", -9.0, 2)])
+    rot = rotation_ranking("us", store=s)
+    assert list(rot["entity"]) == ["Technology", "Utilities"]
+    assert rot.iloc[0]["rs_momentum"] == 10.0
+
+
+def test_fade_excludes_sectors(tmp_path):
+    # 섹터는 fade_ranking 에서 제외(entity_type 필터) — 개별종목만 군집 판정
+    s = TrendStore(root=tmp_path)
+    s.write([
+        _row("NVDA", "apewisdom"), _row("NVDA", "finviz_unusual"),
+        _sector_row("Technology", 10.0, 1),
+    ])
+    fr = fade_ranking("us", store=s, top_n=10)
+    assert list(fr["entity"]) == ["NVDA"]
+
+
+def test_digest_sector_section(tmp_path):
+    s = TrendStore(root=tmp_path)
+    s.write([_sector_row("Technology", 11.5, 1)])
+    d = format_digest("us", store=s)
+    assert "섹터 로테이션" in d and "Technology" in d
+
+
+def test_hot_candidates(tmp_path):
+    s = TrendStore(root=tmp_path)
+    s.write([
+        _row("NVDA", "apewisdom", abn=5.0),
+        _row("AAPL", "finviz_unusual", abn=3.0),
+        _sector_row("Technology", 10.0, 1),  # 섹터는 universe 후보에서 제외
+    ])
+    cands = s.hot_candidates("us", limit=5)
+    assert "Technology" not in cands
+    assert cands[:2] == ["NVDA", "AAPL"]  # abnormal 큰 순
+
+
+def test_universe_sources_empty_when_no_universe():
+    # universe 없으면(첫 tick) 빈 결과 + fetch_ok True(실패 아님)
+    assert google_trends.collect_google_trends(universe=None) == ([], True)
+    assert stocktwits_delta.collect_stocktwits_delta(universe=None) == ([], True)
+
+
+def test_stocktwits_delta_parsing(monkeypatch):
+    monkeypatch.setattr(
+        stocktwits_delta, "collect_stocktwits_messages",
+        lambda tk, **k: ([{"entities": {"sentiment": {"basic": "Bullish"}}}] * 5, True),
+    )
+    rows, ok = stocktwits_delta.collect_stocktwits_delta(
+        universe=["nvda"], asof_date="2026-06-05"
+    )
+    assert ok
+    assert rows[0].entity == "NVDA"
+    assert rows[0].raw_value == 5.0
+    assert rows[0].source == "stocktwits_delta"
+    assert rows[0].leadingness == "C"
+
+
+def test_stocktwits_delta_fetch_fail(monkeypatch):
+    # 모든 종목 fetch 실패 → 빈(실패 아님, universe 는 있었음)
+    monkeypatch.setattr(
+        stocktwits_delta, "collect_stocktwits_messages",
+        lambda tk, **k: ([], False),
+    )
+    assert stocktwits_delta.collect_stocktwits_delta(universe=["NVDA"]) == ([], True)

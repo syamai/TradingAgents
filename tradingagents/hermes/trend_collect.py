@@ -15,7 +15,7 @@ import json
 from typing import Optional
 
 from ..dataflows.trend_store import TrendStore
-from ..dataflows.trends import SOURCE_REGISTRY
+from ..dataflows.trends import SOURCE_REGISTRY, UNIVERSE_SOURCES
 
 
 def run(
@@ -38,6 +38,10 @@ def run(
     kwargs: dict = {"market": mkt}
     if asof_date is not None:
         kwargs["asof_date"] = asof_date
+    # per-ticker 소스는 그날 뜬 후보(hot_candidates)를 universe 로 주입
+    if source in UNIVERSE_SOURCES:
+        st = store or TrendStore()
+        kwargs["universe"] = st.hot_candidates(mkt, asof_date=asof_date, limit=10)
     try:
         rows, fetch_ok = spec["fn"](**kwargs)
     except Exception as exc:  # fetcher 는 graceful 이지만 방어적으로 캐치

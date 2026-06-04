@@ -64,6 +64,7 @@ class TrendStore:
                     asof_date TEXT NOT NULL,
                     market TEXT NOT NULL,
                     entity TEXT NOT NULL,
+                    entity_type TEXT NOT NULL DEFAULT 'ticker',
                     source TEXT NOT NULL,
                     raw_value REAL,
                     abnormal_value REAL,
@@ -77,6 +78,13 @@ class TrendStore:
                 )
                 """
             )
+            # 마이그레이션: 기존 DB 에 entity_type 추가(idempotent, kis_history_store 패턴)
+            existing = {r[1] for r in c.execute("PRAGMA table_info(trend_snapshots)")}
+            if "entity_type" not in existing:
+                c.execute(
+                    "ALTER TABLE trend_snapshots ADD COLUMN entity_type "
+                    "TEXT NOT NULL DEFAULT 'ticker'"
+                )
             c.execute(
                 "CREATE INDEX IF NOT EXISTS idx_trend_asof_market "
                 "ON trend_snapshots(asof_date, market)"
@@ -101,14 +109,14 @@ class TrendStore:
                 cur = c.execute(
                     """
                     INSERT OR IGNORE INTO trend_snapshots (
-                        release_date, asof_date, market, entity, source,
+                        release_date, asof_date, market, entity, entity_type, source,
                         raw_value, abnormal_value, leadingness, rank, metric,
                         snapshot_hash
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        r.release_date, r.asof_date, r.market, r.entity, r.source,
-                        r.raw_value, r.abnormal_value, r.leadingness, r.rank,
+                        r.release_date, r.asof_date, r.market, r.entity, r.entity_type,
+                        r.source, r.raw_value, r.abnormal_value, r.leadingness, r.rank,
                         r.metric, snapshot_hash(r),
                     ),
                 )
@@ -155,6 +163,32 @@ class TrendStore:
                 (market, source),
             ).fetchone()
         return row["d"] if row and row["d"] else None
+
+    def hot_candidates(
+        self,
+        market: str,
+        *,
+        asof_date: Optional[str] = None,
+        limit: int = 10,
+    ) -> list:
+        """오늘(또는 지정) 등장한 개별종목 ticker 상위 — per-ticker 소스
+        (google_trends/stocktwits_delta)의 universe 후보. abnormal 큰 순."""
+        with self._conn() as c:
+            if asof_date is None:
+                row = c.execute(
+                    "SELECT MAX(asof_date) AS d FROM trend_snapshots WHERE market=?",
+                    (market,),
+                ).fetchone()
+                asof_date = row["d"] if row else None
+            if asof_date is None:
+                return []
+            rows = c.execute(
+                "SELECT entity, MAX(abnormal_value) AS a FROM trend_snapshots "
+                "WHERE market=? AND asof_date=? AND entity_type='ticker' "
+                "GROUP BY entity ORDER BY a IS NULL, a DESC LIMIT ?",
+                (market, asof_date, limit),
+            ).fetchall()
+        return [r["entity"] for r in rows]
 
     def hot_list(
         self,
