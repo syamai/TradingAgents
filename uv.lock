@@ -439,6 +439,20 @@ wheels = [
 ]
 
 [[package]]
+name = "cloudscraper"
+version = "1.2.71"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyparsing" },
+    { name = "requests" },
+    { name = "requests-toolbelt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ac/25/6d0481860583f44953bd791de0b7c4f6d7ead7223f8a17e776247b34a5b4/cloudscraper-1.2.71.tar.gz", hash = "sha256:429c6e8aa6916d5bad5c8a5eac50f3ea53c9ac22616f6cb21b18dcc71517d0d3", size = 93261, upload-time = "2023-04-25T23:20:19.467Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/97/fc88803a451029688dffd7eb446dc1b529657577aec13aceff1cc9628c5d/cloudscraper-1.2.71-py2.py3-none-any.whl", hash = "sha256:76f50ca529ed2279e220837befdec892626f9511708e200d48d5bb76ded679b0", size = 99652, upload-time = "2023-04-25T23:20:15.974Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2814,6 +2828,15 @@ crypto = [
 ]
 
 [[package]]
+name = "pyparsing"
+version = "3.3.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/91/9c6ee907786a473bf81c5f53cf703ba0957b23ab84c264080fb5a450416f/pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc", size = 6851574, upload-time = "2026-01-21T03:57:59.36Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d", size = 122781, upload-time = "2026-01-21T03:57:55.912Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3931,6 +3954,7 @@ version = "0.2.5"
 source = { editable = "." }
 dependencies = [
     { name = "backtrader" },
+    { name = "cloudscraper" },
     { name = "langchain-anthropic" },
     { name = "langchain-core" },
     { name = "langchain-experimental" },
@@ -3972,6 +3996,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "backtrader", specifier = ">=1.9.78.123" },
+    { name = "cloudscraper", specifier = ">=1.2.71" },
     { name = "langchain-anthropic", specifier = ">=0.3.15" },
     { name = "langchain-core", specifier = ">=0.3.81" },
     { name = "langchain-experimental", specifier = ">=0.3.4" },
