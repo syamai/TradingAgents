@@ -45,7 +45,7 @@ class TestExcessMetric:
         port = bt._combine_korea_stock_portfolio(rets, acts)
         excess = bt._excess_daily_korea(port, acts, kospi)
         m = bt._metrics(_TRADES, port, excess_daily=excess)
-        assert {"excess_sharpe", "excess_cum_return_pct", "excess_mdd_pct"} <= set(m)
+        assert {"excess_sharpe", "excess_cum_return_pct", "excess_mdd_pct", "daily_excess_vol_pct"} <= set(m)
 
     def test_metrics_omits_excess_when_not_given(self):
         m = bt._metrics(_TRADES, pd.Series([0.0, 0.01, -0.01]))
@@ -54,6 +54,12 @@ class TestExcessMetric:
     def test_empty_trades_with_excess_has_none_ir(self):
         m = bt._metrics([], pd.Series([0.0, 0.0]), excess_daily=pd.Series([0.0, 0.0]))
         assert m["n_trades"] == 0 and m["excess_sharpe"] is None
+        assert m["daily_excess_vol_pct"] == 0.0
+
+    def test_daily_excess_vol_is_daily_standard_deviation_pct(self):
+        excess = pd.Series([0.01, -0.01, 0.02, 0.0])
+        m = bt._metrics(_TRADES, pd.Series([0.0, 0.0, 0.0, 0.0]), excess_daily=excess)
+        assert m["daily_excess_vol_pct"] == round(float(excess.to_numpy().std(ddof=0)) * 100, 4)
 
     def test_pure_beta_excess_near_zero(self):
         # 시장만 따라가면(종목수익==시장수익) 초과수익은 항등적으로 상쇄돼 0.

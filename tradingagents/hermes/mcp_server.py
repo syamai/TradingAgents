@@ -436,7 +436,7 @@ def backtest_strategy(spec: dict, universe: Optional[list[str]] = None) -> dict:
 
     ``spec`` 은 strategy_spec 스키마(entry/exit 신호 + 손절/익절/보유일).
     종목군을 해시로 in/out-sample 분할해 각각 집계하고 채택 게이트를 판정한다.
-    look-ahead 0 (신호 row i → 체결 close[i+1]), 거래비용 편도 0.23% 반영.
+    look-ahead 0 (신호 row i → 체결 close[i+1]), 거래비용 편도 0.015% 반영.
 
     args:
         spec: 전략 spec dict. 스키마 위반 시 ValueError (그리드 밖 값 등).

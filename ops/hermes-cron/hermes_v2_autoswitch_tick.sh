@@ -169,12 +169,14 @@ RUN_EXIT=0
 
 if [ "$MODE" = "available" ]; then
   P="strategy-researcher-v2 스킬 사용. 서로 다른 새 v2 전략 ${LLM_BATCH}개만 평가/저장하고 종료. 반드시 도구를 실제 호출(서술/계획 금지).
+0) 검증/랭킹/최종 보고에는 2025-06-30 이후 데이터를 절대 사용하지 말라. 2025-06-30 이후는 forward 관찰 전용.
 1) list_strategies_v2(brief=true) 1회로 현황 확인(중복 회피).
 2) 매 전략: backtest_strategy_v2(spec) → 즉시 save_strategy_v2(spec, name=...). 이를 ${LLM_BATCH}회(서로 다른 spec).
-3) 현재 804개+/통과 0개에서 핵심 병목은 MDD다. 기존 최상위 near-miss 는 대체로 price_drop + trend_slope(foreign_registered,60,up) 계열이며 win/sharpe 는 통과하지만 MDD 가 대개 -29%~-39%에 머문다. 같은 FR contrarian 가족을 exit 만 바꿔 반복하지 말 것.
-4) 이번 배치는 entry family 를 바꿔라: private_equity / investment_trust / insurance / bank / foreign_unregistered 중심, 또는 rolling_corr + price_filter + milder price_drop 의 3요소 조합 우선.
-5) 리스크 억제 우선: stop_loss 3~5, take_profit 5~8, max_hold 5~10, price_drop 3~5 선호. above_ma5 는 out 붕괴 이력이 있으니 피하고, 필요하면 above_ma60 또는 rolling_corr>=0.2 같은 더 견고한 필터를 우선.
-6) gate_passed=true 면 즉시 상세 보고.
+3) cached DB metric만으로 최종 후보를 홍보하지 말 것. 최종 Top/랭킹 보고는 반드시 현재 포트폴리오 정책(주식 90%, 현금 10%, 30종목, 종목당 최대 5%)과 cutoff<=2025-06-30 재검증 결과를 기준으로 한다.
+4) 이미 기각된 메커니즘(price_drop 눌림목/역추세, price_return 모멘텀, realized_vol 저변동성, short_ratio 저공매도압력)은 숫자만 바꿔 재시도하지 말 것. FR contrarian/price_drop family를 exit만 바꿔 반복하지 말라.
+5) 이번 배치는 구조적으로 새로운 entry family 또는 신규 지표를 우선한다: 주체 간 집중도/이격, 수급 가속, 합의/분산, 선행·지연, rotation 계열. 기존 어휘만 쓰는 경우도 private_equity / investment_trust / insurance / bank / foreign_unregistered 중심의 새 경제 논리가 있어야 한다.
+6) 보고에는 xsec 검증 누적·연환산, time 검증 누적·연환산, 4-way 최소 Sharpe, 검증 MDD, 거래수, 은행이자 대비 실전성을 분리해서 적는다.
+7) gate_passed=true 는 빠른 스크린일 뿐 최종 채택이 아니다. fair gate/cutoff/ETF제외/유동성 통제 전에는 '거래 가능 후보'로 단정하지 말 것.
 메트릭은 도구 반환값만 인용(직접 계산 금지)."
   hermes -z "$P" -s strategy-researcher-v2 --provider openai-codex -m gpt-5.5 --yolo > "$DETAIL_LOG" 2>&1 || RUN_EXIT=$?
   MODE_LABEL="LLM(Codex gpt-5.5)"

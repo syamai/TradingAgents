@@ -122,7 +122,7 @@ def main() -> int:
 
     raw_tickers = KisHistoryStore().list_tickers()
     print(f"[diag] preloading {len(raw_tickers)} tickers ...", flush=True)
-    tickers, loader, kospi_fetcher = _preload(raw_tickers)
+    tickers, loader, kospi_fetcher, usdkrw_fetcher = _preload(raw_tickers)
     holdings = {tk: loader(tk)[0] for tk in tickers}
     kospi = kospi_fetcher(None, None)
     cutoff = _time_cutoff(holdings, IN_SAMPLE_PCT)

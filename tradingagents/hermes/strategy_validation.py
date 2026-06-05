@@ -33,10 +33,11 @@ import pandas as pd
 from scipy.stats import norm
 
 from dashboard.holdings_chart import load_holdings
-from tradingagents.dataflows.market_history import fetch_kospi
+from tradingagents.dataflows.market_history import fetch_kospi, fetch_usdkrw
 from tradingagents.hermes import backtest_engine as bt
 from tradingagents.hermes.backtest_engine_v2 import (
     GATE_V2_MIN_SHARPE,
+    _market_overlay_multiplier,
     _simulate_v2,
     passes_full_gate_v2,
 )
@@ -56,7 +57,7 @@ def _universe_dates(holdings: dict[str, pd.DataFrame]) -> list[str]:
     return sorted(dates)
 
 
-def _window_metrics(spec: dict, holdings: dict, kospi, lo: str, hi: str) -> dict:
+def _window_metrics(spec: dict, holdings: dict, kospi, lo: str, hi: str, usdkrw=None) -> dict:
     """``[lo, hi)`` 날짜 구간만 잘라 종목군 시뮬 → 메트릭(bt._metrics).
 
     각 종목 df 를 구간으로 필터해 ``_simulate_v2`` 에 넘긴다. 구간 밖 데이터는
@@ -64,7 +65,8 @@ def _window_metrics(spec: dict, holdings: dict, kospi, lo: str, hi: str) -> dict
     """
     ret_frames, act_frames, all_trades = [], [], []
     n_tk = 0
-    for tk, df in holdings.items():
+    for tk in sorted(holdings):
+        df = holdings[tk]
         d = df["date"].astype(str)
         sub = df[(d >= lo) & (d < hi)]
         if len(sub) < 3:
@@ -78,7 +80,14 @@ def _window_metrics(spec: dict, holdings: dict, kospi, lo: str, hi: str) -> dict
         all_trades.extend(trades)
         n_tk += 1
     port = bt._combine_korea_stock_portfolio(ret_frames, act_frames)
-    excess = bt._excess_daily_korea(port, act_frames, kospi)
+    overlay_mult = _market_overlay_multiplier(port.index, kospi, spec.get("market_overlay"), usdkrw=usdkrw)
+    if spec.get("market_overlay"):
+        port = port * overlay_mult
+        market = bt._market_daily_returns(kospi, port.index)
+        invested = bt._invested_weight_korea(act_frames).reindex(port.index).fillna(0.0) * overlay_mult
+        excess = port - invested * market
+    else:
+        excess = bt._excess_daily_korea(port, act_frames, kospi)
     m = bt._metrics(all_trades, port, excess_daily=excess)
     m["_window"] = [lo, hi if hi != _HI_SENTINEL else "end"]
     m["_n_tickers"] = n_tk
@@ -91,6 +100,7 @@ def run_time_split_validation(
     *,
     loader: Callable[[str], tuple] = load_holdings,
     kospi_fetcher: Optional[Callable[[str, str], pd.DataFrame]] = fetch_kospi,
+    usdkrw_fetcher: Optional[Callable[[str, str], pd.DataFrame]] = fetch_usdkrw,
     in_sample_pct: int = IN_SAMPLE_PCT,
     embargo_days: int = DEFAULT_EMBARGO_DAYS,
 ) -> dict:
@@ -119,6 +129,13 @@ def run_time_split_validation(
             kospi = kospi_fetcher(min_d, max_d)
         except Exception:        # noqa: BLE001
             kospi = None
+    usdkrw = None
+    needs_fx = spec.get("market_overlay", {}).get("type") == "usdkrw_trailing_return_ma_scale"
+    if needs_fx and holdings and min_d and max_d and usdkrw_fetcher is not None:
+        try:
+            usdkrw = usdkrw_fetcher(min_d, max_d)
+        except Exception:        # noqa: BLE001
+            usdkrw = None
 
     dates = _universe_dates(holdings)
     if len(dates) < 10:
@@ -128,8 +145,8 @@ def run_time_split_validation(
     oos_idx = min(cut_idx + embargo_days, len(dates) - 1)
     oos_start = dates[oos_idx]
 
-    is_m = _window_metrics(spec, holdings, kospi, dates[0], cutoff)
-    oos_m = _window_metrics(spec, holdings, kospi, oos_start, _HI_SENTINEL)
+    is_m = _window_metrics(spec, holdings, kospi, dates[0], cutoff, usdkrw=usdkrw)
+    oos_m = _window_metrics(spec, holdings, kospi, oos_start, _HI_SENTINEL, usdkrw=usdkrw)
 
     return {
         "in_sample": is_m,
@@ -153,6 +170,7 @@ def run_walk_forward_validation(
     *,
     loader: Callable[[str], tuple] = load_holdings,
     kospi_fetcher: Optional[Callable[[str, str], pd.DataFrame]] = fetch_kospi,
+    usdkrw_fetcher: Optional[Callable[[str, str], pd.DataFrame]] = fetch_usdkrw,
     is_years: float = 3.0,
     oos_years: float = 1.0,
     mode: str = "rolling",          # "rolling" | "anchored"
@@ -185,6 +203,13 @@ def run_walk_forward_validation(
             kospi = kospi_fetcher(min_d, max_d)
         except Exception:        # noqa: BLE001
             kospi = None
+    usdkrw = None
+    needs_fx = spec.get("market_overlay", {}).get("type") == "usdkrw_trailing_return_ma_scale"
+    if needs_fx and holdings and min_d and max_d and usdkrw_fetcher is not None:
+        try:
+            usdkrw = usdkrw_fetcher(min_d, max_d)
+        except Exception:        # noqa: BLE001
+            usdkrw = None
 
     dates = _universe_dates(holdings)
     is_len = int(is_years * bt.TRADING_DAYS_PER_YEAR)
@@ -206,8 +231,8 @@ def run_walk_forward_validation(
 
     results = []
     for (is_lo, is_hi, oos_lo, oos_hi) in windows:
-        is_m = _window_metrics(spec, holdings, kospi, is_lo, is_hi)
-        oos_m = _window_metrics(spec, holdings, kospi, oos_lo, oos_hi)
+        is_m = _window_metrics(spec, holdings, kospi, is_lo, is_hi, usdkrw=usdkrw)
+        oos_m = _window_metrics(spec, holdings, kospi, oos_lo, oos_hi, usdkrw=usdkrw)
         results.append({
             "is_window": [is_lo, is_hi], "oos_window": [oos_lo, oos_hi],
             "in_sample": is_m, "out_sample": oos_m,

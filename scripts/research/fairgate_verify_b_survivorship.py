@@ -19,7 +19,7 @@ DB = "/Users/selab/.tradingagents/hermes_fairgate/strategies_v2.db"
 # 1) preload (199종목 holdings + KOSPI 1회)
 raw = KisHistoryStore().list_tickers()
 print(f"[preload] raw_tickers={len(raw)}", flush=True)
-tickers, loader, kospi_fetcher = _preload(raw)
+tickers, loader, kospi_fetcher, usdkrw_fetcher = _preload(raw)
 print(f"[preload] loaded universe={len(tickers)}", flush=True)
 
 # 2) universe-EW NAV 구성: 전 종목 일별수익(close pct_change, 거래일만)의 동일가중 평균

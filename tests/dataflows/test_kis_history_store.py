@@ -241,3 +241,48 @@ class TestTickerNormalization:
     def test_non_korean_ticker_raises_on_read(self, tmp_store):
         with pytest.raises(ValueError, match="not a Korean ticker"):
             tmp_store.read("AAPL", "program")
+
+
+def _minute_rows(timestamps):
+    """timestamps: 'YYYY-MM-DD HH:MM:SS' 리스트."""
+    return [{"date": ts, "open": 100, "high": 110, "low": 90,
+             "close": 105, "volume": 1000} for ts in timestamps]
+
+
+@pytest.mark.unit
+class TestMinuteEndpoint:
+    """1분봉 — date 컬럼에 분 단위 타임스탬프를 넣어 (ticker,date) PK 재사용."""
+
+    def test_multiple_bars_per_day_not_collapsed(self, tmp_store):
+        ts = ["2026-05-28 09:00:00", "2026-05-28 09:01:00", "2026-05-28 09:02:00"]
+        tmp_store.write("005930", "minute", _minute_rows(ts))
+        df = tmp_store.read("005930", "minute")
+        assert list(df["date"]) == ts  # 하루의 분봉이 한 행으로 뭉개지지 않음
+
+    def test_sqlite_round_trip(self, tmp_store):
+        ts = ["2026-05-27 15:30:00", "2026-05-28 09:00:00"]
+        tmp_store.write("005930", "minute", _minute_rows(ts))
+        df = tmp_store.read("005930", "minute", backend="sqlite")
+        assert list(df["date"]) == ts
+        assert int(df.iloc[0]["close"]) == 105
+
+    def test_incremental_merge_dedup_on_timestamp(self, tmp_store):
+        tmp_store.write("005930", "minute",
+                        _minute_rows(["2026-05-28 09:00:00", "2026-05-28 09:01:00"]))
+        # 09:01 중복 + 09:02 신규
+        tmp_store.write("005930", "minute",
+                        _minute_rows(["2026-05-28 09:01:00", "2026-05-28 09:02:00"]))
+        df = tmp_store.read("005930", "minute")
+        assert list(df["date"]) == [
+            "2026-05-28 09:00:00", "2026-05-28 09:01:00", "2026-05-28 09:02:00",
+        ]
+
+    def test_last_date_returns_timestamp(self, tmp_store):
+        tmp_store.write("005930", "minute",
+                        _minute_rows(["2026-05-28 09:00:00", "2026-05-28 15:30:00"]))
+        assert tmp_store.last_date("005930", "minute") == "2026-05-28 15:30:00"
+
+    def test_minute_does_not_trigger_holdings(self, tmp_store):
+        # minute write 는 holdings 재계산 hook 을 타지 않아야 함 (investor 전용)
+        tmp_store.write("005930", "minute", _minute_rows(["2026-05-28 09:00:00"]))
+        assert tmp_store.read("005930", "holdings").empty

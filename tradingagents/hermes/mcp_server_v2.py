@@ -70,7 +70,7 @@ def backtest_strategy_v2(spec: dict, universe: Optional[list[str]] = None) -> di
     spec_version 은 2 (또는 1). entry 1~3 신호 AND, exit signal 0~2 + stop_loss_pct
     /take_profit_pct (옵션) + max_hold_days (필수). 수치는 그리드 값만(위반 ValueError).
 
-    look-ahead 0 (신호 row i → 체결 close[i+1]), 거래비용 편도 0.23% 반영.
+    look-ahead 0 (신호 row i → 체결 close[i+1]), 거래비용 편도 0.015% 반영.
 
     args:
         spec: v2 전략 spec dict. 스키마 위반 시 ValueError.

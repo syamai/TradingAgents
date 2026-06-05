@@ -20,9 +20,9 @@ from typing import Callable, Optional
 import pandas as pd
 
 from dashboard.holdings_chart import load_holdings
-from tradingagents.dataflows.market_history import fetch_kospi
+from tradingagents.dataflows.market_history import fetch_kospi, fetch_usdkrw
 from tradingagents.hermes import backtest_engine as bt
-from tradingagents.hermes.strategy_spec_v2 import _BASE_SIGNALS, validate_spec_v2
+from tradingagents.hermes.strategy_spec_v2 import FLOW_GROUPS, _BASE_SIGNALS, validate_spec_v2
 
 # 완화 게이트 (사용자 지정 — strict 부등호).
 GATE_V2_MIN_WIN_RATE = 0.50   # win_rate > 0.50
@@ -82,6 +82,35 @@ def _eval_signal_v2(df: pd.DataFrame, sig: dict) -> pd.Series:
         retail = bt._num(df["retail_net_qty"]).fillna(0).rolling(sig["window"]).sum()
         return (smart > 0) & (retail < 0)
 
+    if t == "flow_consensus":
+        subjects = FLOW_GROUPS[sig["group"]]
+        sums = [bt._num(df[f"{subj}_net_qty"]).fillna(0).rolling(sig["window"]).sum() for subj in subjects]
+        buyers = pd.concat([(s > 0).astype(int) for s in sums], axis=1).sum(axis=1)
+        out = buyers >= sig["min_buyers"]
+        if sig.get("require_retail_sell", False):
+            retail = bt._num(df["retail_net_qty"]).fillna(0).rolling(sig["window"]).sum()
+            out = out & (retail < 0)
+        return out
+
+    if t == "flow_dispersion":
+        subjects = FLOW_GROUPS[sig["group"]]
+        vals = [bt._num(df[f"{subj}_net_qty"]).fillna(0).rolling(sig["window"]).sum() for subj in subjects]
+        val_df = pd.concat(vals, axis=1)
+        pos_total = val_df.clip(lower=0).sum(axis=1)
+        abs_total = val_df.abs().sum(axis=1)
+        max_abs = val_df.abs().max(axis=1)
+        share = max_abs / abs_total.where(abs_total > 0)
+        return (pos_total > 0) & (share <= sig["max_share"])
+
+    if t == "fast_money_unwind":
+        fu = bt._num(df["foreign_unregistered_net_qty"]).fillna(0).rolling(sig["window"]).sum()
+        pe = bt._num(df["private_equity_net_qty"]).fillna(0).rolling(sig["window"]).sum()
+        return (fu < 0) & (pe < 0)
+
+    if t == "liquidity_filter":
+        value = (bt._num(df["close"]) * bt._num(df["volume"])).rolling(sig["window"]).mean()
+        return value >= sig["value"] if sig["op"] == ">=" else value <= sig["value"]
+
     if t == "short_ratio":
         if "short_volume_ratio" not in df.columns:
             return pd.Series(False, index=df.index)   # short 데이터 미배선 → 신호 off (하위호환)
@@ -99,6 +128,33 @@ def _eval_signal_v2(df: pd.DataFrame, sig: dict) -> pd.Series:
         dr = close.pct_change()
         vol = dr.rolling(sig["window"]).std() * (252 ** 0.5) * 100.0  # trailing 연율화 변동성%
         return vol >= sig["value"] if sig["op"] == ">=" else vol <= sig["value"]
+
+    if t == "volume_surge":
+        vol = bt._num(df["volume"])
+        short_ma = vol.rolling(sig["short"]).mean()
+        long_ma = vol.rolling(sig["long"]).mean()
+        ratio = short_ma / long_ma.where(long_ma > 0)
+        return ratio >= sig["min_ratio"]
+
+    if t == "range_compression":
+        high = bt._num(df["high"])
+        low = bt._num(df["low"])
+        close = bt._num(df["close"])
+        width_pct = (high.rolling(sig["window"]).max() - low.rolling(sig["window"]).min()) / close.where(close > 0) * 100.0
+        return width_pct <= sig["max_pct"]
+
+    if t == "breakout_high":
+        high = bt._num(df["high"])
+        close = bt._num(df["close"])
+        prior_high = high.shift(1).rolling(sig["window"]).max()
+        return close >= prior_high * (1.0 - sig["proximity_pct"] / 100.0)
+
+    if t == "close_location":
+        high = bt._num(df["high"])
+        low = bt._num(df["low"])
+        close = bt._num(df["close"])
+        pos = (close - low) / (high - low).where(high > low)
+        return pos >= sig["min_pos"]
 
     raise ValueError(f"unknown signal type: {t!r}")
 
@@ -136,6 +192,56 @@ def _and_v2(df: pd.DataFrame, signals: list) -> pd.Series:
     for s in signals:
         out = out & _eval_signal_v2(df, s).fillna(False)
     return out
+
+
+def _market_overlay_multiplier(
+    index,
+    kospi: Optional[pd.DataFrame],
+    overlay: Optional[dict],
+    *,
+    usdkrw: Optional[pd.DataFrame] = None,
+) -> pd.Series:
+    """Portfolio exposure multiplier from lagged market/FX risk-off signals.
+
+    Signals are lagged by 1 trading day: row i information affects portfolio
+    exposure from row i+1, avoiding look-ahead.  Returned values multiply the
+    default 90%-stock portfolio return.  Example: stock_weight_pct=20 → 20/90.
+    """
+    out = pd.Series(1.0, index=index, dtype=float)
+    if not overlay:
+        return out
+
+    otype = overlay.get("type")
+    source = kospi if otype == "kospi_trailing_return_scale" else usdkrw
+    if source is None or len(source) == 0 or "date" not in source.columns or "close" not in source.columns:
+        return out
+
+    src = source.loc[:, ["date", "close"]].copy()
+    src["date"] = src["date"].astype(str)
+    src = src.sort_values("date").drop_duplicates("date", keep="last")
+    close = pd.Series(bt._num(src["close"]).to_numpy(dtype=float), index=src["date"].to_numpy())
+    aligned = close.reindex(index).ffill()
+
+    def _condition(window: int, op: str, threshold_pct: float) -> pd.Series:
+        ret = aligned / aligned.shift(window) - 1.0
+        threshold = threshold_pct / 100.0
+        cond = ret >= threshold if op == ">=" else ret <= threshold
+        if otype == "usdkrw_trailing_return_ma_scale":
+            ma = aligned.rolling(int(overlay["ma_window"]), min_periods=int(overlay["ma_window"])).mean()
+            cond = cond & (aligned > ma)
+        return cond.shift(1, fill_value=False).astype(bool)
+
+    base_cond = _condition(overlay["window"], overlay["op"], overlay["threshold_pct"])
+    risk_mult = overlay["risk_stock_weight_pct"] / bt.KOREA_STOCK_PORTFOLIO_POLICY["stock_weight"] / 100.0
+    out = out.mask(base_cond, risk_mult)
+
+    shock = overlay.get("shock_cap")
+    if shock and otype == "kospi_trailing_return_scale":
+        shock_cond = _condition(shock["window"], shock["op"], shock["threshold_pct"])
+        cap_mult = shock["cap_stock_weight_pct"] / bt.KOREA_STOCK_PORTFOLIO_POLICY["stock_weight"] / 100.0
+        out = out.mask(shock_cond, out.clip(upper=cap_mult))
+
+    return out.clip(lower=0.0, upper=1.0).fillna(1.0)
 
 
 # === 시뮬레이션 (기존 _simulate 와 동일 로직, 신호 결합만 _and_v2) ===
@@ -265,6 +371,7 @@ def run_universe_backtest_v2(
     *,
     loader: Callable[[str], tuple] = load_holdings,
     kospi_fetcher: Optional[Callable[[str, str], pd.DataFrame]] = fetch_kospi,
+    usdkrw_fetcher: Optional[Callable[[str, str], pd.DataFrame]] = fetch_usdkrw,
 ) -> dict:
     """종목군 백테스트 v2 — in/out 분할 집계 + 완화 게이트.
 
@@ -290,13 +397,21 @@ def run_universe_backtest_v2(
             kospi = kospi_fetcher(min_d, max_d)
         except Exception:        # noqa: BLE001
             kospi = None
+    usdkrw = None
+    needs_fx = spec.get("market_overlay", {}).get("type") == "usdkrw_trailing_return_ma_scale"
+    if needs_fx and loaded and usdkrw_fetcher is not None and min_d and max_d:
+        try:
+            usdkrw = usdkrw_fetcher(min_d, max_d)
+        except Exception:        # noqa: BLE001
+            usdkrw = None
 
     results: dict[str, dict] = {}
     for split in ("in", "out"):
         all_trades: list[dict] = []
         ret_frames: list[pd.Series] = []
         act_frames: list[pd.Series] = []
-        for tk, df in loaded.items():
+        for tk in sorted(loaded):
+            df = loaded[tk]
             if bt.split_of(tk) != split:
                 continue
             trades, daily, active, cdf = _simulate_v2(spec, df, kospi=kospi)
@@ -306,7 +421,14 @@ def run_universe_backtest_v2(
             ret_frames.append(pd.Series(daily.to_numpy(), index=idx, name=tk))
             act_frames.append(pd.Series(active.to_numpy(), index=idx, name=tk))
         port = bt._combine_korea_stock_portfolio(ret_frames, act_frames)
-        excess = bt._excess_daily_korea(port, act_frames, kospi)
+        overlay_mult = _market_overlay_multiplier(port.index, kospi, spec.get("market_overlay"), usdkrw=usdkrw)
+        if spec.get("market_overlay"):
+            port = port * overlay_mult
+            market = bt._market_daily_returns(kospi, port.index)
+            invested = bt._invested_weight_korea(act_frames).reindex(port.index).fillna(0.0) * overlay_mult
+            excess = port - invested * market
+        else:
+            excess = bt._excess_daily_korea(port, act_frames, kospi)
         results[split] = bt._metrics(all_trades, port, excess_daily=excess)
 
     in_m, out_m = results["in"], results["out"]

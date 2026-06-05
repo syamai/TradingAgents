@@ -18,7 +18,7 @@ from itertools import zip_longest
 
 from dashboard.holdings_chart import load_holdings
 from tradingagents.dataflows.kis_history_store import KisHistoryStore
-from tradingagents.dataflows.market_history import fetch_kospi
+from tradingagents.dataflows.market_history import fetch_kospi, fetch_usdkrw
 from tradingagents.hermes.backtest_engine_v2 import run_universe_backtest_v2
 from tradingagents.hermes.strategy_spec import spec_hash
 from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
@@ -67,6 +67,9 @@ def _candidates() -> list[dict]:
     a13: list[dict] = []  # 신규: 저공매도압력 (short_ratio 신호)
     a14: list[dict] = []  # 신규: 장기 가격 모멘텀 (price_return 신호)
     a15: list[dict] = []  # 신규: 저변동성 방어 (realized_vol 신호)
+    a16: list[dict] = []  # 신규: smart-money 합의 + 개인 흡수 (flow_consensus)
+    a17: list[dict] = []  # 신규: 분산 매집 + 유동성 필터 (flow_dispersion/liquidity)
+    a18: list[dict] = []  # 신규: 수급 가속 + 단기자금 이탈 청산 (flow_accel/fast_money_unwind)
 
     # A1 DIP_SUPPORT: 눌림목 + 수급 매수 지지 (기존 100-run 재현용)
     for subj in SUBJECTS:
@@ -354,9 +357,56 @@ def _candidates() -> list[dict]:
                 "exit": {"take_profit_pct": TP, "stop_loss_pct": SL, "max_hold_days": MH},
             })
 
-    # 라운드로빈 인터리브 — 신규 아키타입(A13~A15 팩터, A9~A12 KOSPI 레짐)을 최우선 배치.
+    # A16 SMART_CONSENSUS: 여러 smart-money 주체가 동시에 순매수하고 개인이 파는 흡수자 패턴.
+    # price_drop 없이 구조적 합의/분산 우선순위 1을 직접 검증한다.
+    for group, min_buyers in [("fast_money", 2), ("foreign_pair", 2), ("institution_defensive", 2), ("broad_smart", 3)]:
+        for w in (3, 5, 10):
+            for lw, lv in [(20, 5_000_000_000.0), (60, 5_000_000_000.0), (20, 10_000_000_000.0)]:
+                a16.append({
+                    "spec_version": 2,
+                    "name": f"cons-{group}-w{w}mb{min_buyers}-liq{lw}_{int(lv/1e9)}b-sl5tp8h10",
+                    "direction": "long",
+                    "entry": {"all_of": [
+                        {"signal": "flow_consensus", "group": group, "window": w, "min_buyers": min_buyers, "require_retail_sell": True},
+                        {"signal": "liquidity_filter", "window": lw, "op": ">=", "value": lv},
+                    ]},
+                    "exit": {"signal_all_of": [{"signal": "fast_money_unwind", "window": 3}], "take_profit_pct": 8.0, "stop_loss_pct": 5.0, "max_hold_days": 10},
+                })
+
+    # A17 DISPERSION_ACCUM: 한 주체 쏠림이 아닌 분산 매집 + 유동성 통제.
+    for group, max_share in [("broad_smart", 0.5), ("broad_smart", 0.6), ("institution_defensive", 0.6), ("fast_money", 0.7)]:
+        for w in (5, 10, 20):
+            for TP, SL, MH in [(8.0, 5.0, 10), (10.0, 5.0, 20)]:
+                a17.append({
+                    "spec_version": 2,
+                    "name": f"disp-{group}-w{w}s{int(max_share*100)}-liq60_5b-tp{int(TP)}sl{int(SL)}h{MH}",
+                    "direction": "long",
+                    "entry": {"all_of": [
+                        {"signal": "flow_dispersion", "group": group, "window": w, "max_share": max_share},
+                        {"signal": "liquidity_filter", "window": 60, "op": ">=", "value": 5_000_000_000.0},
+                    ]},
+                    "exit": {"signal_all_of": [{"signal": "fast_money_unwind", "window": 5}], "take_profit_pct": TP, "stop_loss_pct": SL, "max_hold_days": MH},
+                })
+
+    # A18 FLOW_ACCEL_UNWIND: 수급 2차 미분으로 진입하고 단기자금 동시 이탈 시 청산.
+    for subj in ("foreign_unregistered", "private_equity", "investment_trust", "pension"):
+        for short, long in [(3, 20), (5, 20), (10, 60)]:
+            for zwin, zlb, zmin in [(5, 60, 1.0), (10, 120, 1.5)]:
+                a18.append({
+                    "spec_version": 2,
+                    "name": f"accel-{_ABBR[subj]}-s{short}l{long}-z{zwin}_{zlb}_{int(zmin*10)}-sl5tp8h10",
+                    "direction": "long",
+                    "entry": {"all_of": [
+                        {"signal": "flow_accel", "subject": subj, "short": short, "long": long},
+                        {"signal": "flow_zscore", "subject": subj, "window": zwin, "lookback": zlb, "min_z": zmin},
+                        {"signal": "liquidity_filter", "window": 20, "op": ">=", "value": 5_000_000_000.0},
+                    ]},
+                    "exit": {"signal_all_of": [{"signal": "fast_money_unwind", "window": 3}], "take_profit_pct": 8.0, "stop_loss_pct": 5.0, "max_hold_days": 10},
+                })
+
+    # 라운드로빈 인터리브 — 신규 아키타입(A16~A18 수급/유동성, A9~A12 KOSPI 레짐)을 최우선 배치.
     out: list[dict] = []
-    for tup in zip_longest(a13, a14, a15, a9, a10, a11, a12, a5, a6, a7, a8, a1, a2, a3, a4):
+    for tup in zip_longest(a16, a17, a18, a9, a10, a11, a12, a5, a6, a7, a8, a13, a14, a15, a1, a2, a3, a4):
         for s in tup:
             if s is not None:
                 out.append(s)
@@ -385,6 +435,7 @@ def _phase_filter(specs: list[dict], existing_count: int) -> list[dict]:
     if existing_count < 400:
         return specs
     advanced_prefixes = (
+        "cons-", "disp-", "accel-",
         "shortp-", "mom-", "lowvol-",
         "mrp-", "mconc-", "mfscale-", "defrot-",
         "rgx-", "frev-", "fscale-", "orot-",
@@ -432,9 +483,11 @@ def _merge_short(df, ticker: str, store) -> object:
 
 
 def _preload(tickers: list[str]):
-    """holdings 전부 1회 로딩(메모리 캐시) + short 비중 머지 + KOSPI 1회 — spec 당 재IO 방지.
+    """holdings 전부 1회 로딩(메모리 캐시) + short 비중 머지 + 시장데이터 1회.
 
-    반환 ``(loaded_tickers, cached_loader, cached_kospi_fetcher)``.
+    반환 ``(loaded_tickers, cached_loader, cached_kospi_fetcher, cached_usdkrw_fetcher)``.
+    시장/FX fetch 를 spec 별로 반복하면 캐시 TTL·네트워크 결손 때문에 같은 전략의
+    지표가 run 마다 달라질 수 있어, 연구 루프 시작 시점의 스냅샷으로 고정한다.
     """
     holdings: dict[str, object] = {}
     min_d = max_d = None
@@ -454,6 +507,12 @@ def _preload(tickers: list[str]):
             kospi = fetch_kospi(min_d, max_d)
         except Exception:        # noqa: BLE001
             kospi = None
+    usdkrw = None
+    if min_d and max_d:
+        try:
+            usdkrw = fetch_usdkrw(min_d, max_d)
+        except Exception:        # noqa: BLE001
+            usdkrw = None
 
     def loader(tk):
         return holdings[tk], {}
@@ -461,7 +520,10 @@ def _preload(tickers: list[str]):
     def kospi_fetcher(_s, _e):
         return kospi
 
-    return list(holdings.keys()), loader, kospi_fetcher
+    def usdkrw_fetcher(_s, _e):
+        return usdkrw
+
+    return sorted(holdings.keys()), loader, kospi_fetcher, usdkrw_fetcher
 
 
 def main() -> int:
@@ -471,7 +533,7 @@ def main() -> int:
     cands_all = _phase_filter(_dedup(_candidates()), len(existing_hashes))
     cands = [s for s in cands_all if spec_hash(s) not in existing_hashes]
     print(f"[research-v2] preloading {len(raw_tickers)} tickers ...", flush=True)
-    tickers, loader, kospi_fetcher = _preload(raw_tickers)
+    tickers, loader, kospi_fetcher, usdkrw_fetcher = _preload(raw_tickers)
     print(f"[research-v2] universe={len(tickers)} candidates={len(cands)} "
           f"(all={len(cands_all)} existing={len(existing_hashes)}) "
           f"MAX_EVAL={MAX_EVAL} gate: walk-forward 초과수익 IR>0.5 (모든 OOS창 시장초과)",
@@ -483,11 +545,13 @@ def main() -> int:
         if evaluated >= MAX_EVAL:
             break
         result = run_universe_backtest_v2(
-            spec, tickers, loader=loader, kospi_fetcher=kospi_fetcher)
+            spec, tickers, loader=loader, kospi_fetcher=kospi_fetcher,
+            usdkrw_fetcher=usdkrw_fetcher)
         # 공정 게이트 — walk-forward × 시장대비 초과수익 IR. 모든 OOS 창에서 시장을
         # 이기고(IR>0) 중앙 IR>임계 여야 통과. 단일 분할 레짐편향·시장베타 오인을 제거.
         wf_result = run_walk_forward_validation(
-            spec, tickers, loader=loader, kospi_fetcher=kospi_fetcher)
+            spec, tickers, loader=loader, kospi_fetcher=kospi_fetcher,
+            usdkrw_fetcher=usdkrw_fetcher)
         sid, is_new = store.save(spec, result, name=spec["name"],
                                  wf_result=wf_result,
                                  engine_version=engine_version())

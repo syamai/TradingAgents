@@ -16,7 +16,7 @@ look-ahead 0 규약: 신호는 종가 확정 후 알려지는 값(수급/공매�
     overnight_tow  과거 W일 overnight(open/전일close−1) 누적 = Tug-of-War (Lou-Polk-Skouras 2019).
     reversal       단기 가격반전 = −과거 W일 수익(롱=패자). skip 으로 bid-ask bounce 완화.
 
-공통 통제(노트 §5): net 왕복비용(한국 세금 포함 2×TX_COST_ONE_WAY) 차감, ETF 제외,
+공통 통제(노트 §5): net 왕복비용(2×TX_COST_ONE_WAY, 기본 편도 0.015%) 차감, ETF 제외,
 유동성 하위 제외(저유동·저가 bounce 완화), 채점 상한 2025-06-30, 연도별 시장초과 IR 게이트.
 """
 from __future__ import annotations
@@ -194,7 +194,7 @@ def run_daytrade_backtest(holdings: dict, kospi, *, kind: str, window: int = 5,
 
 def _load():
     """수급 유니버스 로드 + ETF 제외(stock 단타 전략 기준)."""
-    tickers, loader, kf = _preload(KisHistoryStore().list_tickers())
+    tickers, loader, kf, uf = _preload(KisHistoryStore().list_tickers())
     H = {tk: loader(tk)[0] for tk in tickers if str(tk)[:6] not in ETF_CODES}
     return H, kf(None, None)
 

@@ -53,6 +53,12 @@ _URL_INVESTOR = "/uapi/domestic-stock/v1/quotations/investor-trade-by-stock-dail
 _URL_PROGRAM = "/uapi/domestic-stock/v1/quotations/program-trade-by-stock-daily"
 _URL_SHORT = "/uapi/domestic-stock/v1/quotations/daily-short-sale"
 
+# 1분봉 (일별분봉) — 당일분봉(FHKST03010200)은 전일자 미제공이라 백필 불가.
+# 일별분봉(FHKST03010230)만 FID_INPUT_DATE_1 로 과거일자 조회 가능 (단, KIS
+# 서버 보관분 ~1년까지). 매일 장후 누적 저장 + 1년 이내 백필 둘 다 이걸로 한다.
+_TR_MINUTE = "FHKST03010230"
+_URL_MINUTE = "/uapi/domestic-stock/v1/quotations/inquire-time-dailychartprice"
+
 _last_call_ts = 0.0  # module-level sequential rate limiter (단일 프로세스 가정)
 
 
@@ -296,6 +302,26 @@ def _parse_short_row(r: dict) -> dict:
     }
 
 
+def _parse_minute_row(r: dict, fallback_yyyymmdd: str = "") -> dict:
+    """raw 일별분봉 row → 정규화 dict.
+
+    ``date`` 는 분 단위 타임스탬프(``"YYYY-MM-DD HH:MM:SS"``). KIS 일별분봉
+    output2 행은 영업일자(``stck_bsop_date``)를 누락할 수 있어 호출 시점의
+    조회일자(``fallback_yyyymmdd``)로 보강한다. ``close`` 는 분봉 종가에
+    해당하는 현재가(``stck_prpr``).
+    """
+    yyyymmdd = (r.get("stck_bsop_date") or "").strip() or fallback_yyyymmdd
+    hhmmss = (r.get("stck_cntg_hour") or "").strip()
+    return {
+        "date": _format_datetime(yyyymmdd, hhmmss),
+        "open": _safe_int(r.get("stck_oprc")),
+        "high": _safe_int(r.get("stck_hgpr")),
+        "low": _safe_int(r.get("stck_lwpr")),
+        "close": _safe_int(r.get("stck_prpr")),
+        "volume": _safe_int(r.get("cntg_vol")),
+    }
+
+
 def fetch_investor_trend_range(
     code6: str, start_date: str, end_date: str,
     *, progress_cb=None,
@@ -450,6 +476,113 @@ def fetch_short_interest_range(
     return rows
 
 
+# ============================================================
+# Minute bars — 1분봉 OHLCV (일별분봉 FHKST03010230)
+# ============================================================
+#
+# 페이지네이션: 일별분봉은 한 호출당 최대 120봉. FID_INPUT_HOUR_1(조회 종료
+# 시각, HHMMSS)을 15:30부터 역방향으로 슬라이드해 하루(09:00~15:30, ~380봉)를
+# ~4회 호출로 모은다. range 수집은 거래일 단위로 fetch_minute_bars 를 반복.
+
+_MINUTE_PAGE_BARS = 120          # 일별분봉 1회 최대 (실전계좌)
+_MINUTE_OPEN_HHMMSS = "090000"
+_MINUTE_START_CURSOR = "153000"  # 정규장 마감(종가 단일가 포함). 시간외 단일가 제외.
+_MINUTE_MAX_ITER = 20            # 380/120 ≈ 4회, 20 안전 마진
+
+
+def _minute_cursor_back(hhmmss: str) -> Optional[str]:
+    """``HHMMSS`` 에서 1분 뺀 ``HHMMSS``. 파싱 실패 시 None."""
+    try:
+        t = datetime.strptime(hhmmss.zfill(6), "%H%M%S")
+    except ValueError:
+        return None
+    return (t - timedelta(minutes=1)).strftime("%H%M%S")
+
+
+def fetch_minute_bars(code6: str, target_date: str, *, market: str = "J") -> list[dict]:
+    """단일 거래일 1분봉 OHLCV 전량 (일별분봉 FHKST03010230).
+
+    ``target_date`` 는 ``YYYY-MM-DD`` 또는 ``YYYYMMDD``. 휴장일이면 빈 리스트.
+    결과는 시각 오름차순, 각 dict 키: ``date`` (``YYYY-MM-DD HH:MM:SS``),
+    ``open/high/low/close/volume``.
+
+    KIS 분봉 보관 한계(~1년)를 넘은 과거일은 빈 응답 → 빈 리스트.
+    """
+    yyyymmdd = _strip_dashes(target_date)
+    target_day = _format_date(yyyymmdd)  # "YYYY-MM-DD" — 경계 판정용
+    rows: list[dict] = []
+    seen_times: set[str] = set()
+    cursor = _MINUTE_START_CURSOR
+    for _ in range(_MINUTE_MAX_ITER):
+        body = _call_with_backoff(_URL_MINUTE, _TR_MINUTE, {
+            "FID_COND_MRKT_DIV_CODE": market,
+            "FID_INPUT_ISCD": code6,
+            "FID_INPUT_DATE_1": yyyymmdd,
+            "FID_INPUT_HOUR_1": cursor,
+            "FID_PW_DATA_INCU_YN": "Y",   # 과거 데이터 포함
+            "FID_FAKE_TICK_INCU_YN": "N",  # 허봉 제외
+        })
+        time.sleep(_RANGE_CALL_SLEEP_SEC)
+        page = body.get("output2") or []
+        if not page:
+            break
+        added = 0
+        crossed_prev_day = False
+        oldest_hhmmss: Optional[str] = None
+        for r in page:
+            parsed = _parse_minute_row(r, fallback_yyyymmdd=yyyymmdd)
+            ts = parsed["date"]
+            if not ts:
+                continue
+            if ts[:10] != target_day:
+                # 반일장(예: 1/2 단축개장) 경계에서 한 페이지가 직전 거래일로
+                # 넘어감 — 그 종목·날은 별도 호출로 수집하므로 여기선 멈춘다.
+                crossed_prev_day = True
+                continue
+            hhmmss = (r.get("stck_cntg_hour") or "").strip()
+            if not hhmmss or hhmmss in seen_times:
+                continue
+            rows.append(parsed)
+            seen_times.add(hhmmss)
+            added += 1
+            if oldest_hhmmss is None or hhmmss < oldest_hhmmss:
+                oldest_hhmmss = hhmmss
+        if crossed_prev_day or added == 0 or oldest_hhmmss is None:
+            break
+        if oldest_hhmmss <= _MINUTE_OPEN_HHMMSS:  # 장 시작 도달
+            break
+        new_cursor = _minute_cursor_back(oldest_hhmmss)
+        if new_cursor is None or new_cursor >= cursor:  # 진행 멈춤 — 안전 종료
+            break
+        cursor = new_cursor
+    rows.sort(key=lambda r: r["date"])
+    return rows
+
+
+def fetch_minute_bars_range(
+    code6: str, start_date: str, end_date: str,
+    *, progress_cb=None, market: str = "J",
+) -> list[dict]:
+    """``start_date`` ~ ``end_date`` 거래일별 1분봉을 모아 반환.
+
+    거래일 단위로 ``fetch_minute_bars`` 를 역방향 반복. 주말은 건너뛰고
+    휴장일은 빈 응답으로 자연 skip. KIS 분봉 보관(~1년)을 넘은 구간은
+    빈 응답이라 호출만 낭비 — 호출 측에서 윈도우를 1년 이내로 제한 권장.
+    """
+    start_d = datetime.strptime(_strip_dashes(start_date), "%Y%m%d").date()
+    end_d = datetime.strptime(_strip_dashes(end_date), "%Y%m%d").date()
+    rows: list[dict] = []
+    day = end_d
+    while day >= start_d:
+        if day.weekday() < 5:  # Sat=5, Sun=6 제외
+            rows.extend(fetch_minute_bars(code6, day.strftime("%Y%m%d"), market=market))
+            if progress_cb:
+                progress_cb(len(rows))
+        day -= timedelta(days=1)
+    rows.sort(key=lambda r: r["date"])
+    return rows
+
+
 # === parsers ===
 
 def _safe_int(x) -> int:
@@ -470,6 +603,19 @@ def _format_date(yyyymmdd: str) -> str:
     if not yyyymmdd or len(yyyymmdd) != 8:
         return yyyymmdd or ""
     return f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:8]}"
+
+
+def _format_datetime(yyyymmdd: str, hhmmss: str) -> str:
+    """``YYYYMMDD`` + ``HHMMSS`` → ``"YYYY-MM-DD HH:MM:SS"``. 형식 불량 시 ""."""
+    if not yyyymmdd or len(yyyymmdd) != 8:
+        return ""
+    hhmmss = (hhmmss or "").zfill(6)
+    if len(hhmmss) != 6:
+        return ""
+    return (
+        f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:8]} "
+        f"{hhmmss[:2]}:{hhmmss[2:4]}:{hhmmss[4:6]}"
+    )
 
 
 def _strip_dashes(date_str: str) -> str:

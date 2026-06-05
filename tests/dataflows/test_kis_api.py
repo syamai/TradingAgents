@@ -648,3 +648,155 @@ class TestRateLimit:
             kis_api.fetch_investor_trend("005930", "2026-05-20")
             kis_api.fetch_investor_trend("005930", "2026-05-21")
             assert slp.call_count >= 1
+
+
+# === minute bars (일별분봉 FHKST03010230) ===
+
+def _minute_row(yyyymmdd, hhmmss, *, o=100, h=110, low=90, c=105, v=1000):
+    return {
+        "stck_bsop_date": yyyymmdd, "stck_cntg_hour": hhmmss,
+        "stck_oprc": str(o), "stck_hgpr": str(h), "stck_lwpr": str(low),
+        "stck_prpr": str(c), "cntg_vol": str(v),
+    }
+
+
+def _minute_body(yyyymmdd, times):
+    """times: HHMMSS 리스트 (KIS는 최신→과거 descending 반환)."""
+    return {"rt_cd": "0", "output1": {},
+            "output2": [_minute_row(yyyymmdd, t) for t in times]}
+
+
+@pytest.mark.unit
+class TestMinuteParsers:
+    def test_format_datetime(self):
+        assert kis_api._format_datetime("20260528", "090100") == "2026-05-28 09:01:00"
+
+    def test_format_datetime_zero_pads_hour(self):
+        # HHMMSS 가 5자리로 와도 zfill 보정 (예 90100 → 090100)
+        assert kis_api._format_datetime("20260528", "90100") == "2026-05-28 09:01:00"
+
+    def test_format_datetime_bad_date_empty(self):
+        assert kis_api._format_datetime("2026", "090100") == ""
+
+    def test_parse_minute_row_maps_prpr_to_close(self):
+        row = _minute_row("20260528", "093000", o=100, h=120, low=95, c=118, v=5000)
+        parsed = kis_api._parse_minute_row(row)
+        assert parsed == {
+            "date": "2026-05-28 09:30:00", "open": 100, "high": 120,
+            "low": 95, "close": 118, "volume": 5000,
+        }
+
+    def test_parse_minute_row_fallback_date(self):
+        # output2 가 영업일자 누락 시 조회일자로 보강
+        row = {"stck_cntg_hour": "093000", "stck_oprc": "100", "stck_hgpr": "110",
+               "stck_lwpr": "90", "stck_prpr": "105", "cntg_vol": "1"}
+        parsed = kis_api._parse_minute_row(row, fallback_yyyymmdd="20260528")
+        assert parsed["date"] == "2026-05-28 09:30:00"
+
+
+@pytest.mark.unit
+class TestFetchMinuteBars:
+    def test_single_page_until_open(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        # 한 페이지에 장 시작(09:00:00) 포함 → 1회 호출로 종료
+        body = _minute_body("20260528", ["153000", "120000", "090000"])
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, body)
+            rows = kis_api.fetch_minute_bars("005930", "2026-05-28")
+            assert [r["date"] for r in rows] == [
+                "2026-05-28 09:00:00", "2026-05-28 12:00:00", "2026-05-28 15:30:00",
+            ]
+            assert get.call_count == 1
+            params = get.call_args.kwargs["params"]
+            assert params["FID_INPUT_DATE_1"] == "20260528"
+            assert params["FID_INPUT_HOUR_1"] == "153000"
+            assert params["FID_PW_DATA_INCU_YN"] == "Y"
+
+    def test_multi_page_slides_hour_cursor_backward(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        page1 = _minute_body("20260528", ["153000", "152900", "152800"])  # oldest 152800 > open
+        page2 = _minute_body("20260528", ["152700", "100000", "090000"])  # 090000 → stop
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.side_effect = [_mock_response(200, page1), _mock_response(200, page2)]
+            rows = kis_api.fetch_minute_bars("005930", "20260528")
+            assert get.call_count == 2
+            # 2번째 호출 커서 = 1번째 페이지 가장 이른 시각(152800) - 1분 = 152700
+            assert get.call_args_list[1].kwargs["params"]["FID_INPUT_HOUR_1"] == "152700"
+            # 결과는 시각 오름차순, 6봉 전부
+            assert [r["date"] for r in rows][0] == "2026-05-28 09:00:00"
+            assert len(rows) == 6
+
+    def test_stops_when_page_crosses_to_prev_day(self, isolated_cache, kis_env, monkeypatch):
+        """반일장 경계에서 한 페이지가 직전 거래일로 넘어가면 즉시 멈추고
+        대상일 분봉만 반환 (직전일은 별도 호출이 수집)."""
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        body = {"rt_cd": "0", "output2": [
+            _minute_row("20260102", "100000"),
+            _minute_row("20260102", "093000"),
+            _minute_row("20251230", "153000"),  # 직전 거래일로 경계 넘음
+        ]}
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, body)
+            rows = kis_api.fetch_minute_bars("005930", "20260102")
+            assert get.call_count == 1  # crossed → 추가 페이지 호출 안 함
+            assert [r["date"] for r in rows] == [
+                "2026-01-02 09:30:00", "2026-01-02 10:00:00",
+            ]
+            assert all(r["date"].startswith("2026-01-02") for r in rows)
+
+    def test_holiday_empty_response(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, {"rt_cd": "0", "output2": []})
+            rows = kis_api.fetch_minute_bars("005930", "2026-05-28")
+            assert rows == []
+            assert get.call_count == 1
+
+    def test_dedup_repeated_time_across_pages(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        page1 = _minute_body("20260528", ["153000", "152900"])
+        page2 = _minute_body("20260528", ["152900", "090000"])  # 152900 중복
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.side_effect = [_mock_response(200, page1), _mock_response(200, page2)]
+            rows = kis_api.fetch_minute_bars("005930", "20260528")
+            times = [r["date"] for r in rows]
+            assert times == [
+                "2026-05-28 09:00:00", "2026-05-28 15:29:00", "2026-05-28 15:30:00",
+            ]
+
+
+@pytest.mark.unit
+class TestFetchMinuteBarsRange:
+    def test_skips_weekend_days(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        # 2026-05-22 금, 05-23 토, 05-24 일 → 금요일만 호출
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(
+                200, _minute_body("20260522", ["153000", "090000"]))
+            rows = kis_api.fetch_minute_bars_range("005930", "2026-05-22", "2026-05-24")
+            assert get.call_count == 1
+            assert get.call_args.kwargs["params"]["FID_INPUT_DATE_1"] == "20260522"
+            assert all(r["date"].startswith("2026-05-22") for r in rows)
+
+    def test_multiple_trading_days_sorted(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        # 2026-05-26 화, 05-27 수 — 각 1봉
+        def _resp(*a, **kw):
+            day = kw["params"]["FID_INPUT_DATE_1"]
+            return _mock_response(200, _minute_body(day, ["090000"]))
+        with patch("tradingagents.dataflows.kis_api.requests.get", side_effect=_resp):
+            rows = kis_api.fetch_minute_bars_range("005930", "2026-05-26", "2026-05-27")
+            assert [r["date"] for r in rows] == [
+                "2026-05-26 09:00:00", "2026-05-27 09:00:00",
+            ]
+
+    def test_progress_callback(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        seen = []
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(
+                200, _minute_body("20260522", ["153000", "090000"]))
+            kis_api.fetch_minute_bars_range(
+                "005930", "2026-05-22", "2026-05-22",
+                progress_cb=lambda n: seen.append(n))
+        assert seen and seen[-1] == 2

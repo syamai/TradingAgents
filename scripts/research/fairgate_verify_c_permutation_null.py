@@ -101,7 +101,7 @@ def main() -> int:
     t0 = time.time()
     raw = KisHistoryStore().list_tickers()
     print(f"[testC] preloading {len(raw)} tickers ...", flush=True)
-    tickers, loader, kospi_fetcher = _preload(raw)
+    tickers, loader, kospi_fetcher, usdkrw_fetcher = _preload(raw)
 
     # holdings 에 종목코드 컬럼을 주입해 패치된 _and_v2 가 ticker 를 알 수 있게 한다.
     holdings_raw = {tk: loader(tk)[0] for tk in tickers}

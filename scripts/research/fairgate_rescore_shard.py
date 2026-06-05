@@ -39,7 +39,7 @@ todo = [(sid, name, spec) for (sid, name, spec) in specs
 print(f"[sh{SHARD}] assigned={len(specs)} done={len(already)} todo={len(todo)}", flush=True)
 
 raw = KisHistoryStore().list_tickers()
-tickers, loader, kospi_fetcher = _preload(raw)
+tickers, loader, kospi_fetcher, usdkrw_fetcher = _preload(raw)
 ev = engine_version()
 print(f"[sh{SHARD}] universe={len(tickers)} engine={ev} start", flush=True)
 

@@ -49,9 +49,36 @@ def _cache_path(key: str, start: str, end: str) -> Path:
     return _cache_dir() / f"{key}_{start}_{end}.parquet"
 
 
-def _is_cache_fresh(p: Path, *, ttl_seconds: int = 86400) -> bool:
+def _is_historical_end(end: str) -> bool:
+    """요청 범위가 완전히 과거인지 판정한다.
+
+    백테스트/재랭크는 재현성이 우선이다. 과거 구간의 시장 데이터 캐시를 TTL 만료
+    때문에 자동 갱신하면 Yahoo 수정치·부분 다운로드·FX 소스 결손으로 같은 전략의
+    지표가 조용히 달라질 수 있다. 오늘을 포함한 범위만 TTL 갱신 대상이다.
+    """
+    try:
+        return datetime.strptime(end, "%Y-%m-%d").date() < datetime.now().date()
+    except ValueError:
+        return False
+
+
+def _cache_ttl_seconds() -> int:
+    raw = os.environ.get("TRADINGAGENTS_MARKET_CACHE_TTL_SECONDS")
+    if raw is None:
+        return 86400
+    try:
+        return int(raw)
+    except ValueError:
+        return 86400
+
+
+def _is_cache_fresh(p: Path, *, ttl_seconds: Optional[int] = None) -> bool:
     if not p.exists():
         return False
+    if ttl_seconds is None:
+        ttl_seconds = _cache_ttl_seconds()
+    if ttl_seconds < 0:
+        return True
     age = time.time() - p.stat().st_mtime
     return age < ttl_seconds
 
@@ -71,7 +98,9 @@ def fetch_close_series(
     """
     symbol = SPECIAL_SYMBOLS.get(key.lower(), key)
     cache_p = _cache_path(key.lower(), start, end)
-    if cache and _is_cache_fresh(cache_p):
+    force_refresh = os.environ.get("TRADINGAGENTS_MARKET_CACHE_REFRESH") == "1"
+    use_cached_historical = cache and cache_p.exists() and _is_historical_end(end) and not force_refresh
+    if cache and not force_refresh and (use_cached_historical or _is_cache_fresh(cache_p)):
         try:
             return pd.read_parquet(cache_p)
         except Exception:

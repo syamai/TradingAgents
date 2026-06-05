@@ -169,3 +169,77 @@ class TestFlowDivergence:
             validate_spec_v2(_spec([{
                 "signal": "flow_divergence", "subject": "institution",
                 "window": 5}]))
+
+
+@pytest.mark.unit
+class TestFlowConsensus:
+    def test_semantics_with_retail_sell(self):
+        n = 12
+        df = pd.DataFrame({
+            "date": pd.date_range("2021-01-01", periods=n, freq="D").astype(str),
+            "close": 1000.0, "volume": 1,
+            "foreign_unregistered_net_qty": [0, 0, 100, 100, 100, -1, -1, -1, 100, 100, 100, 100],
+            "private_equity_net_qty": [0, 0, 100, 100, 100, -1, -1, -1, 100, 100, 100, 100],
+            "retail_net_qty": [0, 0, -100, -100, -100, 100, 100, 100, 100, 100, 100, 100],
+            "price_change_pct": 0.0,
+        })
+        sig = {"signal": "flow_consensus", "group": "fast_money", "window": 3, "min_buyers": 2, "require_retail_sell": True}
+        s = v2._eval_signal_v2(df, sig)
+        assert bool(s.iloc[4]) is True
+        assert bool(s.iloc[10]) is False
+
+    def test_bad_group_raises(self):
+        with pytest.raises(ValueError):
+            validate_spec_v2(_spec([{"signal": "flow_consensus", "group": "bad", "window": 3, "min_buyers": 2}]))
+
+
+@pytest.mark.unit
+class TestFlowDispersionAndLiquidity:
+    def test_dispersion_semantics(self):
+        n = 8
+        df = pd.DataFrame({
+            "date": pd.date_range("2021-01-01", periods=n, freq="D").astype(str),
+            "close": 1000.0, "volume": 10_000_000,
+            "foreign_registered_net_qty": [10, 10, 10, 50, 50, 50, 100, 100],
+            "foreign_unregistered_net_qty": [10, 10, 10, 50, 50, 50, -1, -1],
+            "private_equity_net_qty": [10, 10, 10, 50, 50, 50, -1, -1],
+            "investment_trust_net_qty": [10, 10, 10, -1, -1, -1, -1, -1],
+            "pension_net_qty": [10, 10, 10, -1, -1, -1, -1, -1],
+            "retail_net_qty": 0.0, "price_change_pct": 0.0,
+        })
+        sig = {"signal": "flow_dispersion", "group": "broad_smart", "window": 3, "max_share": 0.5}
+        s = v2._eval_signal_v2(df, sig)
+        assert bool(s.iloc[2]) is True
+        assert bool(s.iloc[7]) is False
+
+    def test_liquidity_filter_semantics(self):
+        n = 25
+        df = pd.DataFrame({
+            "date": pd.date_range("2021-01-01", periods=n, freq="D").astype(str),
+            "close": 1000.0, "volume": 10_000_000,
+            "retail_net_qty": 0.0, "price_change_pct": 0.0,
+        })
+        sig = {"signal": "liquidity_filter", "window": 20, "op": ">=", "value": 5_000_000_000.0}
+        s = v2._eval_signal_v2(df, sig)
+        assert bool(s.iloc[18]) is False
+        assert bool(s.iloc[19]) is True
+
+    def test_bad_liquidity_value_raises(self):
+        with pytest.raises(ValueError):
+            validate_spec_v2(_spec([{"signal": "liquidity_filter", "window": 20, "op": ">=", "value": 7_000_000_000.0}]))
+
+
+@pytest.mark.unit
+class TestFastMoneyUnwind:
+    def test_semantics(self):
+        n = 10
+        df = pd.DataFrame({
+            "date": pd.date_range("2021-01-01", periods=n, freq="D").astype(str),
+            "close": 1000.0, "volume": 1,
+            "foreign_unregistered_net_qty": [1, 1, 1, -10, -10, -10, 1, 1, 1, 1],
+            "private_equity_net_qty": [1, 1, 1, -10, -10, -10, 1, 1, 1, 1],
+            "retail_net_qty": 0.0, "price_change_pct": 0.0,
+        })
+        s = v2._eval_signal_v2(df, {"signal": "fast_money_unwind", "window": 3})
+        assert bool(s.iloc[5]) is True
+        assert bool(s.iloc[2]) is False

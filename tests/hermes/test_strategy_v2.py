@@ -103,6 +103,31 @@ class TestValidateSpecV2:
         with pytest.raises(ValueError):
             validate_spec_v2(s)
 
+    def test_usdkrw_overlay_valid(self):
+        s = self._spec([{"signal": "price_filter", "mode": "above_ma", "window": 20}])
+        s["market_overlay"] = {
+            "type": "usdkrw_trailing_return_ma_scale",
+            "window": 20,
+            "op": ">=",
+            "threshold_pct": 2.0,
+            "ma_window": 60,
+            "risk_stock_weight_pct": 30.0,
+        }
+        validate_spec_v2(s)
+
+    def test_usdkrw_overlay_offgrid_threshold_raises(self):
+        s = self._spec([{"signal": "price_filter", "mode": "above_ma", "window": 20}])
+        s["market_overlay"] = {
+            "type": "usdkrw_trailing_return_ma_scale",
+            "window": 20,
+            "op": ">=",
+            "threshold_pct": 2.5,
+            "ma_window": 60,
+            "risk_stock_weight_pct": 30.0,
+        }
+        with pytest.raises(ValueError):
+            validate_spec_v2(s)
+
 
 # === look-ahead 회귀 (신규 3종) ===
 
@@ -172,6 +197,23 @@ class TestLookAheadV2:
         out = v2._attach_market_columns(df, kospi)
         assert list(out["market_close"]) == [100.0, 110.0, 110.0]
 
+    def test_usdkrw_overlay_multiplier_uses_lagged_fx_return_and_ma(self):
+        index = pd.date_range("2021-01-01", periods=85, freq="D").astype(str)
+        fx_close = [100.0] * 60 + [103.0] * 25
+        usdkrw = pd.DataFrame({"date": index, "close": fx_close})
+        overlay = {
+            "type": "usdkrw_trailing_return_ma_scale",
+            "window": 20,
+            "op": ">=",
+            "threshold_pct": 2.0,
+            "ma_window": 60,
+            "risk_stock_weight_pct": 30.0,
+        }
+        mult = v2._market_overlay_multiplier(index, kospi=None, overlay=overlay, usdkrw=usdkrw)
+        assert mult.iloc[60] == 1.0  # signal day is not tradable until next row
+        assert mult.iloc[61] == pytest.approx(30.0 / 90.0)
+        assert mult.iloc[84] == 1.0  # risk-off expires after the trailing FX spike rolls out
+
 
 # === 기존 신호 위임 ===
 
@@ -229,8 +271,44 @@ class TestRunUniverseV2:
         }
         out = v2.run_universe_backtest_v2(
             spec, ["005930", "000660", "035720", "005380"],
-            loader=loader, kospi_fetcher=None)
+            loader=loader, kospi_fetcher=None, usdkrw_fetcher=None)
         assert set(out) == {"in_sample", "out_sample", "gate_passed",
                             "portfolio_policy", "universe_size", "n_in", "n_out"}
         assert isinstance(out["gate_passed"], bool)
         assert out["universe_size"] == 4
+
+    def test_metrics_are_ticker_order_invariant_with_fx_overlay(self):
+        tickers = ["005930", "000660", "035720", "005380", "051910", "068270"]
+        frames = {tk: _df(n=220, seed=i).copy() for i, tk in enumerate(tickers)}
+        loader = lambda tk: (frames[tk].copy(), {})  # noqa: E731
+        market = pd.DataFrame({
+            "date": pd.date_range("2021-01-01", periods=220, freq="D").astype(str),
+            "close": 3000.0,
+        })
+        # FX overlay condition becomes true after warmup; injected once and deterministic.
+        usdkrw = pd.DataFrame({
+            "date": pd.date_range("2021-01-01", periods=220, freq="D").astype(str),
+            "close": [1000.0 + i * 2 for i in range(220)],
+        })
+        spec = {
+            "spec_version": 2, "name": "t", "direction": "long",
+            "entry": {"all_of": [
+                {"signal": "price_drop", "window": 5, "value": 3.0}]},
+            "exit": {"take_profit_pct": 5.0, "stop_loss_pct": 5.0, "max_hold_days": 10},
+            "market_overlay": {
+                "type": "usdkrw_trailing_return_ma_scale", "window": 20,
+                "op": ">=", "threshold_pct": 2.0, "ma_window": 60,
+                "risk_stock_weight_pct": 30.0,
+            },
+        }
+
+        a = v2.run_universe_backtest_v2(
+            spec, tickers, loader=loader,
+            kospi_fetcher=lambda _s, _e: market,
+            usdkrw_fetcher=lambda _s, _e: usdkrw)
+        b = v2.run_universe_backtest_v2(
+            spec, list(reversed(tickers)), loader=loader,
+            kospi_fetcher=lambda _s, _e: market,
+            usdkrw_fetcher=lambda _s, _e: usdkrw)
+
+        assert a == b

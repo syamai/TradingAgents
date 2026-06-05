@@ -37,10 +37,15 @@ from tradingagents.dataflows.korean_utils import to_naver_code
 
 logger = logging.getLogger(__name__)
 
-Endpoint = Literal["investor", "program", "short", "holdings"]
+Endpoint = Literal["investor", "program", "short", "holdings", "minute"]
 Backend = Literal["parquet", "sqlite"]
 
-_VALID_ENDPOINTS: tuple[Endpoint, ...] = ("investor", "program", "short", "holdings")
+# "minute" 는 1분봉 OHLCV. 다른 endpoint 가 ``date``(YYYY-MM-DD, 하루 1행)인
+# 것과 달리 ``date`` 컬럼에 분 단위 타임스탬프(YYYY-MM-DD HH:MM:SS)를 넣어
+# (ticker, date) PK·date 기준 dedup 기계를 그대로 재사용한다.
+_VALID_ENDPOINTS: tuple[Endpoint, ...] = (
+    "investor", "program", "short", "holdings", "minute",
+)
 _VALID_BACKENDS: tuple[Backend, ...] = ("parquet", "sqlite")
 
 

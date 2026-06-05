@@ -30,8 +30,9 @@ from tradingagents.dataflows.market_history import fetch_kospi
 from tradingagents.hermes.labeling import _close_at_or_after
 from tradingagents.hermes.strategy_spec import validate_spec
 
-# 거래비용 — 편도(수수료+세금 근사). entry/exit 각 레그에 곱셈 반영.
-TX_COST_ONE_WAY = 0.0023
+# 거래비용 — 편도 수수료. entry/exit 각 레그에 곱셈 반영.
+# 사용자 기준: 국내주식 위탁수수료 0.015% = 0.00015 (편도).
+TX_COST_ONE_WAY = 0.00015
 TRADING_DAYS_PER_YEAR = 252
 
 # 종목 분할 — md5(code6) % 100 < IN_SAMPLE_PCT → in-sample.
@@ -277,15 +278,20 @@ def _sharpe(r: np.ndarray, n_trades: int) -> Optional[float]:
 
 
 def _excess_fields(excess_daily: pd.Series, n_trades: int) -> dict:
-    """초과수익(시장 대비) 일별 시계열 → IR/누적/MDD. raw sharpe 와 동일 식이되
-    입력이 ``port - 투입비중×시장수익`` 이라 시장 베타가 제거된 알파 측정값이다."""
+    """초과수익(시장 대비) 일별 시계열 → IR/누적/MDD/일별 변동성.
+
+    ``daily_excess_vol_pct`` 는 사용자가 필수 지표로 지정한
+    ``표준편차(일별 초과수익들)`` 이다. 단위는 %/day 이며 연율화하지 않는다.
+    """
     er = excess_daily.to_numpy(dtype=float)
     ir = _sharpe(er, n_trades)
     eq = np.cumprod(1.0 + er) if len(er) else np.array([])
+    daily_excess_vol = float(er.std(ddof=0)) * 100 if len(er) else None
     return {
         "excess_sharpe": round(ir, 4) if ir is not None else None,
         "excess_cum_return_pct": round(float(eq[-1] - 1) * 100, 4) if len(eq) else 0.0,
         "excess_mdd_pct": round(_max_drawdown(eq) * 100, 4),
+        "daily_excess_vol_pct": round(daily_excess_vol, 4) if daily_excess_vol is not None else None,
     }
 
 
@@ -295,8 +301,9 @@ def _metrics(
     """trades(pooled) + 포트폴리오 일별 수익률 → 메트릭 dict (JSON 직렬화 가능).
 
     ``excess_daily`` 가 주어지면(시장 대비 초과수익 일별 시계열) ``excess_sharpe``
-    (정보비율)·``excess_cum_return_pct``·``excess_mdd_pct`` 를 추가한다. 미지정 시
-    기존 출력 그대로 — 하위호환.
+    (정보비율)·``excess_cum_return_pct``·``excess_mdd_pct``·``daily_excess_vol_pct``
+    를 추가한다. ``daily_excess_vol_pct`` 는 연율화하지 않은 %/day 표준편차다.
+    미지정 시 기존 출력 그대로 — 하위호환.
     """
     n = len(trades)
     if n == 0:

@@ -53,7 +53,7 @@ _KEEP = ("excess_ir", "sharpe", "cum_return_pct", "yr_ir_min", "gate_passed",
 
 def _load():
     """수급 유니버스 로드 + ETF 제외(stock 팩터 전략 기준)."""
-    tickers, loader, kf = _preload(KisHistoryStore().list_tickers())
+    tickers, loader, kf, uf = _preload(KisHistoryStore().list_tickers())
     H = {tk: loader(tk)[0] for tk in tickers if str(tk)[:6] not in ETF_CODES}
     return H, kf(None, None)
 
