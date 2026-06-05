@@ -78,20 +78,25 @@ def collect_sector_rotation(
     except (IndexError, KeyError):
         return [], False
 
-    scored: list[tuple[float, str]] = []
+    # RS-ratio: 최근 RS / 직전 ~3개월 평균 × 100 (100 중심) — RRG 사분면 판정용.
+    base = rs.rolling(min(len(rs), rs_window * 3)).mean().iloc[-1]
+
+    scored: list[tuple[float, float, str]] = []
     for etf, name in SECTOR_ETFS.items():
         if etf not in mom.index:
             continue
         v = mom[etf]
         if v != v:  # NaN
             continue
-        scored.append((float(v), name))
+        b = float(base.get(etf, float("nan")))
+        ratio = float(rs.iloc[-1][etf]) / b * 100.0 if b == b and b else float("nan")
+        scored.append((float(v), ratio, name))
     if not scored:
         return [], False
 
-    scored.sort(reverse=True)
+    scored.sort(reverse=True)  # RS-momentum 기준
     rows: list[SignalRow] = []
-    for rank, (v, name) in enumerate(scored[:top_n], start=1):
+    for rank, (v, ratio, name) in enumerate(scored[:top_n], start=1):
         rows.append(
             SignalRow(
                 release_date=asof,
@@ -102,7 +107,7 @@ def collect_sector_rotation(
                 source=_SOURCE,
                 metric=_METRIC,
                 leadingness=LEADING,
-                raw_value=None,
+                raw_value=round(ratio, 1) if ratio == ratio else None,  # RS-ratio(100 중심)
                 abnormal_value=round(v * 100, 3),  # RS-momentum %
                 rank=rank,
             )

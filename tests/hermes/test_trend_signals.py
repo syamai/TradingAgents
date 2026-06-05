@@ -287,3 +287,28 @@ def test_options_os_parsing(monkeypatch):
     # opt_vol=(300+100)*2만기=800, stk=100000 → O/S=0.008
     assert abs(rows[0].abnormal_value - 0.008) < 1e-4
     assert rows[0].source == "options_os" and rows[0].leadingness == "C"
+
+
+def test_rrg_quadrant():
+    from tradingagents.hermes.trend_rank import _rrg_quadrant
+    assert _rrg_quadrant(105, 5) == "Leading"     # 강(≥100) + 상승
+    assert _rrg_quadrant(95, 5) == "Improving"    # 약 + 상승
+    assert _rrg_quadrant(105, -5) == "Weakening"  # 강 + 하락
+    assert _rrg_quadrant(95, -5) == "Lagging"     # 약 + 하락
+    assert _rrg_quadrant(None, 5) == "Improving"  # ratio 없으면 약 취급
+
+
+def test_fade_evidence_and_tier(tmp_path):
+    s = TrendStore(root=tmp_path)
+    s.write([
+        SignalRow("2026-06-05", "2026-06-05", "us", "NVDA", "apewisdom",
+                  "mention_momentum_24h", COINCIDENT, raw_value=300, abnormal_value=2.5, rank=1),
+        SignalRow("2026-06-05", "2026-06-05", "us", "NVDA", "options_os",
+                  "os_ratio", COINCIDENT, raw_value=1000, abnormal_value=0.02, rank=1),
+    ])
+    fr = fade_ranking("us", store=s, top_n=10)
+    row = fr.iloc[0]
+    assert row["tier"] == "🟡 약한 군집"  # 2소스
+    ev = row["evidence"]
+    assert any("ApeWisdom 언급" in e for e in ev)  # 근거에 raw 신호값
+    assert any("옵션O/S" in e for e in ev)
