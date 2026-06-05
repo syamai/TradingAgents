@@ -47,6 +47,7 @@ class TestMcpServerToolRegistration:
             "save_analysis", "add_feedback", "list_hypotheses",
             "get_hypothesis_with_labels",
             "backtest_strategy", "save_strategy", "list_strategies",
+            "get_us_trend_watchlist",
         }
 
     def test_tool_descriptions_are_non_empty(self):

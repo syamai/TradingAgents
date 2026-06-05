@@ -321,6 +321,30 @@ def save_analysis(record: dict) -> dict:
 
 
 @mcp.tool()
+def get_us_trend_watchlist(market: str = "us") -> str:
+    """미국 트렌드 와치리스트 — 섹터 로테이션(방향) + 종목 fade(군집 경고) + 알림.
+
+    투자자 관심(investor attention) 6소스를 종합한 모니터링 다이제스트:
+    검색(Google Trends ASVI=비정상 검색량)·소셜(ApeWisdom mention-momentum·StockTwits)
+    ·비정상 거래량(Finviz)·옵션 O/S(Option-to-Stock volume ratio, 옵션/주식 거래량
+    비율)·섹터 로테이션(RS-momentum=섹터 상대강도 모멘텀).
+
+    핵심 해석: 개별종목 attention 은 대개 늦은 contrarian 이라 **추격이 아닌 페이드
+    /리스크 플래그** 용도다(통제실험상 독립 alpha 아님 → 모니터링용). 섹터 로테이션이
+    durable 한 방향, 종목 fade(≥2소스 동시 과열)가 군집/천장 경고. cron 이 매일
+    적재한 최신 스냅샷을 읽어 텍스트로 반환한다. LLM 호출 없음.
+
+    args:
+        market: 'us' (현재 US 만 지원).
+    returns:
+        다이제스트 텍스트(🔔알림 + 🔄섹터 로테이션 + 📊종목 와치리스트 + 📍관심 집중 섹터).
+    """
+    from tradingagents.hermes.trend_rank import format_digest
+
+    return format_digest(market)
+
+
+@mcp.tool()
 def add_feedback(
     hypothesis_id: int,
     verdict: str,
