@@ -153,6 +153,14 @@ Lookup order in `anthropic_client.py`: explicit `api_key` kwarg → `TRADINGAGEN
   - **xsec / time split** = 종목 해시 분할(횡단면 일반화) / 시간 분할(시기 일반화).
   - **MDD** = Maximum Drawdown(최대 낙폭, %). **win_rate** = 수익 거래 비율. **sharpe** = 위험조정 수익(수익/변동성).
   - **fair gate(공정 게이트)** = 채택 합격선. 모든 OOS 창 시장초과 IR>0 **AND** 중앙 IR>0.5(`GATE_EXCESS_MIN_IR`).
+  - 트렌드(투자자 관심) 시스템 용어 — **이 약어들도 처음 쓸 때 반드시 풀이 병기**:
+    - **O/S (Option-to-Stock volume ratio, 옵션/주식 거래량 비율)** = 옵션 총거래량 ÷ 주식 거래량. 높으면 informed(정보 우위) 베팅 가능성(Johnson-So).
+    - **SV-Delta (Social Volume Delta, 소셜 메시지량 변화)** = 소셜 당일 메시지량의 자기 과거(20일) 평균 대비 z-score. >1 = 평소 +1σ 이상 급증(갑작스런 화제).
+    - **ASVI (Abnormal Search Volume Index, 비정상 검색량)** = log(이번주 검색량) − log(직전 8주 중앙값). '새로 생긴' 검색 관심(Da-Engelberg-Gao).
+    - **RS-momentum (Relative Strength momentum, 상대강도 모멘텀)** = 섹터의 SPY 대비 상대강도(RS)의 변화율. 섹터 로테이션 방향.
+    - **fade_score** = 여러 소스에 동시 등장한 종목의 군집/과열 점수 — 추격이 아닌 *페이드(천장 경고)* 용도.
+    - **leadingness** = 신호 시점성: L(leading 선행, 드묾) / C(coincident 동행) / Lag(lagging 후행).
+    - **mention-momentum** = 소셜 언급량의 24h 변화율(ApeWisdom).
 
 ## Issue tracker
 

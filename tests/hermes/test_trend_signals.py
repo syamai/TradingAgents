@@ -10,7 +10,12 @@
 import pytest
 
 from tradingagents.dataflows.trend_store import TrendStore
-from tradingagents.dataflows.trends import apewisdom, google_trends, stocktwits_delta
+from tradingagents.dataflows.trends import (
+    apewisdom,
+    google_trends,
+    options_os,
+    stocktwits_delta,
+)
 from tradingagents.dataflows.trends.base import COINCIDENT, SignalRow
 from tradingagents.hermes import trend_collect
 from tradingagents.hermes.trend_rank import (
@@ -246,3 +251,39 @@ def test_attention_by_sector(tmp_path, monkeypatch):
     ])
     out = attention_by_sector("us", store=s)
     assert set(out.get("Technology", [])) == {"NVDA", "AVGO"}
+
+
+def test_options_os_empty_no_universe():
+    assert options_os.collect_options_os(universe=None) == ([], True)
+
+
+def test_options_os_parsing(monkeypatch):
+    import pandas as pd
+    import yfinance
+
+    class FakeChain:
+        def __init__(self):
+            self.calls = pd.DataFrame({"volume": [100, 200]})
+            self.puts = pd.DataFrame({"volume": [50, 50]})
+
+    class FakeTicker:
+        options = ["2026-06-06", "2026-06-13"]
+
+        def __init__(self, tk):
+            pass
+
+        def option_chain(self, exp):
+            return FakeChain()
+
+        def history(self, period="1d"):
+            return pd.DataFrame({"Volume": [100000]})
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+    rows, ok = options_os.collect_options_os(
+        universe=["nvda"], asof_date="2026-06-05", max_expiries=2
+    )
+    assert ok
+    assert rows[0].entity == "NVDA"
+    # opt_vol=(300+100)*2만기=800, stk=100000 → O/S=0.008
+    assert abs(rows[0].abnormal_value - 0.008) < 1e-4
+    assert rows[0].source == "options_os" and rows[0].leadingness == "C"
