@@ -312,3 +312,6 @@ def test_fade_evidence_and_tier(tmp_path):
     ev = row["evidence"]
     assert any("ApeWisdom 언급" in e for e in ev)  # 근거에 raw 신호값
     assert any("옵션O/S" in e for e in ev)
+    assert any("출처 Barber-Huang-Odean-Schwarz" in e for e in ev)  # ApeWisdom 소셜 herding
+    assert any("출처 Johnson-So" in e for e in ev)  # 옵션 O/S
+    assert any("스코어" in e for e in ev)  # 소스별 기여 스코어

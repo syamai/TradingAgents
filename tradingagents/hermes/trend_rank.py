@@ -28,16 +28,39 @@ _EVIDENCE_FMT = {
     "social_volume": lambda r: f"StockTwits {int(r['raw_value'])}건",
 }
 
+# 각 신호의 대표 학술 출처(노트 기반) — 신호별 방법론에 가장 직접적인 논문으로 정밀 매핑.
+_SOURCE_REF = {
+    # ApeWisdom = Reddit/WSB 소셜 언급 herding → Robinhood/메임주 herding 직접 연구
+    "mention_momentum_24h": "Barber-Huang-Odean-Schwarz 2022",
+    # 비정상 거래량 = Barber-Odean 의 '단일 최고 attention 지표'
+    "unusual_volume_rank": "Barber-Odean 2008",
+    # 검색량 attention
+    "asvi": "Da-Engelberg-Gao 2011",
+    # 옵션/주식 거래량 비율(O/S)
+    "os_ratio": "Johnson-So 2012",
+    # StockTwits 메시지 감성/볼륨
+    "social_volume": "Divernois-Filipovic 2024",
+}
+
 
 def _source_evidence(g) -> list:
-    """종목의 소스별 신호 → 근거 텍스트 리스트(점수 산출의 raw 근거 = '왜 과열인지')."""
+    """종목의 소스별 [신호값 · 기여 스코어 · 대표 출처] 근거 리스트('왜 과열인지')."""
     ev = []
-    for _, r in g.sort_values("source").iterrows():
+    g2 = g.sort_values("rank_score", ascending=False) if "rank_score" in g.columns else g
+    for _, r in g2.iterrows():
         fmt = _EVIDENCE_FMT.get(r["metric"])
         try:
-            ev.append(fmt(r) if fmt else str(r["source"]))
+            sig = fmt(r) if fmt else str(r["source"])
         except (ValueError, TypeError, KeyError):
-            ev.append(str(r["source"]))
+            sig = str(r["source"])
+        parts = [sig]
+        sc = r.get("rank_score")
+        if sc is not None and not pd.isna(sc):
+            parts.append(f"스코어 {float(sc):.2f}")
+        ref = _SOURCE_REF.get(r["metric"])
+        if ref:
+            parts.append(f"출처 {ref}")
+        ev.append(" · ".join(parts))
     return ev
 
 
@@ -259,7 +282,10 @@ def format_digest(
         lines.append("")
     # 섹터 로테이션 — RRG 사분면 + 근거(RS-ratio 상대강도 레벨, RS-momentum 변화)
     if not rot.empty:
-        lines.append(f"🔄 섹터 로테이션 [{mkt}] (RRG 사분면 — Leading/Improving/Weakening/Lagging)")
+        lines.append(
+            f"🔄 섹터 로테이션 [{mkt}] (RRG 사분면 — Leading/Improving/Weakening/Lagging"
+            " · 출처: 산업모멘텀 Moskowitz-Grinblatt 1999, RRG StockCharts)"
+        )
         for _, r in rot.iterrows():
             ratio = r.get("rs_ratio")
             ratio_s = (
@@ -283,7 +309,9 @@ def format_digest(
             )
             ev = row.get("evidence")
             if isinstance(ev, list) and ev:
-                lines.append(f"   근거: {' · '.join(ev)}")
+                lines.append("   근거(소스별 신호 · 기여 스코어 · 출처):")
+                for e in ev:
+                    lines.append(f"     · {e}")
             lead = row["leadingness"]
             lead_s = "동행/contrarian" if lead == "C" else ("선행" if lead == "L" else "후행")
             lines.append(
