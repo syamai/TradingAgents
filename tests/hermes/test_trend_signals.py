@@ -14,8 +14,10 @@ from tradingagents.dataflows.trends import apewisdom, google_trends, stocktwits_
 from tradingagents.dataflows.trends.base import COINCIDENT, SignalRow
 from tradingagents.hermes import trend_collect
 from tradingagents.hermes.trend_rank import (
+    attention_by_sector,
     fade_ranking,
     format_digest,
+    rotation_alerts,
     rotation_ranking,
 )
 
@@ -211,3 +213,36 @@ def test_stocktwits_delta_fetch_fail(monkeypatch):
         lambda tk, **k: ([], False),
     )
     assert stocktwits_delta.collect_stocktwits_delta(universe=["NVDA"]) == ([], True)
+
+
+def test_rotation_alert_peak(tmp_path):
+    s = TrendStore(root=tmp_path)
+    s.write([_sector_row("Technology", 11.5, 1)])  # ≥10% → 과열
+    a = rotation_alerts("us", store=s)
+    assert any("과열" in x and "Technology" in x for x in a)
+
+
+def test_rotation_alert_crossover(tmp_path):
+    s = TrendStore(root=tmp_path)
+    s.write([_sector_row("Energy", -2.0, 1, asof="2026-06-04")])  # 전일 음
+    s.write([_sector_row("Energy", 3.0, 1, asof="2026-06-05")])   # 오늘 양 → 전환
+    a = rotation_alerts("us", asof_date="2026-06-05", store=s)
+    assert any("양전환" in x and "Energy" in x for x in a)
+
+
+def test_rotation_alert_none(tmp_path):
+    s = TrendStore(root=tmp_path)
+    s.write([_sector_row("Utilities", -5.0, 1)])  # 과열 아님 + 전일 없음
+    assert rotation_alerts("us", store=s) == []
+
+
+def test_attention_by_sector(tmp_path, monkeypatch):
+    import tradingagents.dataflows.trends.sector_map as sm
+    monkeypatch.setattr(sm, "get_sectors", lambda tks: {str(t).upper(): "Technology" for t in tks})
+    s = TrendStore(root=tmp_path)
+    s.write([
+        _row("NVDA", "apewisdom"), _row("NVDA", "finviz_unusual"),
+        _row("AVGO", "apewisdom"), _row("AVGO", "finviz_unusual"),
+    ])
+    out = attention_by_sector("us", store=s)
+    assert set(out.get("Technology", [])) == {"NVDA", "AVGO"}

@@ -17,6 +17,7 @@ import pandas as pd
 from ..dataflows.trend_store import TrendStore
 
 MIN_SOURCES = 2
+ROTATION_PEAK_PCT = 10.0  # 섹터 RS-momentum 과열 임계(%) — peak-chase 경고
 
 
 def _rank_score(rank, top_n: int) -> float:
@@ -115,6 +116,74 @@ def rotation_ranking(
     )
 
 
+def rotation_alerts(
+    market: str,
+    *,
+    asof_date: Optional[str] = None,
+    store: Optional[TrendStore] = None,
+) -> list:
+    """섹터 로테이션 고급 알림 — RS-momentum 양전환(Improving 진입) + 과열(peak-chase).
+
+    양전환(전일 ≤0 → 오늘 >0)은 전일 데이터가 누적돼야 감지된다. 과열(최상위
+    섹터 RS-momentum ≥ ROTATION_PEAK_PCT)은 당일만으로 판정(노트: flow 정점·이미
+    Leading 추격 금지). 반환=알림 문자열 리스트(없으면 빈).
+    """
+    store = store or TrendStore()
+    df = store.read(market=market, source="sector_rotation")
+    if df.empty:
+        return []
+    dates = sorted(df["asof_date"].unique())
+    today = asof_date or dates[-1]
+    t = df[df["asof_date"] == today].set_index("entity")["abnormal_value"]
+    if t.empty:
+        return []
+    alerts: list = []
+    # 1) 양전환 = Improving→Leading 진입 (전일 비교)
+    prevs = [d for d in dates if d < today]
+    if prevs:
+        p = df[df["asof_date"] == prevs[-1]].set_index("entity")["abnormal_value"]
+        for e in t.index:
+            if e in p.index and float(p[e]) <= 0 < float(t[e]):
+                alerts.append(
+                    f"📈 {e} 섹터 RS-momentum 양전환({float(p[e]):+.1f}%→{float(t[e]):+.1f}%)"
+                    " — Improving→Leading 진입"
+                )
+    # 2) peak-chase: 최상위 섹터 과열 → 추격 주의
+    top = t.sort_values(ascending=False)
+    if not top.empty and float(top.iloc[0]) >= ROTATION_PEAK_PCT:
+        alerts.append(
+            f"⚠️ {top.index[0]} 섹터 과열({float(top.iloc[0]):+.1f}%) — 추격 주의(peak-chase)"
+        )
+    return alerts
+
+
+def attention_by_sector(
+    market: str,
+    *,
+    asof_date: Optional[str] = None,
+    top_n: int = 10,
+    store: Optional[TrendStore] = None,
+    fade=None,
+) -> dict:
+    """와치리스트(fade) 종목을 GICS 섹터로 집계 — '어느 섹터에 관심 집중'.
+
+    **모니터링용**(① 통제실험: attention 은 독립 alpha 아님 → alpha 주장 안 함).
+    반환 ``{sector: [tickers]}``. 섹터 매핑은 yfinance(캐시). 'Unknown' 은 제외하지
+    않고 그대로 반환(호출부에서 표시 정책 결정).
+    """
+    if fade is None:
+        fade = fade_ranking(market, asof_date=asof_date, top_n=top_n, store=store)
+    if fade.empty:
+        return {}
+    from ..dataflows.trends.sector_map import get_sectors
+
+    secs = get_sectors(list(fade["entity"]))
+    out: dict = {}
+    for ent in fade["entity"]:
+        out.setdefault(secs.get(str(ent).upper(), "Unknown"), []).append(ent)
+    return out
+
+
 def format_digest(
     market: str,
     *,
@@ -122,18 +191,24 @@ def format_digest(
     top_n: int = 10,
     store: Optional[TrendStore] = None,
 ) -> str:
-    """Telegram 일일 다이제스트 — 섹터 로테이션(방향) + 종목 fade 와치리스트(군집 경고)."""
+    """Telegram 일일 다이제스트 — 고급 알림 + 섹터 로테이션(방향) + 종목 fade(군집 경고)."""
     store = store or TrendStore()
     mkt = market.upper()
     fade = fade_ranking(
         market, asof_date=asof_date, top_n=top_n, store=store, min_sources=MIN_SOURCES
     )
     rot = rotation_ranking(market, asof_date=asof_date, top_n=3, store=store)
-    if fade.empty and rot.empty:
+    alerts = rotation_alerts(market, asof_date=asof_date, store=store)
+    if fade.empty and rot.empty and not alerts:
         return f"[트렌드 {mkt}] 신호 없음."
 
     lines: list[str] = []
-    # 섹터 로테이션 먼저 — durable·방향(노트: 테마로 방향, 종목으로 군집 회피)
+    # 고급 알림 먼저 — 전환/과열(important)
+    if alerts:
+        lines.append(f"🔔 알림 [{mkt}]")
+        lines.extend(f"  {a}" for a in alerts)
+        lines.append("")
+    # 섹터 로테이션 — durable·방향(노트: 테마로 방향, 종목으로 군집 회피)
     if not rot.empty:
         lines.append(f"🔄 섹터 로테이션 [{mkt}] (RS-momentum, Improving→Leading)")
         for _, r in rot.iterrows():
@@ -150,4 +225,12 @@ def format_digest(
                 f"{i + 1}. {flag} {row['entity']}  score={row['fade_score']} "
                 f"({row['n_sources']}소스: {row['sources']}, {row['leadingness']})"
             )
+        # 관심 집중 섹터(모니터링용 — alpha 아님). 종목 多 섹터 순.
+        secmap = attention_by_sector(market, store=store, fade=fade)
+        named = {s: tks for s, tks in secmap.items() if s != "Unknown"}
+        if named:
+            lines.append("")
+            lines.append("📍 관심 집중 섹터(모니터링):")
+            for sec, tks in sorted(named.items(), key=lambda x: -len(x[1])):
+                lines.append(f"  {sec}: {', '.join(tks)}")
     return "\n".join(lines)
