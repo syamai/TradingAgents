@@ -160,8 +160,21 @@ venv.bak/
 # trading-ai 작업 산출물 / 백업 / OS
 .runtime/
 *.bak
+*.bak-*
 .DS_Store
 /tmp/
+/artifacts/
+/notebooks/*.html
+/strategies_v2.db
+
+# 로컬 도구·MCP 캐시 (Claude Code / Playwright)
+.claude/
+.playwright-mcp/
+
+# 루트 임시 실험 스크립트·출력
+/_*.out
+/_*.py
+/tmp_*.py
 
 # LangGraph dev/Studio in-memory server working dir
 .langgraph_api/
