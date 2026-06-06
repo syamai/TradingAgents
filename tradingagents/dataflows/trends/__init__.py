@@ -16,6 +16,8 @@ from .apewisdom import collect_apewisdom
 from .base import COINCIDENT, LAGGING, LEADING, SignalRow
 from .finviz_unusual import collect_finviz_unusual
 from .google_trends import collect_google_trends
+from .naver_board import collect_naver_board
+from .naver_datalab import collect_naver_datalab
 from .options_os import collect_options_os
 from .sector_rotation import collect_sector_rotation
 from .stocktwits_delta import collect_stocktwits_delta
@@ -23,6 +25,8 @@ from .stocktwits_delta import collect_stocktwits_delta
 # source 이름 -> (collect 함수, 기본 market). trend_collect 가 --source 로 조회.
 # 순서 주의: per-ticker universe 소스(google_trends/stocktwits_delta/options_os)는
 # hot_candidates 를 읽으므로 apewisdom/finviz 뒤에 둔다(같은 tick 에서 후보 먼저 적재).
+# naver_board/naver_datalab(kr)의 universe 는 hot_candidates 가 아니라
+# kr_peer_bridge 가 만든다. naver_datalab(검색량)은 토론방과 독립인 2번째 KR 소스.
 SOURCE_REGISTRY: dict[str, dict] = {
     "apewisdom": {"fn": collect_apewisdom, "market": "us"},
     "finviz_unusual": {"fn": collect_finviz_unusual, "market": "us"},
@@ -30,11 +34,13 @@ SOURCE_REGISTRY: dict[str, dict] = {
     "google_trends": {"fn": collect_google_trends, "market": "us"},
     "stocktwits_delta": {"fn": collect_stocktwits_delta, "market": "us"},
     "options_os": {"fn": collect_options_os, "market": "us"},
+    "naver_board": {"fn": collect_naver_board, "market": "kr"},
+    "naver_datalab": {"fn": collect_naver_datalab, "market": "kr"},
 }
 
-# universe(hot_candidates)를 주입받는 소스
+# universe 를 주입받는 per-ticker 소스(us=hot_candidates, kr=kr_peer_bridge)
 UNIVERSE_SOURCES: frozenset[str] = frozenset(
-    {"google_trends", "stocktwits_delta", "options_os"}
+    {"google_trends", "stocktwits_delta", "options_os", "naver_board", "naver_datalab"}
 )
 
 __all__ = [
@@ -50,4 +56,6 @@ __all__ = [
     "collect_google_trends",
     "collect_stocktwits_delta",
     "collect_options_os",
+    "collect_naver_board",
+    "collect_naver_datalab",
 ]

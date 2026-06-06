@@ -93,6 +93,46 @@ class TrendStore:
                 "CREATE INDEX IF NOT EXISTS idx_trend_rank "
                 "ON trend_snapshots(asof_date, market, source, rank)"
             )
+            # 트렌드 필터 정책(Hermes 대화로 수정 → cron·digest 가 active 정책을 읽음).
+            # market 당 active 1개. 변경 시 이전 active 를 비활성화하고 새 행 추가(이력 보존).
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS trend_policies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market TEXT NOT NULL,
+                    name TEXT,
+                    min_sources INTEGER,
+                    rotation_peak_pct REAL,
+                    notes TEXT,
+                    created_at TEXT NOT NULL DEFAULT (
+                        strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                    ),
+                    active INTEGER NOT NULL DEFAULT 1
+                )
+                """
+            )
+            c.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trend_policy_active "
+                "ON trend_policies(market, active)"
+            )
+            # 신규 진입 종목 심층분석(C) 캐시·기록. (market,entity,asof_date) 당 1개 —
+            # 같은 종목/날 재분석 0(분석가 시간·비용 절약). 내러티브가 summary 를 인용.
+            c.execute(
+                """
+                CREATE TABLE IF NOT EXISTS trend_analyses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market TEXT NOT NULL,
+                    entity TEXT NOT NULL,
+                    asof_date TEXT NOT NULL,
+                    name TEXT,
+                    summary TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (
+                        strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                    ),
+                    UNIQUE(market, entity, asof_date)
+                )
+                """
+            )
 
     # === Public API ===
 
@@ -219,3 +259,145 @@ class TrendStore:
                 params + [top],
             ).fetchall()
         return pd.DataFrame([dict(r) for r in rows])
+
+    # === 트렌드 필터 정책(Hermes 수정 ↔ cron 반영) ===
+
+    def get_active_policy(self, market: str) -> Optional[dict]:
+        """market 의 현재 활성 정책(없으면 None). digest·cron 이 필터값을 여기서 읽음."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT * FROM trend_policies WHERE market=? AND active=1 "
+                "ORDER BY id DESC LIMIT 1",
+                (market,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def set_policy(
+        self,
+        market: str,
+        *,
+        min_sources: Optional[int] = None,
+        rotation_peak_pct: Optional[float] = None,
+        name: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> dict:
+        """필터 변경 → 이전 active 비활성화 + 새 active 행 추가(이력 보존).
+
+        지정 안 한 필드는 이전 active 정책 값을 승계(부분 수정 지원).
+
+        LLM(MCP) 경계 입력이라 검증: market 은 'us'|'kr', min_sources 는 1~10 정수.
+        잘못된 값은 ValueError(쓰레기 정책이 active 불변식을 오염하지 않게).
+        """
+        if market not in ("us", "kr"):
+            raise ValueError(f"market must be 'us' or 'kr', got {market!r}")
+        if min_sources is not None:
+            if not isinstance(min_sources, int) or isinstance(min_sources, bool) \
+                    or not (1 <= min_sources <= 10):
+                raise ValueError(f"min_sources must be int in 1..10, got {min_sources!r}")
+        if rotation_peak_pct is not None:
+            try:
+                rotation_peak_pct = float(rotation_peak_pct)
+            except (TypeError, ValueError):
+                raise ValueError(f"rotation_peak_pct must be a number, got {rotation_peak_pct!r}")
+            if rotation_peak_pct < 0:
+                raise ValueError(f"rotation_peak_pct must be >= 0, got {rotation_peak_pct}")
+        prev = self.get_active_policy(market) or {}
+        merged = {
+            "min_sources": min_sources if min_sources is not None else prev.get("min_sources"),
+            "rotation_peak_pct": (
+                rotation_peak_pct if rotation_peak_pct is not None
+                else prev.get("rotation_peak_pct")
+            ),
+            "name": name if name is not None else prev.get("name"),
+            "notes": notes if notes is not None else prev.get("notes"),
+        }
+        with self._conn() as c:
+            c.execute(
+                "UPDATE trend_policies SET active=0 WHERE market=? AND active=1",
+                (market,),
+            )
+            cur = c.execute(
+                "INSERT INTO trend_policies (market, name, min_sources, "
+                "rotation_peak_pct, notes, active) VALUES (?, ?, ?, ?, ?, 1)",
+                (market, merged["name"], merged["min_sources"],
+                 merged["rotation_peak_pct"], merged["notes"]),
+            )
+            new_id = cur.lastrowid
+            row = c.execute(
+                "SELECT * FROM trend_policies WHERE id=?", (new_id,)
+            ).fetchone()
+        return dict(row)
+
+    def list_policies(self, market: str, *, limit: int = 20) -> list:
+        """market 의 정책 이력(최신순)."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM trend_policies WHERE market=? ORDER BY id DESC LIMIT ?",
+                (market, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # === 신규 진입 심층분석(C) 캐시 ===
+
+    def get_analysis(self, market: str, entity: str, asof_date: str) -> Optional[dict]:
+        """저장된 심층분석(없으면 None). 같은 종목/날 재분석 방지·내러티브 인용용."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT * FROM trend_analyses WHERE market=? AND entity=? AND asof_date=?",
+                (market, entity, asof_date),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def save_analysis(
+        self, market: str, entity: str, asof_date: str, summary: str,
+        *, name: Optional[str] = None,
+    ) -> None:
+        """심층분석 요약 저장(같은 키 재저장은 갱신 — 멱등)."""
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO trend_analyses (market, entity, asof_date, name, summary) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(market, entity, asof_date) DO UPDATE SET "
+                "  summary=excluded.summary, "
+                "  name=COALESCE(excluded.name, trend_analyses.name)",  # None 이 기존 이름 미덮음
+                (market, entity, asof_date, name, summary),
+            )
+
+    def latest_analysis_asof(self, market: str) -> Optional[str]:
+        """trend_analyses 의 최신 asof_date(스냅샷 날짜와 분리 — deep_dive 읽기용)."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT MAX(asof_date) AS d FROM trend_analyses WHERE market=?",
+                (market,),
+            ).fetchone()
+        return row["d"] if row and row["d"] else None
+
+    def list_analyses(self, market: str, asof_date: str) -> list:
+        """해당 날짜의 모든 심층분석(내러티브가 일괄 인용)."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM trend_analyses WHERE market=? AND asof_date=? ORDER BY id",
+                (market, asof_date),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def asof_dates(
+        self, market: str, *, lt: Optional[str] = None,
+        lookback_days: Optional[int] = None,
+    ) -> list:
+        """market 의 distinct asof_date(최신순). ``lt`` 미만·``lookback_days`` 이내 한정."""
+        clauses = ["market=?"]
+        params: list = [market]
+        if lt is not None:
+            clauses.append("asof_date < ?")
+            params.append(lt)
+            if lookback_days is not None:
+                clauses.append("asof_date >= date(?, ?)")
+                params += [lt, f"-{int(lookback_days)} days"]
+        with self._conn() as c:
+            rows = c.execute(
+                f"SELECT DISTINCT asof_date FROM trend_snapshots "
+                f"WHERE {' AND '.join(clauses)} ORDER BY asof_date DESC",
+                params,
+            ).fetchall()
+        return [r["asof_date"] for r in rows]

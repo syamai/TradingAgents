@@ -320,9 +320,16 @@ def save_analysis(record: dict) -> dict:
     }
 
 
+def _trend_store():
+    """TrendStore — 디폴트 경로(``~/.tradingagents/trends/trends.db``)."""
+    from tradingagents.dataflows.trend_store import TrendStore
+
+    return TrendStore()
+
+
 @mcp.tool()
 def get_us_trend_watchlist(market: str = "us") -> str:
-    """미국 트렌드 와치리스트 — 섹터 로테이션(방향) + 종목 fade(군집 경고) + 알림.
+    """트렌드 와치리스트 — 섹터 로테이션(방향) + 종목 fade(군집 경고) + 알림.
 
     투자자 관심(investor attention) 6소스를 종합한 모니터링 다이제스트:
     검색(Google Trends ASVI=비정상 검색량)·소셜(ApeWisdom mention-momentum·StockTwits)
@@ -335,13 +342,169 @@ def get_us_trend_watchlist(market: str = "us") -> str:
     적재한 최신 스냅샷을 읽어 텍스트로 반환한다. LLM 호출 없음.
 
     args:
-        market: 'us' (현재 US 만 지원).
+        market: 'us' | 'kr'. KR 은 '미국에서 달아오른 종목의 한국 짝'(브리지) 모니터링.
     returns:
         다이제스트 텍스트(🔔알림 + 🔄섹터 로테이션 + 📊종목 와치리스트 + 📍관심 집중 섹터).
     """
     from tradingagents.hermes.trend_rank import format_digest
 
-    return format_digest(market)
+    return format_digest(market, store=_trend_store())
+
+
+@mcp.tool()
+def get_kr_trend_watchlist() -> str:
+    """한국 트렌드 와치리스트 — 미국에서 관심 쏠린 종목의 '한국 짝'(peer) 모니터링.
+
+    미국장 마감 후 fade('us') 상위 종목 → 유사 한국 종목(LLM 브리지) → 그 한국
+    종목의 종목토론방 글수·감성·네이버 검색량(ASVI)을 종합. '미국 테마가 한국에서도
+    토론·검색이 달아오르기 시작'한 종목을 표면화한다(추격 아닌 모니터링). LLM 호출 없음.
+
+    returns:
+        KR 다이제스트 텍스트(연결근거 🇺🇸→🇰🇷 + 근거값 + 분위기).
+    """
+    from tradingagents.hermes.trend_rank import format_digest
+
+    return format_digest("kr", store=_trend_store())
+
+
+@mcp.tool()
+def list_trend_signals(market: str = "us", limit: int = 10) -> dict:
+    """트렌드 진행 상태 — 현재 fade 와치리스트 상위 + 활성 필터 정책 + 누적 규모.
+
+    list_strategies 의 트렌드판: 지금 어떤 종목이 몇 소스 동의로 떠 있고, 어떤
+    필터(min_sources)가 적용 중인지 조회. 모니터링/조정 판단용.
+
+    args:
+        market: 'us' | 'kr'.
+        limit: 상위 종목 수(기본 10).
+    returns:
+        {market, asof_date, min_sources, active_policy, top:[{entity, fade_score,
+        n_sources, tier, leadingness}]}.
+    """
+    from tradingagents.hermes.trend_rank import fade_ranking, _resolve_min_sources
+
+    store = _trend_store()
+    ms = _resolve_min_sources(market, store)
+    fade = fade_ranking(market, store=store, top_n=limit, min_sources=ms)
+    top = [] if fade.empty else [
+        {
+            "entity": r["entity"],
+            "fade_score": r["fade_score"],
+            "n_sources": int(r["n_sources"]),
+            "tier": r.get("tier", ""),
+            "leadingness": r.get("leadingness", ""),
+        }
+        for _, r in fade.iterrows()
+    ]
+    asof = None if fade.empty else fade["asof_date"].iloc[0]
+    return {
+        "market": market,
+        "asof_date": asof,
+        "min_sources": ms,
+        "active_policy": store.get_active_policy(market),
+        "top": top,
+    }
+
+
+@mcp.tool()
+def update_trend_filter(
+    market: str,
+    min_sources: Optional[int] = None,
+    rotation_peak_pct: Optional[float] = None,
+    name: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> dict:
+    """트렌드 필터를 대화로 수정 → 정책으로 영속(cron·digest 가 즉시 반영).
+
+    예: "한국 트렌드 2소스 동의로 올려줘" → update_trend_filter('kr', min_sources=2).
+    이전 active 정책은 비활성화되고 새 active 행이 추가된다(이력 보존). 미지정 필드는
+    직전 정책 값을 승계. min_sources 가 클수록 보수적(여러 소스 동시 과열만 표면화).
+
+    args:
+        market: 'us' | 'kr'.
+        min_sources: fade 통과에 필요한 독립 소스 수(KR 1~2, US 2~). None=유지.
+        rotation_peak_pct: 섹터 과열 임계(%). None=유지.
+        name: 정책 이름(선택). notes: 변경 사유(선택).
+    returns:
+        새 active 정책 dict(id, market, min_sources, rotation_peak_pct, created_at, active).
+    """
+    return _trend_store().set_policy(
+        market, min_sources=min_sources, rotation_peak_pct=rotation_peak_pct,
+        name=name, notes=notes,
+    )
+
+
+@mcp.tool()
+def list_trend_policies(market: str, limit: int = 20) -> list[dict]:
+    """트렌드 필터 정책 이력(최신순) — 언제 무엇을 어떻게 바꿨나(active 1개 표시).
+
+    args:
+        market: 'us' | 'kr'. limit: 행 수(기본 20).
+    returns:
+        [{id, market, name, min_sources, rotation_peak_pct, notes, created_at, active}].
+    """
+    return _trend_store().list_policies(market, limit=limit)
+
+
+@mcp.tool()
+def get_trend_context(market: str, entity: str, limit: int = 8) -> dict:
+    """A(내용): 종목이 '무슨 이야기로' 달아오르는지 — 토론방 제목 + 뉴스 헤드라인.
+
+    fade 점수는 '얼마나'(양)만 본다. 이 도구는 '왜/무슨 내용으로'를 위해 사람들이
+    실제로 쓰는 제목·헤드라인을 반환한다(내러티브가 인용 — 환각 방지용 실제 텍스트).
+
+    args:
+        market: 'us' | 'kr'. entity: 티커/6자리 코드. limit: 항목 수.
+    returns:
+        {market, entity, titles:[토론방 제목(KR)], news:[뉴스 헤드라인]}.
+    """
+    from datetime import date, timedelta
+
+    titles: list = []
+    news: list = []
+    if not entity or not str(entity).strip():  # 빈 입력 — 빈 컨텍스트
+        return {"market": market, "entity": entity, "titles": titles, "news": news}
+    if market == "kr":
+        try:
+            from tradingagents.dataflows.naver_discussion import collect_naver_discussion
+
+            err, posts = collect_naver_discussion(entity, limit=limit * 2, lookback_days=2)
+            if not err:
+                titles = [p["title"] for p in posts[:limit] if p.get("title")]
+        except Exception:
+            pass
+    try:  # 뉴스 best-effort(키 없으면 빈 리스트) — US/KR 공통
+        from tradingagents.dataflows.search_aggregator import search_news
+
+        until = date.today()
+        hits = search_news(entity, until - timedelta(days=5), until, max_results=limit, ticker=entity)
+        news = [h.title for h in hits[:limit] if getattr(h, "title", None)]
+    except Exception:
+        pass
+    return {"market": market, "entity": entity, "titles": titles, "news": news}
+
+
+@mcp.tool()
+def get_trend_deep_dive(market: str = "kr") -> list[dict]:
+    """C(심층): 오늘 신규 진입 종목의 심층분석 요약(분석가 5종→종합)을 읽는다.
+
+    cron tick 의 trend_deepen 이 미리 채워둔 캐시를 읽기만 한다(LLM 0). 내러티브가
+    '신규 진입 심층분석'으로 인용. 분석가가 한국 수급 기반이라 **KR 전용**.
+
+    args:
+        market: 'kr'(US 는 분석가 미적용 → 보통 빈 리스트).
+    returns:
+        [{entity, name, summary, asof_date}] (오늘 분석된 신규 진입 종목들).
+    """
+    store = _trend_store()
+    asof = store.latest_analysis_asof(market)  # 스냅샷 아닌 '분석' 최신 날짜
+    if not asof:
+        return []
+    return [
+        {"entity": a["entity"], "name": a.get("name"),
+         "summary": a["summary"], "asof_date": a["asof_date"]}
+        for a in store.list_analyses(market, asof)
+    ]
 
 
 @mcp.tool()

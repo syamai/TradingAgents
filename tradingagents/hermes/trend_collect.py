@@ -38,10 +38,15 @@ def run(
     kwargs: dict = {"market": mkt}
     if asof_date is not None:
         kwargs["asof_date"] = asof_date
-    # per-ticker 소스는 그날 뜬 후보(hot_candidates)를 universe 로 주입
+    # per-ticker 소스는 universe 를 주입. us=그날 뜬 hot_candidates,
+    # kr=미국 fade 와치리스트의 유사 한국 종목(kr_peer_bridge).
     if source in UNIVERSE_SOURCES:
         st = store or TrendStore()
-        kwargs["universe"] = st.hot_candidates(mkt, asof_date=asof_date, limit=10)
+        if mkt == "kr":
+            from .kr_peer_bridge import kr_universe
+            kwargs["universe"] = kr_universe(asof_date=asof_date, store=st)
+        else:
+            kwargs["universe"] = st.hot_candidates(mkt, asof_date=asof_date, limit=10)
     try:
         rows, fetch_ok = spec["fn"](**kwargs)
     except Exception as exc:  # fetcher 는 graceful 이지만 방어적으로 캐치
