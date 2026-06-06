@@ -670,10 +670,85 @@ def test_deepen_cache_hit_skips_analysts(tmp_path, monkeypatch):
     s.set_policy("kr", min_sources=1)
     s.write([_kr_vol("035720", "2026-06-05")])
     s.save_analysis("kr", "035720", "2026-06-05", "이미 분석됨")   # 캐시 존재
-    monkeypatch.setattr(trend_deepen, "new_entrants", lambda *a, **k: ["035720"])
+    monkeypatch.setattr(trend_deepen, "analysis_targets", lambda *a, **k: (["035720"], "2026-06-05"))
     monkeypatch.setattr(ar, "run_analyst", lambda *a, **k: (_ for _ in ()).throw(AssertionError("호출되면 안 됨")))
     out = trend_deepen.deepen("kr", asof="2026-06-05", store=s)
     assert out["cached"] == 1 and out["analyzed"] == 0
+
+
+def test_analysis_targets_staleness(tmp_path):
+    """상위 fade 중 분석 없음/오래된 종목만 타깃(신선한 분석은 제외) — 확대 커버."""
+    from tradingagents.hermes import trend_deepen
+    s = TrendStore(root=tmp_path)
+    s.set_policy("kr", min_sources=1)
+    s.write([_kr_vol("035720", "2026-06-06", abn=90),
+             _kr_vol("000660", "2026-06-06", abn=80, rank=2)])
+    s.save_analysis("kr", "035720", "2026-06-06", "오늘 분석됨(신선)")   # 신선 → 제외
+    s.save_analysis("kr", "000660", "2026-06-01", "5일 전(stale)")        # 오래됨 → 포함
+    s.write([_kr_vol("005930", "2026-06-06", abn=70, rank=3)])      # 분석 없음 → 포함
+    codes, asof = trend_deepen.analysis_targets("kr", "2026-06-06", freshness_days=3, store=s)
+    assert "000660" in codes and "005930" in codes and "035720" not in codes
+
+
+def test_entity_presence(tmp_path):
+    """며칠째 상위(KST 기준) + first_seen — 시계열 맥락."""
+    from datetime import datetime, timedelta, timezone
+    kst = timezone(timedelta(hours=9))
+    today = datetime.now(kst).date()
+    s = TrendStore(root=tmp_path)
+    for d in (today, today - timedelta(days=1), today - timedelta(days=10)):
+        s.write([_kr_vol("005930", d.isoformat())])
+    p = s.entity_presence("kr", "005930", lookback_days=7)
+    assert p["days_present"] == 2                               # 오늘+어제(10일전 제외)
+    assert p["first_seen"] == (today - timedelta(days=10)).isoformat()
+
+
+def test_kr_price_fallback_and_nan(monkeypatch):
+    """_kr_price: .KS 실패→.KQ 폴백, 둘 다 실패→None, NaN 거래량도 직렬화 안전(BLOCK)."""
+    import json
+    import pandas as pd
+    import yfinance as yf
+    import tradingagents.hermes.mcp_server as m
+
+    def df(prices, vols):
+        return pd.DataFrame({"Close": prices, "Volume": vols})
+
+    class KqOnly:                       # .KS 빈값 → .KQ 성공
+        def __init__(self, sym): self.sym = sym
+        def history(self, period=None):
+            return pd.DataFrame() if self.sym.endswith(".KS") \
+                else df([100, 101, 102, 103, 104, 110], [10, 10, 10, 10, 10, 20])
+    monkeypatch.setattr(yf, "Ticker", KqOnly)
+    r = m._kr_price("035720")
+    assert r and r["price"] == 110 and json.dumps(r)            # 폴백 + 직렬화
+
+    class AllFail:
+        def __init__(self, s): pass
+        def history(self, period=None): return pd.DataFrame()
+    monkeypatch.setattr(yf, "Ticker", AllFail)
+    assert m._kr_price("999999") is None                       # 둘 다 실패
+
+    class NanVol:                       # 거래량 NaN → NaN 없이 직렬화
+        def __init__(self, s): self.s = s
+        def history(self, period=None):
+            return df([100, 101, 102, 103, 104, 110], [float("nan")] * 6) \
+                if self.s.endswith(".KS") else pd.DataFrame()
+    monkeypatch.setattr(yf, "Ticker", NanVol)
+    r2 = m._kr_price("035720")
+    assert r2 is not None and r2["volume_ratio"] == 0.0 and json.dumps(r2)
+
+
+def test_market_context_shape(monkeypatch):
+    """get_trend_market_context: divergence 항상 존재(non-kr도), MCP 직렬화 가능(BLOCK)."""
+    import json
+    import tradingagents.hermes.mcp_server as m
+    monkeypatch.setattr(m, "_kr_price", lambda code: {
+        "price": 2070000, "change_1d_pct": -9.9, "change_5d_pct": -9.6,
+        "volume": 5778751, "volume_ratio": 1.0})
+    r = m.get_trend_market_context("kr", "000660")
+    assert r["divergence"] and "괴리" in r["divergence"] and json.dumps(r)
+    r2 = m.get_trend_market_context("us", "NVDA")   # px 없음 → divergence None, 직렬화
+    assert "divergence" in r2 and r2["divergence"] is None and json.dumps(r2)
 
 
 def test_deepen_synthesis_fail_saves_fallback(tmp_path, monkeypatch):
@@ -683,7 +758,7 @@ def test_deepen_synthesis_fail_saves_fallback(tmp_path, monkeypatch):
     s = TrendStore(root=tmp_path)
     s.set_policy("kr", min_sources=1)
     s.write([_kr_vol("035720", "2026-06-05")])
-    monkeypatch.setattr(trend_deepen, "new_entrants", lambda *a, **k: ["035720"])
+    monkeypatch.setattr(trend_deepen, "analysis_targets", lambda *a, **k: (["035720"], "2026-06-05"))
     monkeypatch.setattr(ar, "run_analyst", lambda t, d, a, **k: f"{a} 보고서 내용 샘플")
     monkeypatch.setattr(trend_deepen, "_synthesis_llm",
                         lambda: (_ for _ in ()).throw(RuntimeError("LLM down")))
@@ -704,7 +779,7 @@ def test_deepen_time_budget_defers(tmp_path, monkeypatch):
     s = TrendStore(root=tmp_path)
     s.set_policy("kr", min_sources=1)
     s.write([_kr_vol("035720", "2026-06-05"), _kr_vol("000660", "2026-06-05", abn=80, rank=2)])
-    monkeypatch.setattr(trend_deepen, "new_entrants", lambda *a, **k: ["035720", "000660"])
+    monkeypatch.setattr(trend_deepen, "analysis_targets", lambda *a, **k: (["035720", "000660"], "2026-06-05"))
     monkeypatch.setattr(ar, "run_analyst",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("예산0이면 호출 금지")))
     out = trend_deepen.deepen("kr", asof="2026-06-05", time_budget_s=0.0, store=s)

@@ -458,6 +458,7 @@ def get_trend_context(market: str, entity: str, limit: int = 8) -> dict:
     returns:
         {market, entity, titles:[토론방 제목(KR)], news:[뉴스 헤드라인]}.
     """
+    import html
     from datetime import date, timedelta
 
     titles: list = []
@@ -468,17 +469,18 @@ def get_trend_context(market: str, entity: str, limit: int = 8) -> dict:
         try:
             from tradingagents.dataflows.naver_discussion import collect_naver_discussion
 
-            err, posts = collect_naver_discussion(entity, limit=limit * 2, lookback_days=2)
-            if not err:
-                titles = [p["title"] for p in posts[:limit] if p.get("title")]
+            err, posts = collect_naver_discussion(entity, limit=limit * 3, lookback_days=2)
+            if not err:  # 노이즈 제거(너무 짧은 제목)
+                titles = [html.unescape(p["title"]) for p in posts
+                          if p.get("title") and len(p["title"]) >= 6][:limit]
         except Exception:
             pass
-    try:  # 뉴스 best-effort(키 없으면 빈 리스트) — US/KR 공통
+    try:  # 뉴스(주가의 '왜' — 토론방 글보다 substantive). 키 없으면 빈 리스트.
         from tradingagents.dataflows.search_aggregator import search_news
 
         until = date.today()
         hits = search_news(entity, until - timedelta(days=5), until, max_results=limit, ticker=entity)
-        news = [h.title for h in hits[:limit] if getattr(h, "title", None)]
+        news = [html.unescape(h.title) for h in hits[:limit] if getattr(h, "title", None)]
     except Exception:
         pass
     return {"market": market, "entity": entity, "titles": titles, "news": news}
@@ -486,25 +488,115 @@ def get_trend_context(market: str, entity: str, limit: int = 8) -> dict:
 
 @mcp.tool()
 def get_trend_deep_dive(market: str = "kr") -> list[dict]:
-    """C(심층): 오늘 신규 진입 종목의 심층분석 요약(분석가 5종→종합)을 읽는다.
+    """C(심층): 현재 상위 fade 종목별 최신(7일내) 심층분석 요약(분석가 5종→종합)을 읽는다.
 
-    cron tick 의 trend_deepen 이 미리 채워둔 캐시를 읽기만 한다(LLM 0). 내러티브가
-    '신규 진입 심층분석'으로 인용. 분석가가 한국 수급 기반이라 **KR 전용**.
+    cron tick 의 trend_deepen 이 며칠에 걸쳐 채운 캐시를 읽기만 한다(LLM 0). 종목별
+    가장 최신 분석을 7일 신선도 안에서 반환(오래된 것 제외). 한국 수급 기반 **KR 전용**.
 
     args:
         market: 'kr'(US 는 분석가 미적용 → 보통 빈 리스트).
     returns:
-        [{entity, name, summary, asof_date}] (오늘 분석된 신규 진입 종목들).
+        [{entity, name, summary, asof_date}] (상위 종목 중 최근 분석된 것들).
+    """
+    from datetime import date
+
+    from tradingagents.hermes.trend_rank import _resolve_min_sources, fade_ranking
+
+    store = _trend_store()
+    fade = fade_ranking(
+        market, store=store, top_n=15, min_sources=_resolve_min_sources(market, store)
+    )
+    if fade.empty:
+        return []
+    asof = fade["asof_date"].iloc[0]
+    out: list = []
+    for code in fade["entity"]:  # 현재 상위 fade 종목별 최신(신선) 분석
+        la = store.latest_analysis(market, code)
+        if not la:
+            continue
+        try:
+            if (date.fromisoformat(asof) - date.fromisoformat(la["asof_date"])).days > 7:
+                continue  # 7일 넘게 오래된 분석은 제외
+        except Exception:
+            pass
+        out.append({"entity": la["entity"], "name": la.get("name"),
+                    "summary": la["summary"], "asof_date": la["asof_date"]})
+    return out
+
+
+def _kr_price(code: str) -> Optional[dict]:
+    """6자리 코드 → 주가·등락·거래량(yfinance, .KS→.KQ 폴백). 실패/NaN 시 None.
+
+    상폐·거래정지 종목은 NaN 을 반환할 수 있는데, NaN 은 JSON 직렬화 불가(MCP
+    실패)라 모든 값을 유한값으로 가드하고 비유한이면 다음 접미사/ None 으로 degrade.
+    """
+    import math
+
+    try:
+        import yfinance as yf
+    except Exception:
+        return None
+
+    def _fin(x: float) -> bool:
+        return isinstance(x, float) and math.isfinite(x)
+
+    for suf in (".KS", ".KQ"):
+        try:
+            h = yf.Ticker(f"{code}{suf}").history(period="1mo")
+        except Exception:
+            continue
+        if h is None or h.empty or len(h) < 2:
+            continue
+        close = h["Close"].astype(float)
+        vol = h["Volume"].astype(float)
+        cur = float(close.iloc[-1])
+        prev = float(close.iloc[-2])
+        if not _fin(cur) or cur <= 0:  # 상폐/이상치 → 다음 접미사 시도
+            continue
+        chg1 = (cur / prev - 1) * 100 if _fin(prev) and prev > 0 else 0.0
+        base5 = float(close.iloc[-6]) if len(close) >= 6 else float(close.iloc[0])
+        chg5 = (cur / base5 - 1) * 100 if _fin(base5) and base5 > 0 else 0.0
+        vlast = float(vol.iloc[-1])
+        vlast = vlast if _fin(vlast) else 0.0
+        vavg = float(vol.iloc[-20:].mean()) if len(vol) >= 5 else float(vol.mean())
+        vol_ratio = (vlast / vavg) if _fin(vavg) and vavg > 0 else 0.0
+        return {
+            "price": round(cur),
+            "change_1d_pct": round(chg1, 1),
+            "change_5d_pct": round(chg5, 1),
+            "volume": int(vlast),
+            "volume_ratio": round(vol_ratio, 1),
+        }
+    return None
+
+
+@mcp.tool()
+def get_trend_market_context(market: str, entity: str, lookback_days: int = 7) -> dict:
+    """가격·시계열 맥락 — '관심 vs 주가 괴리' + '며칠째 상위'(부실 보완 핵심).
+
+    fade(관심)는 양만 본다. 이 도구는 주가·등락·거래량과 와치리스트 지속성을 더해
+    '관심↑인데 주가↓'(페이드 경고 강화) 같은 *맥락*을 준다. KR=yfinance(.KS/.KQ).
+
+    args:
+        market: 'us' | 'kr'. entity: 티커/6자리 코드. lookback_days: 시계열 창(기본 7).
+    returns:
+        {price, change_1d_pct, change_5d_pct, volume, volume_ratio,
+         days_present, window_days, first_seen, divergence}.
     """
     store = _trend_store()
-    asof = store.latest_analysis_asof(market)  # 스냅샷 아닌 '분석' 최신 날짜
-    if not asof:
-        return []
-    return [
-        {"entity": a["entity"], "name": a.get("name"),
-         "summary": a["summary"], "asof_date": a["asof_date"]}
-        for a in store.list_analyses(market, asof)
-    ]
+    pres = store.entity_presence(market, entity, lookback_days=lookback_days)
+    px = _kr_price(entity) if market == "kr" else None
+    out = {"market": market, "entity": entity, "divergence": None, **pres}
+    if px:
+        out.update(px)
+        # 관심은 쏠리는데 주가가 빠지면 페이드(천장) 경고가 강화된다.
+        if px["change_5d_pct"] <= -3:
+            out["divergence"] = "관심↑ · 주가↓ (괴리 — 페이드 경고 강화)"
+        elif px["change_5d_pct"] >= 5:
+            out["divergence"] = "관심·주가 동반↑ (추격 과열 주의)"
+        else:
+            out["divergence"] = "관심↑ · 주가 보합"
+    return out
 
 
 @mcp.tool()

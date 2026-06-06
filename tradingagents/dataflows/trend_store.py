@@ -363,6 +363,16 @@ class TrendStore:
                 (market, entity, asof_date, name, summary),
             )
 
+    def latest_analysis(self, market: str, entity: str) -> Optional[dict]:
+        """종목의 최신 심층분석(asof 무관). 갱신 필요(staleness) 판정·읽기용."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT * FROM trend_analyses WHERE market=? AND entity=? "
+                "ORDER BY asof_date DESC, id DESC LIMIT 1",
+                (market, entity),
+            ).fetchone()
+        return dict(row) if row else None
+
     def latest_analysis_asof(self, market: str) -> Optional[str]:
         """trend_analyses 의 최신 asof_date(스냅샷 날짜와 분리 — deep_dive 읽기용)."""
         with self._conn() as c:
@@ -380,6 +390,28 @@ class TrendStore:
                 (market, asof_date),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def entity_presence(self, market: str, entity: str, *, lookback_days: int = 7) -> dict:
+        """종목의 와치리스트 지속성(시계열) — 최근 N일 중 며칠 등장 + 최초 등장일.
+
+        ``{days_present, window_days, first_seen}``. '오늘 처음' vs 'N일째 지속' 판정용.
+        """
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT COUNT(DISTINCT asof_date) AS d, MIN(asof_date) AS first "
+                "FROM trend_snapshots WHERE market=? AND entity=? "
+                "AND asof_date >= date('now', '+9 hours', ?)",  # '+9h'=KST(asof_date 가 KST)
+                (market, entity, f"-{int(lookback_days)} days"),
+            ).fetchone()
+            first_all = c.execute(
+                "SELECT MIN(asof_date) AS f FROM trend_snapshots WHERE market=? AND entity=?",
+                (market, entity),
+            ).fetchone()
+        return {
+            "days_present": int(row["d"]) if row and row["d"] else 0,
+            "window_days": int(lookback_days),
+            "first_seen": (first_all["f"] if first_all else None),
+        }
 
     def asof_dates(
         self, market: str, *, lt: Optional[str] = None,

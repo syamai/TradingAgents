@@ -30,6 +30,7 @@ _DEFAULT_TIME_BUDGET = 200.0  # 초 — cron 540s 안(수집22s+예산200+내러
                               # tick 은 추가로 timeout 백스톱으로 deepen 을 감싼다.
 _DEFAULT_TOP_N = 5
 _DEFAULT_LOOKBACK = 7
+_DEFAULT_FRESHNESS = 3  # 일 — 이보다 오래된 분석은 갱신 대상(뉴스·수급 시의성)
 
 
 def _today() -> str:
@@ -63,6 +64,48 @@ def new_entrants(
             seen.update(prev["entity"].tolist())
     fresh = today[~today["entity"].isin(seen)].head(top_n)
     return list(fresh["entity"])
+
+
+def analysis_targets(
+    market: str,
+    asof: Optional[str] = None,
+    *,
+    top_n: int = _DEFAULT_TOP_N,
+    freshness_days: int = _DEFAULT_FRESHNESS,
+    store: Optional[TrendStore] = None,
+) -> tuple:
+    """심층분석 대상 = 상위 fade 종목 중 **분석이 없거나 오래된(stale)** 것 top_n.
+
+    신규 진입만이 아니라 상위 종목 전반을 며칠에 걸쳐 커버(캐시·예산으로 점진).
+    반환 ``(codes, asof_actual)``.
+    """
+    from datetime import date
+
+    from .trend_rank import _resolve_min_sources, fade_ranking
+
+    store = store or TrendStore()
+    fade = fade_ranking(
+        market, asof_date=asof, top_n=100,
+        min_sources=_resolve_min_sources(market, store), store=store,
+    )
+    if fade.empty:
+        return [], (asof or _today())
+    asof_actual = fade["asof_date"].iloc[0]
+    targets: list = []
+    for code in fade["entity"]:
+        la = store.latest_analysis(market, code)
+        stale = True
+        if la is not None:
+            try:
+                gap = (date.fromisoformat(asof_actual) - date.fromisoformat(la["asof_date"])).days
+                stale = gap >= freshness_days
+            except Exception:
+                stale = True
+        if stale:
+            targets.append(code)
+        if len(targets) >= top_n:
+            break
+    return targets, asof_actual
 
 
 def _analyst_llm():
@@ -149,14 +192,15 @@ def deepen(
     asof: Optional[str] = None,
     *,
     top_n: int = _DEFAULT_TOP_N,
-    lookback_days: int = _DEFAULT_LOOKBACK,
+    freshness_days: int = _DEFAULT_FRESHNESS,
     time_budget_s: float = _DEFAULT_TIME_BUDGET,
     store: Optional[TrendStore] = None,
 ) -> dict:
-    """KR 신규 진입 종목을 시간예산 안에서 심층분석·캐시. 반환=상태 dict.
+    """KR 상위 fade 종목(분석 없음/오래됨)을 시간예산 안에서 심층분석·캐시.
 
-    분석가는 로컬(무료), 종합은 mini(저렴). 캐시 hit 은 둘 다 0. 예산 초과분은
-    다음 tick(캐시라 한 번만). ``TREND_DEEPEN=0`` 이면 비활성.
+    신규 진입만이 아니라 상위 종목 전반을 며칠에 걸쳐 커버(예산·캐시로 점진).
+    분석가는 로컬(무료), 종합은 mini(저렴). 캐시 hit(신선)은 둘 다 0. 예산
+    초과분은 다음 tick. ``TREND_DEEPEN=0`` 이면 비활성.
     """
     if os.environ.get("TREND_DEEPEN", "1") != "1":
         return {"status": "disabled", "analyzed": 0}
@@ -165,19 +209,11 @@ def deepen(
 
     store = store or TrendStore()
     asof = asof or _today()
-    codes = new_entrants(
-        market, asof=asof, lookback_days=lookback_days, top_n=top_n, store=store
+    codes, asof_actual = analysis_targets(
+        market, asof, top_n=top_n, freshness_days=freshness_days, store=store
     )
     if not codes:
-        return {"status": "ok", "analyzed": 0, "entrants": 0}
-
-    # 적재된 실제 asof(오늘 데이터 없으면 최신) — 캐시 키 일관성
-    from .trend_rank import _resolve_min_sources, fade_ranking
-    fade = fade_ranking(
-        market, asof_date=asof, top_n=100,
-        min_sources=_resolve_min_sources(market, store), store=store,
-    )
-    asof_actual = fade["asof_date"].iloc[0] if not fade.empty else asof
+        return {"status": "ok", "analyzed": 0, "targets": 0}
 
     from .analyst_runner import run_analyst
     from .kr_peer_bridge import KrPeerCache

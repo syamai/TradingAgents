@@ -41,7 +41,8 @@ metadata:
 - `update_trend_filter(market, min_sources=None, rotation_peak_pct=None, name=None, notes=None)` — 필터 수정 → 정책 영속(cron·digest 즉시 반영)
 - `list_trend_policies(market)` — 필터 변경 이력(active 1개)
 - **`get_trend_context(market, entity)`** — A(내용): 종목별 토론방 제목 + 뉴스 헤드라인("무슨 이야기로 달아오르나")
-- **`get_trend_deep_dive(market)`** — C(심층): 오늘 신규 진입 종목의 분석가 5종 종합 요약(cron 이 미리 채움, 읽기 전용·KR)
+- **`get_trend_market_context(market, entity)`** — 가격·시계열: 주가·1d/5d 등락·거래량배수 + **관심 vs 주가 괴리** + 며칠째 상위(신규/지속)
+- **`get_trend_deep_dive(market)`** — C(심층): 상위 fade 종목의 분석가 5종 종합 요약(cron 이 미리 채움, 읽기 전용·KR)
 
 ## 워크플로우
 
@@ -52,20 +53,23 @@ metadata:
 ### Phase 1 — 다이제스트 읽기
 `get_us_trend_watchlist()` 또는 `get_kr_trend_watchlist()` 로 사람이 읽는 텍스트 확보.
 
-### Phase 1.5 — 내용·심층 (A + C, 도구값만 인용)
-- **A(무슨 이야기인가)**: 상위 2~3종목에 `get_trend_context(market, code)` → 토론방 제목·뉴스
-  헤드라인에서 **테마/재료**를 한 구절로 파악(예: "신약 승인 기대", "HBM 수요").
-- **C(신규 진입 배경)**: `get_trend_deep_dive(market)` → 오늘 새로 뜬 종목의 분석가 종합
-  요약(수급·뉴스·재무). 있으면 '🆕 신규 진입 심층분석' 줄로 인용.
-- 둘 다 **도구가 준 텍스트만** 인용(없으면 생략). 추정·매매추천 금지.
+### Phase 1.5 — 종목별 맥락 수집 (도구값만 인용)
+상위 4~5종목 각각에 대해 호출:
+- **가격·시계열**: `get_trend_market_context(market, code)` → 주가·등락%·거래량배수 +
+  **관심 vs 주가 괴리**(예: "관심↑·주가 −9.6% 괴리 → 페이드 경고 강화") + 며칠째 상위.
+- **A(내용)**: `get_trend_context(market, code)` → 뉴스 헤드라인 1개(없으면 토론 화제)로 **왜**.
+- **C(심층)**: `get_trend_deep_dive(market)` → 종목별 분석가 종합 요약(있으면 1줄).
+- 전부 **도구가 준 텍스트/수치만** 인용(없으면 생략). 추정·매매추천 금지.
 
-### Phase 2 — 분석·내러티브 (도구값만 인용)
-- **무엇이 달아올랐나**: 상위 종목 + 몇 소스 동의 + 근거(검색/토론/거래량).
-- **무슨 내용으로(A)**: get_trend_context 의 제목/뉴스에서 본 테마·재료를 한 구절.
-- **테마·추종 흐름**: US fade 의 섹터 흐름, KR 은 🇺🇸→🇰🇷 연결근거(어떤 미국 종목의 한국 짝인지).
-- **신규 진입 배경(C)**: get_trend_deep_dive 요약이 있으면 종목별 1줄.
+### Phase 2 — 종목별 풍성한 내러티브 (도구값만 인용)
+헤더 1줄(시장·필터·상위 수) + 상위 4~5종목 각 **2~3줄**로, 종목마다 다음을 엮는다:
+- **(a) 관심**: 쏠림점수 · N소스 동의 · 토론방 글수/검색량 급증.
+- **(b) 주가**: 등락%(1d·5d) · 거래량배수 · **관심 vs 주가 괴리**(페이드의 핵심 — 관심↑·주가↓면 천장 경고 강화).
+- **(c) 왜**: 뉴스 헤드라인 1개 또는 토론 화제(get_trend_context). KR 은 🇺🇸→🇰🇷 연결근거도.
+- **(d) 지속성**: '오늘 처음(🆕 신규)' vs 'N일째 상위'(get_trend_market_context).
+- **(e) 심층**: get_trend_deep_dive 요약 있으면 수급·재료 1줄.
 - **신호 성격**: leadingness(선행 L/동행 C/후행 Lag) + "여러 곳 동시 = 과열 경고".
-- 핵심 6~10줄. 텔레그램 1통 분량(과열 종목 요약 + 🆕 신규 진입 배경).
+- 텔레그램 1통(과열 종목별 맥락 묶음). 매매추천 없이 모니터링 톤.
 
 ### Phase 3 — 필터 조정 (요청 시에만)
 사용자가 "더 보수적으로/2소스로/완화" 등을 요청하면 `update_trend_filter` 호출.

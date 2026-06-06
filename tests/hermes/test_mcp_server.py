@@ -49,7 +49,7 @@ class TestMcpServerToolRegistration:
             "backtest_strategy", "save_strategy", "list_strategies",
             "get_us_trend_watchlist", "get_kr_trend_watchlist",
             "list_trend_signals", "update_trend_filter", "list_trend_policies",
-            "get_trend_context", "get_trend_deep_dive",
+            "get_trend_context", "get_trend_deep_dive", "get_trend_market_context",
         }
 
     def test_tool_descriptions_are_non_empty(self):
