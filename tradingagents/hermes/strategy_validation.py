@@ -47,6 +47,10 @@ IN_SAMPLE_PCT = 70           # 시간축 IS 비율(종목분할과 동일 — �
 DEFAULT_EMBARGO_DAYS = 12    # IS↔OOS 갭(거래일). López de Prado h≈1%·T 권장에 부합.
 _HI_SENTINEL = "9999-12-31"  # 마지막 날짜까지 포함하기 위한 상한
 GATE_EXCESS_MIN_IR = 0.5     # 채택 게이트: 시장(KOSPI) 대비 초과수익 정보비율(IR) 하한
+# OOS/IS 채점 상한 — 2025-06 이후 한국 증시 비정상 급등(생존자 풀 동일가중 ~18.8배 vs
+# KOSPI ~4.3배)이 검증에 섞이면 성과가 구조적으로 과대평가된다(CLAUDE.md 규칙). 데이터
+# 그리드를 이 날짜에서 잘라 채점하면 IS·OOS 모두 상한이 적용된다. 포워드 관찰은 date_hi=None.
+SCORE_DATE_HI = "2025-06-30"
 
 
 def _universe_dates(holdings: dict[str, pd.DataFrame]) -> list[str]:
@@ -103,6 +107,7 @@ def run_time_split_validation(
     usdkrw_fetcher: Optional[Callable[[str, str], pd.DataFrame]] = fetch_usdkrw,
     in_sample_pct: int = IN_SAMPLE_PCT,
     embargo_days: int = DEFAULT_EMBARGO_DAYS,
+    date_hi: Optional[str] = SCORE_DATE_HI,
 ) -> dict:
     """단일 시간 분할(IS=과거 / OOS=미래) 검증 + embargo 갭 + 시간 게이트.
 
@@ -118,6 +123,10 @@ def run_time_split_validation(
         df, _meta = loader(tk)
         if df is None or df.empty:
             continue
+        if date_hi:                                  # OOS/IS 채점 상한 (CLAUDE.md 2025-06 룰)
+            df = df[df["date"].astype(str) <= date_hi]
+            if df.empty:
+                continue
         holdings[tk] = df
         d0, d1 = str(df["date"].iloc[0]), str(df["date"].iloc[-1])
         min_d = d0 if (min_d is None or d0 < min_d) else min_d
@@ -175,6 +184,7 @@ def run_walk_forward_validation(
     oos_years: float = 1.0,
     mode: str = "rolling",          # "rolling" | "anchored"
     embargo_days: int = DEFAULT_EMBARGO_DAYS,
+    date_hi: Optional[str] = SCORE_DATE_HI,
 ) -> dict:
     """Walk-forward 검증 — 윈도우를 전진시키며 (IS→OOS) 사이클 반복.
 
@@ -193,6 +203,10 @@ def run_walk_forward_validation(
         df, _meta = loader(tk)
         if df is None or df.empty:
             continue
+        if date_hi:                                  # OOS/IS 채점 상한 (CLAUDE.md 2025-06 룰)
+            df = df[df["date"].astype(str) <= date_hi]
+            if df.empty:
+                continue
         holdings[tk] = df
         d0, d1 = str(df["date"].iloc[0]), str(df["date"].iloc[-1])
         min_d = d0 if (min_d is None or d0 < min_d) else min_d

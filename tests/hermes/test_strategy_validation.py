@@ -108,6 +108,31 @@ class TestWalkForward:
 
 
 @pytest.mark.unit
+class TestScoreDateCap:
+    """OOS/IS 채점 상한(2025-06-30) — 2025-06 이후 비정상 급등 제외 (CLAUDE.md 규칙)."""
+
+    def _long_loader(self):
+        df = _mk_df(2800)  # 2016-01-01 → ~2026 (상한 너머까지)
+        return lambda tk: (df.copy(), {})
+
+    def test_walk_forward_caps_at_score_date_hi_by_default(self):
+        r = V.run_walk_forward_validation(
+            _price_drop_spec(), ["A"], loader=self._long_loader(), kospi_fetcher=_no_kospi)
+        assert r["data_span"][1] <= V.SCORE_DATE_HI
+
+    def test_date_hi_none_uses_full_span(self):
+        r = V.run_walk_forward_validation(
+            _price_drop_spec(), ["A"], loader=self._long_loader(),
+            kospi_fetcher=_no_kospi, date_hi=None)
+        assert r["data_span"][1] > V.SCORE_DATE_HI
+
+    def test_time_split_caps_by_default(self):
+        r = V.run_time_split_validation(
+            _price_drop_spec(), ["A"], loader=self._long_loader(), kospi_fetcher=_no_kospi)
+        assert r["split"]["data_span"][1] <= V.SCORE_DATE_HI
+
+
+@pytest.mark.unit
 class TestMinBTL:
     def test_expected_max_sharpe_monotonic(self):
         vals = [V.expected_max_sharpe(n) for n in (2, 10, 45, 100, 500)]
