@@ -60,7 +60,11 @@ _ABBR = {
 
 
 def _candidates() -> list[dict]:
-    """13개 아키타입 × 그리드 → 후보 spec 리스트 (라운드로빈 인터리브)."""
+    """21개 아키타입 × 그리드 → 후보 spec 리스트 (라운드로빈 인터리브).
+
+    A19~A21 은 기술신호(breakout_high/volume_surge/close_location)를 주도신호로 쓰는
+    아키타입으로, 상한(2025-06-30) 적용 측정에서 공정게이트 통과율이 입증된 영역만 편입.
+    """
     a1, a2, a3, a4 = [], [], [], []
     a5, a6, a7, a8 = [], [], [], []
     a9, a10, a11, a12 = [], [], [], []
@@ -70,6 +74,9 @@ def _candidates() -> list[dict]:
     a16: list[dict] = []  # 신규: smart-money 합의 + 개인 흡수 (flow_consensus)
     a17: list[dict] = []  # 신규: 분산 매집 + 유동성 필터 (flow_dispersion/liquidity)
     a18: list[dict] = []  # 신규: 수급 가속 + 단기자금 이탈 청산 (flow_accel/fast_money_unwind)
+    a19: list[dict] = []  # 신규: 신고가 돌파 + 수급 확인 (breakout_high) — 측정 통과율 최고
+    a20: list[dict] = []  # 신규: 분산 매집 + 거래량 확장 + 돌파 (volume_surge+breakout_high)
+    a21: list[dict] = []  # 신규: 종가 고점근접 + 비정상 수급 (close_location, 좁은 z5 영역)
 
     # A1 DIP_SUPPORT: 눌림목 + 수급 매수 지지 (기존 100-run 재현용)
     for subj in SUBJECTS:
@@ -404,9 +411,73 @@ def _candidates() -> list[dict]:
                     "exit": {"signal_all_of": [{"signal": "fast_money_unwind", "window": 3}], "take_profit_pct": 8.0, "stop_loss_pct": 5.0, "max_hold_days": 10},
                 })
 
+    # A19 BREAKOUT: 신고가 돌파 + 수급 가속/괴리 확인 + 유동성 필터 (기술신호 breakout_high).
+    # 상한(2025-06-30) 적용 측정에서 단독 43% 통과로 4종 중 최고 — 검증된 배치 템플릿 이식.
+    _ov_kospi = {"type": "kospi_trailing_return_scale", "window": 80, "op": "<=",
+                 "threshold_pct": 0.0, "risk_stock_weight_pct": 20.0}
+    for subj in ("foreign_unregistered", "private_equity", "investment_trust", "pension"):
+        for bh_w, prox, flow_kind in [(20, 0.0, "accel"), (60, 2.0, "accel"), (120, 5.0, "div")]:
+            for hold, TP, SL in [(20, 10, 5), (40, 15, 8)]:
+                flow_sig = ({"signal": "flow_accel", "subject": subj, "short": 5, "long": 20}
+                            if flow_kind == "accel"
+                            else {"signal": "flow_divergence", "subject": subj, "window": 10})
+                a19.append({
+                    "spec_version": 2,
+                    "name": f"tbreak-{_ABBR[subj]}-bh{bh_w}_{int(prox)}-{flow_kind}-liq50-tp{TP}sl{SL}h{hold}",
+                    "direction": "long",
+                    "entry": {"all_of": [
+                        {"signal": "breakout_high", "window": bh_w, "proximity_pct": prox},
+                        flow_sig,
+                        {"signal": "liquidity_filter", "window": 60, "op": ">=", "value": 5_000_000_000.0},
+                    ]},
+                    "exit": {"signal_all_of": [{"signal": "fast_money_unwind", "window": 3}],
+                             "take_profit_pct": float(TP), "stop_loss_pct": float(SL), "max_hold_days": hold},
+                    "market_overlay": _ov_kospi,
+                })
+
+    # A20 DISTRIB_VOL_BREAK: 분산 매집 + 거래량 확장 + 신고가 돌파 (volume_surge 가 돌파 확인자).
+    # volume_surge 는 단독 엣지 없고 breakout 결합 시에만 통과(C4 29%) — 그 조합만 편입.
+    _ov_fx = {"type": "usdkrw_trailing_return_ma_scale", "window": 60, "op": ">=",
+              "threshold_pct": 3.0, "risk_stock_weight_pct": 45.0, "ma_window": 120}
+    for group, share in [("broad_smart", 0.5), ("broad_smart", 0.6), ("institution_defensive", 0.6), ("fast_money", 0.7)]:
+        for vs_s, vs_l, vs_r in [(3, 20, 1.5), (5, 60, 1.5), (5, 60, 2.0)]:
+            for bh_w, prox in [(20, 5.0), (60, 2.0)]:
+                a20.append({
+                    "spec_version": 2,
+                    "name": f"tdvb-{group}-s{int(share*100)}-vs{vs_s}_{vs_l}_{int(vs_r*10)}-bh{bh_w}_{int(prox)}",
+                    "direction": "long",
+                    "entry": {"all_of": [
+                        {"signal": "flow_dispersion", "group": group, "window": 10, "max_share": share},
+                        {"signal": "volume_surge", "short": vs_s, "long": vs_l, "min_ratio": vs_r},
+                        {"signal": "breakout_high", "window": bh_w, "proximity_pct": prox},
+                    ]},
+                    "exit": {"signal_all_of": [{"signal": "fast_money_unwind", "window": 5}],
+                             "take_profit_pct": 10.0, "stop_loss_pct": 5.0, "max_hold_days": 20},
+                    "market_overlay": _ov_fx,
+                })
+
+    # A21 CLOSEHIGH: 종가가 당일 고저 상단 + 비정상 수급 z-score + 유동성 (close_location).
+    # 통과는 cl75/cl90 + z5_120 영역에 집중 — z3_60·z10_250 은 측정서 전멸이라 제외(좁은 그리드).
+    for subj in ("foreign_unregistered", "private_equity", "investment_trust", "pension", "insurance", "bank"):
+        for min_pos in (0.75, 0.9):
+            a21.append({
+                "spec_version": 2,
+                "name": f"tclose-{_ABBR[subj]}-cl{int(min_pos*100)}-z5_120_15-liq50",
+                "direction": "long",
+                "entry": {"all_of": [
+                    {"signal": "close_location", "min_pos": min_pos},
+                    {"signal": "flow_zscore", "subject": subj, "window": 5, "lookback": 120, "min_z": 1.5},
+                    {"signal": "liquidity_filter", "window": 20, "op": ">=", "value": 5_000_000_000.0},
+                ]},
+                "exit": {"signal_all_of": [{"signal": "fast_money_unwind", "window": 3}],
+                         "take_profit_pct": 8.0, "stop_loss_pct": 5.0, "max_hold_days": 10},
+                "market_overlay": _ov_kospi,
+            })
+
     # 라운드로빈 인터리브 — 신규 아키타입(A16~A18 수급/유동성, A9~A12 KOSPI 레짐)을 최우선 배치.
+    # A19~A21(기술신호)은 검증된 수급 아키타입 A16~A18 뒤에 둬 그 평가를 굶기지 않는다.
     out: list[dict] = []
-    for tup in zip_longest(a16, a17, a18, a9, a10, a11, a12, a5, a6, a7, a8, a13, a14, a15, a1, a2, a3, a4):
+    for tup in zip_longest(a16, a17, a18, a19, a20, a21, a9, a10, a11, a12, a5, a6, a7, a8, a13, a14, a15, a1, a2, a3, a4):
         for s in tup:
             if s is not None:
                 out.append(s)
@@ -436,6 +507,7 @@ def _phase_filter(specs: list[dict], existing_count: int) -> list[dict]:
         return specs
     advanced_prefixes = (
         "cons-", "disp-", "accel-",
+        "tbreak-", "tdvb-", "tclose-",
         "shortp-", "mom-", "lowvol-",
         "mrp-", "mconc-", "mfscale-", "defrot-",
         "rgx-", "frev-", "fscale-", "orot-",
