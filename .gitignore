@@ -165,6 +165,7 @@ venv.bak/
 /tmp/
 /artifacts/
 /notebooks/*.html
+!/notebooks/trend_monitoring_overview.html
 /strategies_v2.db
 
 # 로컬 도구·MCP 캐시 (Claude Code / Playwright)

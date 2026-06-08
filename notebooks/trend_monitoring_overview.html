@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>트렌드 모니터링 기능 — 쉬운 설명</title>
+<style>
+  :root {
+    --fg: #e6edf3; --muted: #8b949e; --bg: #0d1117; --soft: #161b22;
+    --border: #30363d; --accent: #58a6ff; --accent-soft: #1f6feb;
+    --warn-bg: rgba(187,128,9,0.13); --warn-border: #d29922;
+    --green: #3fb950; --orange: #db6d28; --red: #f85149; --purple: #bc8cff;
+    --code-bg: #010409; --code-fg: #e6edf3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--fg); background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+      "Pretendard", "Noto Sans KR", Roboto, sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 24px 96px; }
+  header.doc { border-bottom: 2px solid var(--border); padding-bottom: 20px; margin-bottom: 8px; }
+  header.doc h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -0.4px; }
+  header.doc .sub { color: var(--muted); font-size: 16px; }
+
+  h2 {
+    font-size: 23px; margin: 46px 0 14px; padding-top: 8px; letter-spacing: -0.3px;
+    border-bottom: 1px solid var(--border); padding-bottom: 6px;
+  }
+  h3 { font-size: 18px; margin: 26px 0 8px; }
+  p { margin: 11px 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul, ol { margin: 10px 0; padding-left: 24px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.85em; background: var(--soft); padding: 1.5px 5px; border-radius: 5px;
+  }
+  strong { font-weight: 650; color: #fff; }
+
+  .lead { font-size: 18px; color: var(--fg); }
+
+  .callout {
+    border: 1px solid var(--border); border-left: 4px solid var(--accent);
+    background: var(--soft); border-radius: 8px; padding: 14px 18px; margin: 18px 0;
+    font-size: 15px;
+  }
+  .callout.warn { border-left-color: var(--warn-border); background: var(--warn-bg); }
+  .callout.key { border-left-color: var(--purple); background: rgba(188,140,255,0.10); }
+  .callout h4 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+  nav.toc {
+    background: var(--soft); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; margin: 28px 0; font-size: 15px;
+  }
+  nav.toc h4 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+  nav.toc ol { margin: 0; padding-left: 22px; }
+  nav.toc li { margin: 5px 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 15px; }
+  th, td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 650; color: #fff; }
+  tbody tr:nth-child(even) { background: rgba(255,255,255,0.025); }
+  td.c, th.c { text-align: center; white-space: nowrap; }
+
+  pre {
+    background: var(--code-bg); color: var(--code-fg); border-radius: 10px;
+    padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.6;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  .tag {
+    display: inline-block; font-size: 13px; font-weight: 650; padding: 1px 9px;
+    border-radius: 999px; line-height: 1.7; white-space: nowrap;
+  }
+  .t-before { background: rgba(56,139,253,0.18); color: #79c0ff; }
+  .t-same   { background: rgba(219,109,40,0.18); color: #ffa657; }
+  .t-after  { background: rgba(248,81,73,0.18); color: #ff7b72; }
+
+  .num { color: var(--accent); font-weight: 700; }
+  .ok { color: var(--green); font-weight: 700; }
+  .mid { color: var(--orange); font-weight: 700; }
+  .no { color: var(--red); font-weight: 700; }
+
+  footer.doc { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>트렌드 모니터링 기능</h1>
+  <div class="sub">"지금 사람들의 관심과 돈이 어느 주식·업종으로 몰리는지"를 매일 자동으로 살펴 알려주는 기능 — 쉬운 설명</div>
+</header>
+
+<nav class="toc">
+  <h4>차례</h4>
+  <ol>
+    <li><a href="#s1">한마디로 무엇인가</a></li>
+    <li><a href="#s2">왜 "사라"가 아니라 "조심하라" 신호인가</a></li>
+    <li><a href="#s3">무엇을 보고 판단하나 — 6가지 정보원</a></li>
+    <li><a href="#s4">신호의 타이밍 성격 — 미리 / 같이 / 뒤늦게</a></li>
+    <li><a href="#s5">가장 중요한 규칙 — 최소 2곳이 동시에</a></li>
+    <li><a href="#s6">어느 업종으로 돈이 도나 — 섹터 흐름</a></li>
+    <li><a href="#s7">과거 기록을 절대 고치지 않는 이유</a></li>
+    <li><a href="#s8">매일 오는 텔레그램 메시지</a></li>
+    <li><a href="#s9">언제·어떻게 자동 실행되나</a></li>
+    <li><a href="#s10">솔직한 한계</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">1. 한마디로 무엇인가</h2>
+<p class="lead">미국 주식 시장에서 <strong>"요즘 사람들의 관심과 돈이 어디로 우르르 몰리는지"</strong>를
+매일 자동으로 모아서, 눈에 띄는 종목·업종을 정리해 <strong>텔레그램 메시지 한 통</strong>으로 보내 주는 기능입니다.</p>
+<p>한마디로 <strong>"화제 감지 레이더"</strong>라고 보면 됩니다. 단, 이 레이더는 "이거 사세요"가 아니라
+"여기 사람이 너무 몰렸으니 조심하세요"를 알려 주는 쪽에 가깝습니다. 그 이유는 다음 장에서 설명합니다.</p>
+<p>주력 대상은 <strong>미국 주식</strong>이지만, 지금은 <strong>한국 시장용 짝(companion) 파이프라인</strong>도 함께 돌고 있습니다 —
+미국에서 달아오른 테마의 <strong>한국 짝 종목</strong>을 네이버 토론방·검색량으로 따로 살펴 별도 메시지로 보냅니다(자세히는 9·10장).</p>
+
+<h2 id="s2">2. 왜 "사라"가 아니라 "조심하라" 신호인가</h2>
+<p>보통 <strong>모두가 한 종목을 동시에 떠들 때는 이미 가격이 많이 오른 뒤</strong>인 경우가 많습니다.
+즉 화제가 정점일 때 뒤늦게 따라 들어가면 손해 보기 쉽습니다.</p>
+<div class="callout key">
+  <h4>핵심 전제</h4>
+  그래서 이 기능은 "지금 떠들썩한 종목 = 사야 할 종목"으로 보지 않습니다.
+  오히려 <strong>"여러 곳에서 동시에 뜨겁다 = 과열되어 곧 식을 수 있다 = 조심"</strong>이라는
+  <strong>경고등(과열 주의)</strong> 용도로 씁니다. 실제로 이 관심 신호만으로는 꾸준한 수익이 나지 않는다는
+  사전 실험 결과도 있었고, 그 결론을 그대로 반영했습니다.
+</div>
+
+<h2 id="s3">3. 무엇을 보고 판단하나 — 6가지 정보원</h2>
+<p>한 곳만 보면 틀리기 쉬우니, 성격이 다른 <strong>6가지 무료 정보원</strong>을 함께 봅니다.
+각각 "사람들이 이 종목에 평소보다 얼마나 더 관심을 쏟는가"를 다른 각도에서 측정합니다.</p>
+
+<table>
+  <thead><tr><th>정보원</th><th>무엇을 보나 (쉬운 말로)</th></tr></thead>
+  <tbody>
+    <tr><td><strong>레딧 게시판 언급</strong><br><span style="color:var(--muted)">(ApeWisdom)</span></td>
+        <td>미국 개인투자자 커뮤니티(월스트리트베츠)에서 어떤 종목이 얼마나 자주 언급되는지, 특히 <strong>최근 24시간 사이에 언급이 급증</strong>했는지.</td></tr>
+    <tr><td><strong>비정상 거래량</strong><br><span style="color:var(--muted)">(Finviz)</span></td>
+        <td>오늘 <strong>평소보다 훨씬 많이 거래되는</strong> 종목 목록.</td></tr>
+    <tr><td><strong>검색량 급증</strong><br><span style="color:var(--muted)">(Google Trends)</span></td>
+        <td>사람들이 그 종목 이름을 <strong>평소 검색량보다 얼마나 더 많이 검색</strong>하는지.</td></tr>
+    <tr><td><strong>소셜 글 개수</strong><br><span style="color:var(--muted)">(StockTwits)</span></td>
+        <td>투자 소셜 서비스에서 그 종목에 대해 <strong>글이 얼마나 많이 올라오는지</strong>.</td></tr>
+    <tr><td><strong>옵션 거래 쏠림</strong><br><span style="color:var(--muted)">(옵션/주식 비율)</span></td>
+        <td>주식 자체보다 <strong>옵션(베팅성 상품)이 유독 많이 거래</strong>되는지. 정보에 밝은 투자자들이 몰릴 때 나타나는 신호로 알려져 있습니다.</td></tr>
+    <tr><td><strong>업종 자금 흐름</strong><br><span style="color:var(--muted)">(섹터 로테이션)</span></td>
+        <td>기술·에너지·금융 같은 <strong>업종 단위로 시장 평균보다 강해지는 곳</strong>이 어디인지. (자세히는 6장)</td></tr>
+  </tbody>
+</table>
+
+<p>여기서 중요한 점 하나: 단순히 "많이 언급됐다"가 아니라 <strong>"그 종목의 평소 수준에 비해 얼마나 튀었는가"</strong>를
+보려 합니다. 원래 늘 화제인 대형주와, 갑자기 튀어 오른 종목을 구분하기 위해서입니다.
+(다만 정보원에 따라 평소 기준선이 아직 충분히 쌓이지 않아, 당분간은 원본 수치를 그대로 쓰기도 합니다 — 10장.)</p>
+<div class="callout">
+  <h4>한국 시장은 다른 2개를 본다</h4>
+  한국은 위 6개(미국) 정보원과 별개로 <strong>네이버 종목토론방 글수·분위기</strong>와 <strong>네이버 검색량</strong> 2개를 봅니다.
+  다만 둘째 소스(검색량)는 아직 연동을 붙이는 중이라, 당분간 한국은 토론방 1곳만으로도 목록에 올립니다
+  (미국은 항상 2곳 이상 — 다음 장).
+</div>
+
+<h2 id="s4">4. 신호의 타이밍 성격 — 미리 / 같이 / 뒤늦게</h2>
+<p>같은 "관심"이라도, 그게 <strong>가격이 움직이기 전에 나타나는지, 같이 나타나는지, 다 오른 뒤에 나타나는지</strong>는
+정보원마다 다릅니다. 그래서 각 정보원에 타이밍 꼬리표를 붙여 둡니다.</p>
+<table>
+  <thead><tr><th class="c">꼬리표</th><th>뜻</th><th>해당 정보원</th></tr></thead>
+  <tbody>
+    <tr><td class="c"><span class="tag t-before">미리</span></td><td>가격보다 먼저 움직이는 경향 (드물고 귀함)</td><td>검색량 급증, 업종 자금 흐름</td></tr>
+    <tr><td class="c"><span class="tag t-same">같이</span></td><td>가격과 거의 동시에 움직임 (대부분 여기에 해당)</td><td>레딧 언급, 비정상 거래량, 소셜 글, 옵션 쏠림</td></tr>
+    <tr><td class="c"><span class="tag t-after">뒤늦게</span></td><td>가격이 다 움직인 뒤에 나타남</td><td>(상황에 따라)</td></tr>
+  </tbody>
+</table>
+<p>대부분의 화제 신호는 "같이" 또는 "뒤늦게"입니다. 바로 이 점이
+이 기능을 <strong>예언 도구가 아니라 과열 경고 도구</strong>로 쓰는 근거입니다.</p>
+
+<h2 id="s5">5. 가장 중요한 규칙 — 최소 2곳이 동시에</h2>
+<p>한 정보원에서만 튀는 건 <strong>가짜 화제(봇·작전 세력의 한 곳 도배)</strong>일 수 있습니다.
+그래서 이 기능의 핵심 규칙은 이것입니다:</p>
+<div class="callout key">
+  <h4>2곳 이상 동의 규칙</h4>
+  <strong>서로 다른 정보원 2곳 이상이 동시에 같은 종목을 가리킬 때만</strong> 와치리스트(주목 목록)에 올립니다.
+  한 곳만 떠들면 무시합니다. 여러 곳이 입을 모을수록 신뢰도가 올라가는 셈입니다.
+  <br><span style="color:var(--muted)">(이 "2곳" 기준은 미국 기준이며 운영자가 시장별로 조정할 수 있습니다. 한국은 둘째 정보원을 붙이는 동안 임시로 1곳 — 3장.)</span>
+</div>
+<p>그리고 <strong>몇 곳이 동시에 가리키느냐</strong>로 "얼마나 몰렸는지" 등급을 매깁니다.</p>
+<table>
+  <thead><tr><th class="c">등급</th><th>조건</th><th>의미</th></tr></thead>
+  <tbody>
+    <tr><td class="c">🔴 관심 매우 쏠림</td><td>4곳 이상 동시</td><td>매우 과열 — 가장 강한 주의</td></tr>
+    <tr><td class="c">🟠 관심 많이 쏠림</td><td>3곳 동시</td><td>과열 주의</td></tr>
+    <tr><td class="c">🟡 관심 쏠림 시작</td><td>2곳 동시</td><td>관심 시작 — 지켜볼 단계</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s6">6. 어느 업종으로 돈이 도나 — 섹터 흐름</h2>
+<p>개별 종목과 별개로, <strong>업종(기술·에너지·금융 등) 단위로 시장 전체보다 더 강해지는 곳</strong>을 같이 봅니다.
+"돈이 어느 동네로 옮겨 가는지"를 보여 주는 <strong>업종 날씨 지도</strong>라고 생각하면 됩니다.</p>
+<p>각 업종을 시장 평균과 비교해 두 가지를 보고, 네 칸 중 하나로 분류합니다:</p>
+<table>
+  <thead><tr><th>분류</th><th>상태</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Leading (주도)</strong></td><td>이미 강하고, 더 강해지는 중 — 현재 주도 업종</td></tr>
+    <tr><td><strong>Improving (개선)</strong></td><td>아직 약하지만, 빠르게 좋아지는 중 — 떠오르는 후보</td></tr>
+    <tr><td><strong>Weakening (약화)</strong></td><td>아직 강하지만, 힘이 빠지는 중 — 정점 지나는 중</td></tr>
+    <tr><td><strong>Lagging (부진)</strong></td><td>약하고, 계속 약한 상태</td></tr>
+  </tbody>
+</table>
+<p>여기에 <strong>알림 두 가지</strong>를 덧붙입니다: ① 약하던 업종이 <strong>막 좋아지기 시작</strong>하면("개선→주도 진입") 알림,
+② 너무 가파르게 오른 업종은 <strong>"추격하지 말라"</strong>는 과열 경고를 띄웁니다.</p>
+
+<h2 id="s7">7. 과거 기록을 절대 고치지 않는 이유</h2>
+<p>모은 신호는 날짜별로 차곡차곡 저장합니다. 그런데 여기엔 겉보기보다 중요한 규칙이 하나 있습니다:
+<strong>한 번 저장한 그날의 기록은 절대 나중에 덮어쓰지 않습니다.</strong></p>
+<div class="callout warn">
+  <h4>왜 이게 중요한가</h4>
+  과거 데이터로 전략을 검증할 때는, <strong>"그날 실제로 알 수 있었던 정보"만</strong> 써야 공정합니다.
+  만약 옛날 기록이 나중 값으로 슬쩍 바뀌어 버리면, 검증 과정이 <strong>미래를 미리 엿본 셈</strong>이 되어
+  결과가 실제보다 좋아 보이는 착시가 생깁니다. (예: 검색량 지표는 조회할 때마다 과거 수치가 다시 조정되는데,
+  그걸 그대로 두면 옛 기록이 오염됩니다.) 그래서 그날 값을 <strong>그 자리에 영구히 잠가</strong> 둡니다.
+</div>
+<p>과거를 덮어쓰지 않으니, 나중에 어느 날짜를 다시 들춰 봐도 그날 보였던 값 그대로입니다. 검증(백테스트)은 여기에 더해 "그 시점까지의 기록만" 읽도록 만들어져 있어, 미래 정보를 끌어다 쓰는 일이 구조적으로 막힙니다.</p>
+
+<h2 id="s8">8. 매일 오는 텔레그램 메시지</h2>
+<p>매일 수집·정리한 결과는 먼저 아래와 같은 <strong>원본 요약(다이제스트)</strong>으로 만들어집니다(예시):</p>
+<pre>🔔 알림 [US]
+  ⚠️ Technology 업종 과열(+11.5%) — 추격 주의
+
+🔄 업종 흐름 [US]  (주도 / 개선 / 약화 / 부진)
+  [주도] Technology — 시장 대비 강도 105(100=평균), 상승 속도 +11.5%
+
+📊 과열 주목 종목 [US]   2026-06-06
+(여러 곳에서 동시에 화제 = 과열 경고 — 따라 사는 신호 아님)
+1. 🟡 관심 쏠림 시작  NVDA   쏠림점수 0.72 · 2곳 동의
+   근거:
+     · 레딧 언급 +250%(24시간)
+     · 옵션 쏠림 O/S 1.8
+   → 신호 성격: 가격과 같이 움직임 — 막 달아오르는 중
+
+📍 관심 집중 섹터(모니터링):
+  Technology: NVDA, AVGO</pre>
+<div class="callout">
+  <h4>실제 보내지는 메시지</h4>
+  텔레그램으로 가는 메시지는 보통 위 원본 그대로가 아니라, <strong>AI 분석 도우미(trend-analyzer)가 이 데이터를 읽고
+  사람이 읽기 쉬운 몇 줄로 다시 써 준 글</strong>입니다. (AI가 일시적으로 쓸 수 없을 때만 위와 같은 원본 형태로 폴백해 보냅니다.)
+  한국 메시지는 여기에 더해 종목별 <strong>심층 요약</strong>까지 한 단계 더 붙습니다.
+</div>
+<p>만약 그날 <strong>주목할 신호(과열 종목·업종 흐름·알림)가 하나도 없으면</strong>, 메시지를 아예 보내지 않습니다(불필요한 메시지 방지).</p>
+
+<h2 id="s9">9. 언제·어떻게 자동 실행되나</h2>
+<ul>
+  <li><strong>실행 시각(미국)</strong>: 화요일~토요일 <strong>아침 6시 30분</strong>(한국 시간). 미국 장이 막 끝난 직후라, 그날 결과를 정리하기 좋은 때입니다.</li>
+  <li><strong>실행 시각(한국)</strong>: 평일(월~금) <strong>오후 4시</strong>(한국 시간). 한국 장 마감 직후, 한국 짝 종목을 별도 메시지로 보냅니다.</li>
+  <li><strong>실행 방식</strong>: 사람이 손대지 않아도 컴퓨터가 자동으로 정보원을 모아 저장하고, 정리한 요약을 (대개 AI가 한 번 다듬어) 텔레그램으로 보냅니다.</li>
+  <li><strong>AI 연구 도우미 연동</strong>: 별도의 AI 연구 보조(Hermes)가 "오늘 미국 관심 현황 보여 줘"라고 요청하면, 저장해 둔 <strong>원본 요약을 그대로</strong> 받아 갑니다 — 이 <strong>요청-응답 도구</strong>는 추가 분석 없이 전달만 합니다. (반면 위의 매일 자동 텔레그램은 8장처럼 AI가 한 번 더 다듬어 보내는, 서로 다른 경로입니다.)</li>
+</ul>
+
+<h2 id="s10">10. 솔직한 한계</h2>
+<p>정확히 알고 쓰도록, 아직 완성되지 않았거나 범위 밖인 부분을 그대로 밝힙니다.</p>
+<table>
+  <thead><tr><th>항목</th><th>현재 상태</th></tr></thead>
+  <tbody>
+    <tr><td>대상 시장</td><td><span class="mid">미국 주식이 주력.</span> 한국 시장도 별도 파이프라인이 <strong>이미 가동 중</strong>입니다 —
+      다만 "한국에서 자생한 화제"가 아니라 <strong>미국에서 달아오른 테마의 한국 짝 종목</strong>을 네이버 토론방·검색량으로 살펴보는 방식이고, 둘째 한국 정보원(검색량)은 아직 연동을 붙이는 중입니다.</td></tr>
+    <tr><td>"평소 대비" 계산</td><td>일부 정보원(소셜 글 개수, 옵션 쏠림)은 아직 <span class="mid">평소 기준선이 충분히 쌓이지 않아</span>, 당분간 원본 수치를 그대로 쓰면서 데이터를 모으는 중입니다.</td></tr>
+    <tr><td>용도</td><td><span class="no">수익을 내는 매매 신호가 아니라</span>, 과열·쏠림을 알려 주는 <strong>모니터링/경고</strong>용입니다.</td></tr>
+    <tr><td>"기관 자금이면 경고를 낮춘다" 같은 세부 규칙</td><td>계획에는 있었으나 <span class="no">아직 구현 전</span>입니다.</td></tr>
+  </tbody>
+</table>
+
+<div class="callout key">
+  <h4>한 문장 요약</h4>
+  <strong>여러 무료 정보원에서 "어디에 관심이 몰리는지"를 매일 모아 → 2곳 이상이 동의하는 종목·업종만 추려 →
+  과열 경고로 텔레그램에 보내 주는</strong>, 미국 주식 중심(한국 짝 종목도 함께 보는) "화제 감지 레이더"입니다.
+  핵심은 ① 가짜 화제를 거르는 2곳 동의 규칙, ② 과거 기록을 고치지 않아 검증을 공정하게 유지하는 것,
+  그리고 ③ 이건 매수 신호가 아니라 과열 주의 신호라는 점입니다.
+</div>
+
+<footer class="doc">
+  trading-ai 트렌드 모니터링 기능 설명 · 저장 위치 <code>notebooks/trend_monitoring_overview.html</code>
+</footer>
+
+</div>
+</body>
+</html>
