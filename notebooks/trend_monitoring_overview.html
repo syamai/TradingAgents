@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>트렌드 모니터링 기능 — 쉬운 설명</title>
+<title>트렌드 모니터링 기능 — 쉬운 설명 (인터랙티브)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --fg: #e6edf3; --muted: #8b949e; --bg: #0d1117; --soft: #161b22;
@@ -19,7 +20,7 @@
       "Pretendard", "Noto Sans KR", Roboto, sans-serif;
     line-height: 1.75; font-size: 16px;
   }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 40px 24px 96px; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 24px 96px; }
   header.doc { border-bottom: 2px solid var(--border); padding-bottom: 20px; margin-bottom: 8px; }
   header.doc h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -0.4px; }
   header.doc .sub { color: var(--muted); font-size: 16px; }
@@ -69,6 +70,7 @@
     background: var(--code-bg); color: var(--code-fg); border-radius: 10px;
     padding: 18px 20px; overflow-x: auto; font-size: 13.5px; line-height: 1.6;
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    margin: 0;
   }
 
   .tag {
@@ -85,6 +87,122 @@
   .no { color: var(--red); font-weight: 700; }
 
   footer.doc { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+
+  /* ===== 인터랙티브 / 시각 요소 ===== */
+  .viz {
+    border: 1px solid var(--border); background: linear-gradient(180deg, #11161d, #0d1117);
+    border-radius: 12px; padding: 18px 18px 16px; margin: 20px 0;
+  }
+  .viz-h { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .viz-h .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .viz-cap { font-size: 13px; color: var(--muted); margin: 2px 0 12px; }
+  .chart-box { position: relative; height: 360px; }
+  .chart-box.short { height: 230px; }
+  .chart-fallback { color: var(--muted); font-size: 13px; padding: 18px; text-align: center; }
+
+  /* 탭 */
+  .tabs { display: inline-flex; background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px; margin-bottom: 12px; gap: 2px; }
+  .tab-btn { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 14px;
+    font-weight: 650; padding: 5px 16px; border-radius: 999px; cursor: pointer; }
+  .tab-btn.active { background: var(--accent-soft); color: #fff; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* 등급 계산기 */
+  .calc-srcs { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 16px; }
+  .src-toggle { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--code-bg); color: var(--fg);
+    padding: 7px 13px; border-radius: 9px; font-size: 14px; user-select: none; transition: .12s; }
+  .src-toggle:hover { border-color: var(--accent); }
+  .src-toggle.on { border-color: var(--orange); background: rgba(219,109,40,0.14); color: #ffd9b8; }
+  .src-toggle .bx { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--muted); display: inline-block; position: relative; }
+  .src-toggle.on .bx { border-color: var(--orange); background: var(--orange); }
+  .src-toggle.on .bx::after { content: "✓"; position: absolute; inset: 0; color: #fff; font-size: 12px; line-height: 14px; text-align: center; }
+  .calc-out { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .calc-count { font-size: 14px; color: var(--muted); }
+  .calc-count b { color: var(--fg); font-size: 22px; }
+  .tier-badge { font-size: 17px; font-weight: 750; padding: 6px 16px; border-radius: 999px; }
+  .tier-x { background: rgba(139,148,158,0.16); color: var(--muted); }
+  .tier-2 { background: rgba(210,153,34,0.18); color: #f0c674; }
+  .tier-3 { background: rgba(219,109,40,0.20); color: #ffa657; }
+  .tier-4 { background: rgba(248,81,73,0.20); color: #ff7b72; }
+  .calc-msg { font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+
+  /* 타이밍 타임라인 */
+  .tl-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .tl-chip { cursor: pointer; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px;
+    font-size: 13.5px; background: var(--code-bg); transition: .12s; }
+  .tl-chip[data-zone="before"]:hover, .tl-chip.hl[data-zone="before"] { border-color: #79c0ff; background: rgba(56,139,253,0.16); }
+  .tl-chip[data-zone="same"]:hover,   .tl-chip.hl[data-zone="same"]   { border-color: #ffa657; background: rgba(219,109,40,0.16); }
+  .tl-zone { transition: opacity .15s; }
+  .tl-zone.dim { opacity: 0.18; }
+
+  /* append-only 토글 */
+  .toggle-row { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 14px; }
+  .toggle-row button { border: 0; background: var(--code-bg); color: var(--muted); font: inherit; font-weight: 650;
+    font-size: 14px; padding: 8px 18px; cursor: pointer; }
+  .toggle-row button.active { background: var(--red); color: #fff; }
+  .toggle-row button.active.safe { background: var(--green); color: #04210d; }
+  .ao-bars { margin-top: 8px; }
+  .ao-bar { height: 30px; border-radius: 6px; margin: 8px 0; display: flex; align-items: center; padding: 0 12px;
+    font-size: 13px; font-weight: 650; color: #fff; white-space: nowrap; transition: width .4s ease; }
+  .ao-bar.real { background: linear-gradient(90deg, #1f6feb, #58a6ff); }
+  .ao-bar.fake { background: linear-gradient(90deg, #8a2622, #f85149); }
+  .ao-explain { font-size: 14px; color: var(--fg); background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; margin-top: 6px; }
+
+  /* 텔레그램 말풍선 */
+  .tg { max-width: 560px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,0.35); }
+  .tg-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: #17212b; border-bottom: 1px solid var(--border); }
+  .tg-ava { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #58a6ff, #bc8cff);
+    display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .tg-name { font-weight: 650; font-size: 14.5px; color: #fff; }
+  .tg-sub { font-size: 12px; color: var(--muted); }
+  .tg-body { padding: 14px 16px; }
+  .tg-body pre { background: transparent; padding: 0; font-size: 13px; }
+  .tg-time { text-align: right; font-size: 11px; color: var(--muted); padding: 0 14px 10px; }
+
+  /* KR 파이프라인 흐름 */
+  .flow { display: flex; flex-direction: column; gap: 0; margin: 8px 0; }
+  .flow-step { border: 1px solid var(--border); background: var(--code-bg); border-radius: 10px;
+    padding: 12px 15px; position: relative; }
+  .flow-step .n { display: inline-block; min-width: 22px; height: 22px; line-height: 22px; text-align: center;
+    border-radius: 50%; background: var(--accent-soft); color: #fff; font-size: 12px; font-weight: 700; margin-right: 8px; }
+  .flow-step b { color: #fff; }
+  .flow-step small { color: var(--muted); }
+  .flow-arrow { text-align: center; color: var(--muted); font-size: 18px; line-height: 1; padding: 5px 0; }
+  .analyst-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+  .a-pill { font-size: 13px; font-weight: 650; padding: 4px 11px; border-radius: 999px;
+    background: rgba(88,166,255,0.13); color: #79c0ff; border: 1px solid rgba(88,166,255,0.3); }
+
+  /* 진행 현황(실측) */
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 6px; }
+  .stat { border: 1px solid var(--border); background: var(--code-bg); border-radius: 10px; padding: 11px 13px; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-size: 16px; font-weight: 700; color: #fff; margin-top: 2px; }
+  .stat .v.ok { color: var(--green); }
+  .dd-card { border: 1px solid var(--border); border-left: 3px solid var(--purple); background: var(--soft); border-radius: 9px; padding: 12px 15px; margin: 10px 0; }
+  .dd-h { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+  .dd-name { font-weight: 700; color: #fff; }
+  .dd-tag { font-size: 11px; color: #79c0ff; background: rgba(88,166,255,0.13); border: 1px solid rgba(88,166,255,0.3); border-radius: 999px; padding: 1px 8px; }
+  .dd-date { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .dd-card p { margin: 4px 0 0; font-size: 14px; line-height: 1.7; }
+  .real-badge { display: inline-block; font-size: 12px; font-weight: 700; color: #04210d; background: var(--green); border-radius: 999px; padding: 1px 10px; vertical-align: middle; }
+  .muted { color: var(--muted); font-weight: 400; font-size: 0.82em; }
+  h4 { font-size: 16px; margin: 24px 0 6px; }
+  h4 .step-no { display: inline-block; min-width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 7px; background: var(--accent-soft); color: #fff; font-size: 13px; font-weight: 700; margin-right: 7px; }
+  table.tight th, table.tight td { padding: 7px 10px; font-size: 14px; }
+  .formula { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-family: ui-monospace, Menlo, monospace; font-size: 13.5px; color: #e6edf3; overflow-x: auto; }
+  ol.steps { counter-reset: st; list-style: none; padding-left: 0; }
+  ol.steps > li { position: relative; padding: 8px 0 8px 38px; border-bottom: 1px solid var(--border); }
+  ol.steps > li:last-child { border-bottom: 0; }
+  ol.steps > li::before { counter-increment: st; content: counter(st); position: absolute; left: 0; top: 8px; width: 26px; height: 26px; line-height: 26px; text-align: center; border-radius: 50%; background: var(--soft); border: 1px solid var(--border); color: var(--accent); font-weight: 700; font-size: 13px; }
+
+  @media (max-width: 560px) { .chart-box { height: 300px; } }
 </style>
 </head>
 <body>
@@ -92,8 +210,13 @@
 
 <header class="doc">
   <h1>트렌드 모니터링 기능</h1>
-  <div class="sub">"지금 사람들의 관심과 돈이 어느 주식·업종으로 몰리는지"를 매일 자동으로 살펴 알려주는 기능 — 쉬운 설명</div>
+  <div class="sub">"지금 사람들의 관심과 돈이 어느 주식·업종으로 몰리는지"를 매일 자동으로 살펴 알려주는 기능 — 쉬운 설명 · 인터랙티브</div>
 </header>
+
+<div class="callout" style="font-size:13.5px">
+  📊 이 문서의 차트·그래프 속 숫자는 <strong>개념 이해를 돕기 위한 예시(illustrative)</strong>입니다. 실제 값이 아니라,
+  "이런 식으로 측정·표시된다"를 보여 주는 용도예요. 칩·슬라이드·탭 등은 마우스로 직접 만져 볼 수 있습니다.
+</div>
 
 <nav class="toc">
   <h4>차례</h4>
@@ -106,8 +229,9 @@
     <li><a href="#s6">어느 업종으로 돈이 도나 — 섹터 흐름</a></li>
     <li><a href="#s7">과거 기록을 절대 고치지 않는 이유</a></li>
     <li><a href="#s8">매일 오는 텔레그램 메시지</a></li>
-    <li><a href="#s9">언제·어떻게 자동 실행되나</a></li>
-    <li><a href="#s10">솔직한 한계</a></li>
+    <li><a href="#s9">한국 시장은 어떻게 분석하나</a></li>
+    <li><a href="#s10">언제·어떻게 자동 실행되나</a></li>
+    <li><a href="#s11">솔직한 한계</a></li>
   </ol>
 </nav>
 
@@ -152,19 +276,67 @@
   </tbody>
 </table>
 
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 한 종목의 정보원별 "비정상도" (예시)</div>
+  <div class="tabs" role="tablist">
+    <button class="tab-btn active" data-tab="us">🇺🇸 미국 (6개 정보원)</button>
+    <button class="tab-btn" data-tab="kr">🇰🇷 한국 (2개 정보원)</button>
+  </div>
+  <div class="tab-panel active" data-panel="us">
+    <div class="viz-cap">예시 종목 <strong>NVDA</strong> — 막대가 길수록 "평소보다 더 튀었다". 파란색 = 미리(L) 성격, 주황색 = 같이(C) 성격(4장). 섹터는 종목이 아니라 업종 단위라 6장에서 따로 봅니다.</div>
+    <div class="chart-box short"><canvas id="srcUs"></canvas><div class="chart-fallback" id="fbUs" hidden>차트를 불러오지 못했습니다(인터넷 연결 필요).</div></div>
+  </div>
+  <div class="tab-panel" data-panel="kr">
+    <div class="viz-cap">예시 종목 <strong>한미반도체(042700)</strong> — 한국은 네이버 토론방·검색량 2개를 봅니다(9장).</div>
+    <div class="chart-box short"><canvas id="srcKr"></canvas><div class="chart-fallback" id="fbKr" hidden>차트를 불러오지 못했습니다(인터넷 연결 필요).</div></div>
+  </div>
+</div>
+
 <p>여기서 중요한 점 하나: 단순히 "많이 언급됐다"가 아니라 <strong>"그 종목의 평소 수준에 비해 얼마나 튀었는가"</strong>를
 보려 합니다. 원래 늘 화제인 대형주와, 갑자기 튀어 오른 종목을 구분하기 위해서입니다.
-(다만 정보원에 따라 평소 기준선이 아직 충분히 쌓이지 않아, 당분간은 원본 수치를 그대로 쓰기도 합니다 — 10장.)</p>
+(다만 정보원에 따라 평소 기준선이 아직 충분히 쌓이지 않아, 당분간은 원본 수치를 그대로 쓰기도 합니다 — 11장.)</p>
 <div class="callout">
   <h4>한국 시장은 다른 2개를 본다</h4>
   한국은 위 6개(미국) 정보원과 별개로 <strong>네이버 종목토론방 글수·분위기</strong>와 <strong>네이버 검색량</strong> 2개를 봅니다.
-  다만 둘째 소스(검색량)는 아직 연동을 붙이는 중이라, 당분간 한국은 토론방 1곳만으로도 목록에 올립니다
-  (미국은 항상 2곳 이상 — 다음 장).
+  검색량 소스가 가동되면서 <strong>2026-06-06부터 한국도 "2곳 동의"(토론방+검색량)로 운영</strong>됩니다(미국과 동일 기준 — 다음 장).
+  한국 분석과 <strong>실제 진행 현황</strong>은 <a href="#s9">9장</a>에서 따로 다룹니다.
 </div>
 
 <h2 id="s4">4. 신호의 타이밍 성격 — 미리 / 같이 / 뒤늦게</h2>
 <p>같은 "관심"이라도, 그게 <strong>가격이 움직이기 전에 나타나는지, 같이 나타나는지, 다 오른 뒤에 나타나는지</strong>는
 정보원마다 다릅니다. 그래서 각 정보원에 타이밍 꼬리표를 붙여 둡니다.</p>
+
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 가격 곡선 위에서 각 신호가 언제 켜지나</div>
+  <div class="viz-cap">아래 칩에 마우스를 올리면 그 신호가 가격 곡선의 어느 구간에서 켜지는지 강조됩니다. 대부분 신호는 정점 근처(같이)예요.</div>
+  <svg id="tlSvg" viewBox="0 0 720 200" style="width:100%;height:auto;display:block">
+    <!-- 구간 배경 -->
+    <rect class="tl-zone" data-zone="before" x="0"   y="0" width="260" height="200" fill="rgba(56,139,253,0.10)"></rect>
+    <rect class="tl-zone" data-zone="same"   x="260" y="0" width="220" height="200" fill="rgba(219,109,40,0.12)"></rect>
+    <rect class="tl-zone" data-zone="after"  x="480" y="0" width="240" height="200" fill="rgba(248,81,73,0.10)"></rect>
+    <!-- 가격 곡선 -->
+    <path d="M0,165 C140,150 200,60 370,46 C520,34 560,120 720,150" fill="none" stroke="#e6edf3" stroke-width="2.5"></path>
+    <!-- 정점 -->
+    <circle cx="370" cy="46" r="5" fill="#ffa657"></circle>
+    <!-- 구간 라벨 -->
+    <text x="14"  y="26" fill="#79c0ff" font-size="13" font-weight="700">① 미리 (Leading)</text>
+    <text x="276" y="26" fill="#ffa657" font-size="13" font-weight="700">② 같이 (Coincident)</text>
+    <text x="496" y="26" fill="#ff7b72" font-size="13" font-weight="700">③ 뒤늦게 (Lagging)</text>
+    <text x="14"  y="190" fill="#8b949e" font-size="12">검색량·섹터</text>
+    <text x="276" y="190" fill="#8b949e" font-size="12">레딧·거래량·소셜·옵션</text>
+    <text x="496" y="190" fill="#8b949e" font-size="12">(현재 직접 내보내는 소스 없음)</text>
+    <text x="338" y="40" fill="#ffa657" font-size="11">가격 정점</text>
+  </svg>
+  <div class="tl-chips">
+    <span class="tl-chip" data-zone="before"><span class="tag t-before">미리</span> 검색량 급증</span>
+    <span class="tl-chip" data-zone="before"><span class="tag t-before">미리</span> 업종 자금 흐름</span>
+    <span class="tl-chip" data-zone="same"><span class="tag t-same">같이</span> 레딧 언급</span>
+    <span class="tl-chip" data-zone="same"><span class="tag t-same">같이</span> 비정상 거래량</span>
+    <span class="tl-chip" data-zone="same"><span class="tag t-same">같이</span> 소셜 글</span>
+    <span class="tl-chip" data-zone="same"><span class="tag t-same">같이</span> 옵션 쏠림</span>
+  </div>
+</div>
+
 <table>
   <thead><tr><th class="c">꼬리표</th><th>뜻</th><th>해당 정보원</th></tr></thead>
   <tbody>
@@ -183,8 +355,26 @@
   <h4>2곳 이상 동의 규칙</h4>
   <strong>서로 다른 정보원 2곳 이상이 동시에 같은 종목을 가리킬 때만</strong> 와치리스트(주목 목록)에 올립니다.
   한 곳만 떠들면 무시합니다. 여러 곳이 입을 모을수록 신뢰도가 올라가는 셈입니다.
-  <br><span style="color:var(--muted)">(이 "2곳" 기준은 미국 기준이며 운영자가 시장별로 조정할 수 있습니다. 한국은 둘째 정보원을 붙이는 동안 임시로 1곳 — 3장.)</span>
+  <br><span style="color:var(--muted)">(이 "2곳" 기준은 운영자가 시장별로 조정할 수 있습니다. 한국도 2026-06-06부터 토론방+검색량 2곳으로 운영 — 9장.)</span>
 </div>
+
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 직접 해 보기 — 정보원을 켜면 등급이 바뀐다</div>
+  <div class="viz-cap">한 종목을 가리킨 정보원을 켜 보세요. <strong>2곳 미만이면 목록에서 빠지고</strong>, 2 → 3 → 4곳으로 늘수록 경고 등급이 올라갑니다.</div>
+  <div class="calc-srcs" id="calcSrcs">
+    <label class="src-toggle"><span class="bx"></span> 레딧 언급</label>
+    <label class="src-toggle"><span class="bx"></span> 비정상 거래량</label>
+    <label class="src-toggle"><span class="bx"></span> 검색량 급증</label>
+    <label class="src-toggle"><span class="bx"></span> 소셜 글</label>
+    <label class="src-toggle"><span class="bx"></span> 옵션 쏠림</label>
+  </div>
+  <div class="calc-out">
+    <div class="calc-count">동의한 정보원 <b id="calcN">0</b>곳</div>
+    <div class="tier-badge tier-x" id="calcBadge">와치리스트 제외</div>
+  </div>
+  <div class="calc-msg" id="calcMsg">한 곳도 안 켜져 있어요. 정보원을 2곳 이상 켜 보세요.</div>
+</div>
+
 <p>그리고 <strong>몇 곳이 동시에 가리키느냐</strong>로 "얼마나 몰렸는지" 등급을 매깁니다.</p>
 <table>
   <thead><tr><th class="c">등급</th><th>조건</th><th>의미</th></tr></thead>
@@ -199,13 +389,21 @@
 <p>개별 종목과 별개로, <strong>업종(기술·에너지·금융 등) 단위로 시장 전체보다 더 강해지는 곳</strong>을 같이 봅니다.
 "돈이 어느 동네로 옮겨 가는지"를 보여 주는 <strong>업종 날씨 지도</strong>라고 생각하면 됩니다.</p>
 <p>각 업종을 시장 평균과 비교해 두 가지를 보고, 네 칸 중 하나로 분류합니다:</p>
+
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 업종 날씨 지도 (RRG, 예시)</div>
+  <div class="viz-cap">가로축 = <strong>시장 대비 강도</strong>(오른쪽일수록 셈, 100=시장 평균) · 세로축 = <strong>상승 속도</strong>(위로 갈수록 빨라짐).
+    점에 마우스를 올리면 값이 보입니다. 네 칸 = 주도/개선/약화/부진.</div>
+  <div class="chart-box"><canvas id="rrg"></canvas><div class="chart-fallback" id="fbRrg" hidden>차트를 불러오지 못했습니다(인터넷 연결 필요).</div></div>
+</div>
+
 <table>
   <thead><tr><th>분류</th><th>상태</th></tr></thead>
   <tbody>
-    <tr><td><strong>Leading (주도)</strong></td><td>이미 강하고, 더 강해지는 중 — 현재 주도 업종</td></tr>
-    <tr><td><strong>Improving (개선)</strong></td><td>아직 약하지만, 빠르게 좋아지는 중 — 떠오르는 후보</td></tr>
-    <tr><td><strong>Weakening (약화)</strong></td><td>아직 강하지만, 힘이 빠지는 중 — 정점 지나는 중</td></tr>
-    <tr><td><strong>Lagging (부진)</strong></td><td>약하고, 계속 약한 상태</td></tr>
+    <tr><td><strong style="color:var(--green)">Leading (주도)</strong></td><td>이미 강하고, 더 강해지는 중 — 현재 주도 업종 <span style="color:var(--muted)">(오른쪽 위)</span></td></tr>
+    <tr><td><strong style="color:var(--accent)">Improving (개선)</strong></td><td>아직 약하지만, 빠르게 좋아지는 중 — 떠오르는 후보 <span style="color:var(--muted)">(왼쪽 위)</span></td></tr>
+    <tr><td><strong style="color:var(--orange)">Weakening (약화)</strong></td><td>아직 강하지만, 힘이 빠지는 중 — 정점 지나는 중 <span style="color:var(--muted)">(오른쪽 아래)</span></td></tr>
+    <tr><td><strong style="color:var(--red)">Lagging (부진)</strong></td><td>약하고, 계속 약한 상태 <span style="color:var(--muted)">(왼쪽 아래)</span></td></tr>
   </tbody>
 </table>
 <p>여기에 <strong>알림 두 가지</strong>를 덧붙입니다: ① 약하던 업종이 <strong>막 좋아지기 시작</strong>하면("개선→주도 진입") 알림,
@@ -214,6 +412,23 @@
 <h2 id="s7">7. 과거 기록을 절대 고치지 않는 이유</h2>
 <p>모은 신호는 날짜별로 차곡차곡 저장합니다. 그런데 여기엔 겉보기보다 중요한 규칙이 하나 있습니다:
 <strong>한 번 저장한 그날의 기록은 절대 나중에 덮어쓰지 않습니다.</strong></p>
+
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 덮어쓰면 왜 검증이 부풀려지나</div>
+  <div class="toggle-row">
+    <button id="aoSafe" class="active safe">append-only (정직)</button>
+    <button id="aoOver">덮어쓰기 (미래 엿봄)</button>
+  </div>
+  <div class="ao-bars">
+    <div style="font-size:13px;color:var(--muted)">검증(백테스트)에서 나온 "과거 성과" — 실제보다 좋아 보이면 위험</div>
+    <div class="ao-bar real" id="aoBar" style="width:46%">실제로 그날 알 수 있던 정보로만 계산</div>
+  </div>
+  <div class="ao-explain" id="aoExplain">
+    <strong>append-only</strong>: 그날 저장한 값을 영구히 잠급니다. 나중에 다시 들춰 봐도 그날 실제로 보였던 값 그대로 →
+    검증이 공정합니다.
+  </div>
+</div>
+
 <div class="callout warn">
   <h4>왜 이게 중요한가</h4>
   과거 데이터로 전략을 검증할 때는, <strong>"그날 실제로 알 수 있었던 정보"만</strong> 써야 공정합니다.
@@ -225,7 +440,12 @@
 
 <h2 id="s8">8. 매일 오는 텔레그램 메시지</h2>
 <p>매일 수집·정리한 결과는 먼저 아래와 같은 <strong>원본 요약(다이제스트)</strong>으로 만들어집니다(예시):</p>
-<pre>🔔 알림 [US]
+<div class="tg">
+  <div class="tg-head">
+    <div class="tg-ava">📡</div>
+    <div><div class="tg-name">트렌드 모니터</div><div class="tg-sub">@trend_monitor_bot · 화~토 06:30</div></div>
+  </div>
+  <div class="tg-body"><pre>🔔 알림 [US]
   ⚠️ Technology 업종 과열(+11.5%) — 추격 주의
 
 🔄 업종 흐름 [US]  (주도 / 개선 / 약화 / 부진)
@@ -240,7 +460,9 @@
    → 신호 성격: 가격과 같이 움직임 — 막 달아오르는 중
 
 📍 관심 집중 섹터(모니터링):
-  Technology: NVDA, AVGO</pre>
+  Technology: NVDA, AVGO</pre></div>
+  <div class="tg-time">오전 6:30</div>
+</div>
 <div class="callout">
   <h4>실제 보내지는 메시지</h4>
   텔레그램으로 가는 메시지는 보통 위 원본 그대로가 아니라, <strong>AI 분석 도우미(trend-analyzer)가 이 데이터를 읽고
@@ -249,7 +471,231 @@
 </div>
 <p>만약 그날 <strong>주목할 신호(과열 종목·업종 흐름·알림)가 하나도 없으면</strong>, 메시지를 아예 보내지 않습니다(불필요한 메시지 방지).</p>
 
-<h2 id="s9">9. 언제·어떻게 자동 실행되나</h2>
+<h2 id="s9">9. 한국 시장은 어떻게 분석하나</h2>
+<p>한국 파이프라인의 출발점이 미국과 다릅니다. 미국은 "미국에서 떠오른 종목 자체"를 보지만,
+한국은 <strong>"미국에서 달아오른 테마와 닮은 한국 종목"</strong>부터 찾습니다. 흐름은 이렇습니다:</p>
+
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 한국 분석 파이프라인 (매 평일 16:00 KST)</div>
+  <div class="flow">
+    <div class="flow-step"><span class="n">1</span><b>미국에서 떠오른 종목 추리기</b><br><small>그날 미국 와치리스트(fade)에 오른 종목들을 출발점으로 삼습니다.</small></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><span class="n">2</span><b>"한국 짝" 찾기 — peer-bridge</b><br><small>각 미국 종목과 <strong>사업·테마·공급망이 닮은 한국 상장 종목</strong>을 AI가 골라 후보 목록을 만듭니다. 예) 🇺🇸NVDA → HBM 공급망 한국주. (미국 종목당 1번만 + 결과 저장으로 비용 최소화)</small></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><span class="n">3</span><b>한국 정보원 2개로 관심도 측정</b><br><small><strong>네이버 종목토론방</strong>(글 개수 = 관심 몰림, + 글 분위기로 낙관/비관 방향) &amp; <strong>네이버 검색량</strong>(평소 대비 검색 급증 = ASVI). 이 둘은 출처가 달라 <strong>독립 2번째 소스</strong> 역할을 합니다.</small></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><span class="n">4</span><b>신규 진입 종목만 심층분석</b><br><small>그날 <strong>새로</strong> 목록에 든 종목을, 한국 시장 분석가 5종(아래)으로 읽고 AI가 2~3줄 "왜 관심이 몰렸나" 요약으로 종합합니다.
+      <span class="analyst-pills">
+        <span class="a-pill">수급(외인·기관)</span><span class="a-pill">감성</span><span class="a-pill">시장</span><span class="a-pill">뉴스</span><span class="a-pill">재무</span>
+      </span></small></div>
+    <div class="flow-arrow">↓</div>
+    <div class="flow-step"><span class="n">5</span><b>한국장 마감 후 텔레그램 발송</b><br><small>평일 오후 4시(한국장 마감 직후), 한국 짝 종목 목록 + 심층요약을 별도 메시지로 보냅니다.</small></div>
+  </div>
+</div>
+
+<h3 style="margin-top:30px">단계별로 더 자세히</h3>
+<p>위 5단계를 하나씩 뜯어보면 이렇게 동작합니다. 괄호 안은 <strong>실제 코드의 기본값·파라미터</strong>예요.</p>
+
+<h4><span class="step-no">①</span>한국 짝 찾기 — peer-bridge <span class="muted">어떤 한국 종목을 분석 대상에 올릴까</span></h4>
+<p>미국장 마감 후, 미국에서 화제로 떠오른 종목 <strong>상위 10개</strong>를 출발점으로, 각 미국 종목마다
+<strong>사업·테마·공급망이 닮은 한국 상장 종목을 최대 5개</strong>까지 AI가 골라 후보 목록(유니버스)을 만듭니다.</p>
+<table class="tight">
+  <thead><tr><th>파라미터</th><th>값</th><th>뜻</th></tr></thead>
+  <tbody>
+    <tr><td>출발점(미국 종목)</td><td class="c">상위 10개</td><td>그날 미국에서 화제로 뜬 종목(fade)</td></tr>
+    <tr><td>종목당 한국 짝</td><td class="c">최대 5개</td><td>사업·테마·공급망 유사</td></tr>
+    <tr><td>AI 호출</td><td class="c">종목당 1회</td><td>빠른·저비용(quick-think) 모델, 코드·종목명·근거를 정형 출력</td></tr>
+    <tr><td>캐시(재사용)</td><td class="c">90일</td><td>한 번 매핑하면 90일 저장 → 대부분의 날은 AI 호출 0</td></tr>
+    <tr><td>종목명 보강</td><td class="c">3단 폴백</td><td>AI가 준 이름 → 없으면 KIS 종목 메타 → 그래도 없으면 코드</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  <h4 style="margin:0 0 6px">AI에게 주는 지시(요지)</h4>
+  "단순히 같은 <strong>대분류 섹터</strong>가 아니라, 같은 <strong>제품·기술·공급망·테마</strong>로 한국 투자자가 <strong>'OO 관련주'로 연상</strong>할 종목을 우선하라. 없으면 빈 목록." — 억지 매핑을 막는 장치입니다.
+  매핑할 때 "이 한국 종목이 <strong>어느 미국 종목에서 끌려왔는지(연결근거)</strong>"도 함께 저장해, 나중에 메시지에 🇺🇸→🇰🇷로 표시합니다.
+</div>
+
+<h4><span class="step-no">②</span>한국 정보원 2개로 관심도 측정 <span class="muted">서로 다른 두 각도</span></h4>
+<table class="tight">
+  <thead><tr><th></th><th>네이버 종목토론방 <span class="muted">naver_board</span></th><th>네이버 검색량 <span class="muted">naver_datalab</span></th></tr></thead>
+  <tbody>
+    <tr><td><strong>무엇을 보나</strong></td><td>당일(한국시간) 올라온 <strong>글 개수</strong> + 글 <strong>분위기</strong>(공감−비공감)</td><td>검색 급증도 <strong>ASVI</strong> = log(이번주) − log(직전 8주 중앙값)</td></tr>
+    <tr><td><strong>타이밍(4장)</strong></td><td><span class="tag t-same">같이</span> 가격과 동행</td><td><span class="tag t-before">미리</span> 가격에 앞섬</td></tr>
+    <tr><td><strong>신호 조건</strong></td><td>당일 글 1개 이상 / 분위기는 공감+비공감 <strong>5표 이상</strong>일 때만</td><td>ASVI <strong>&gt; 0</strong>(평소 직전 8주보다 검색 증가)일 때만</td></tr>
+    <tr><td><strong>정규화 상태</strong></td><td>글수는 아직 <strong>원본 수치</strong>(평소 기준선 쌓는 중)</td><td>로그 비라 <strong>정규화됨</strong>, 8주 중앙값 대비</td></tr>
+    <tr><td><strong>데이터원</strong></td><td>종목토론방 글(종목당 최근 2일)</td><td>DataLab 오픈API(키 필요), 정밀도 위해 <strong>종목당 1요청</strong>·주간</td></tr>
+    <tr><td><strong>독립성</strong></td><td colspan="2">글수와 분위기는 <strong>같은 게시판 = 1개 소스</strong>. 진짜 독립인 2번째 소스는 <strong>검색량</strong>이라, "둘 다 떴다"가 진짜 2소스 동의.</td></tr>
+  </tbody>
+</table>
+<div class="callout warn">
+  <h4 style="margin:0 0 6px">분위기(감성)는 점수에 안 섞는다</h4>
+  글 <strong>개수</strong>는 "얼마나 몰렸나"(과열 강도)지만, <strong>분위기</strong>는 "낙관이냐 비관이냐"(방향)입니다. 방향을 강도 점수에 섞으면 안 되므로,
+  분위기는 쏠림 점수 계산에서 빠지고(순위 미부여) 메시지엔 <strong>"분위기 한 줄"</strong>로만 표시됩니다. 검색량은 매 조회 때 0~100으로 다시 눈금이 바뀌지만,
+  ASVI는 로그 비라 그 영향이 상쇄되고, 한 번 저장한 값은 절대 덮어쓰지 않아(7장) 검증이 공정합니다.
+</div>
+
+<h4><span class="step-no">③</span>쏠림 점수와 "2소스 동의" 등급 <span class="muted">어떻게 순위를 매기나</span></h4>
+<p>각 정보원 <strong>안에서의 순위</strong>를 0~1 점수로 바꿔 더한 값이 <strong>쏠림점수(fade_score)</strong>입니다. 더 많은 독립 소스에서 더 높은 순위로 잡힐수록 점수가 커집니다.</p>
+<div class="formula">쏠림점수 = Σ (20 − 그_정보원_안_순위 + 1) ÷ 20  &nbsp;&nbsp;<span style="color:var(--muted)"># 1등=1.0, 10등=0.55, 20등=0.05 · 순위 없는 분위기 신호는 0</span></div>
+<p>그날 <strong>몇 개의 독립 소스</strong>가 동시에 가리켰는지로 목록 포함 여부와 등급이 갈립니다:</p>
+<table class="tight">
+  <thead><tr><th>최소 소스 수(min_sources) 결정 순서</th><th>값</th></tr></thead>
+  <tbody>
+    <tr><td>① 운영자가 저장한 활성 정책이 있으면 그 값</td><td class="c"><span class="ok">현재 한국 = 2 (2026-06-06 적용)</span></td></tr>
+    <tr><td>② 정책 없고 한국이면 환경변수(TREND_KR_MIN_SOURCES)</td><td class="c">기본 1</td></tr>
+    <tr><td>③ 미국이면 코드 기본값</td><td class="c">2</td></tr>
+  </tbody>
+</table>
+<div class="callout key">
+  <h4 style="margin:0 0 6px">"소스 수"를 세는 법이 핵심</h4>
+  소스 수는 <strong>정보원 종류의 가짓수</strong>로 셉니다. 토론방 글수와 분위기는 둘 다 <code>naver_board</code>라 합쳐도 <strong>1개</strong>.
+  그래서 "<strong>토론방 + 검색량</strong>"이 둘 다 떠야 비로소 2소스 동의가 됩니다. 등급은 5장과 동일: 4곳↑ 🔴 / 3곳 🟠 / 2곳 🟡.
+</div>
+<div class="callout warn">
+  <h4 style="margin:0 0 6px">맨 끝 "판정"은 왜 종목마다 다른가</h4>
+  한국은 소스가 2개뿐이라 <strong>등급(🟡)과 옛 "신호 성격"은 모든 종목에서 똑같아질 수밖에</strong> 없었습니다(소스 개수·종류만 보니까).
+  그래서 한국 메시지의 맨 끝 줄은 <strong>"판정"</strong>으로 바꿔, <strong>주가 5일 등락(관심 vs 주가 괴리)</strong>으로 결론을 냅니다:
+  관심↑·주가↓ → <strong>페이드(천장) 경고 강화</strong> / 동반↑ → <strong>추격 과열 주의</strong> / 보합 → <strong>관망</strong>.
+  "관심은 뜨거운데 주가는 빠지는" 종목(천장 신호)과 "관심·주가 동반 급등"(추격 위험)이 비로소 구분됩니다.
+</div>
+
+<h4><span class="step-no">④</span>신규 진입 종목 심층분석 — 분석가 5종 <span class="muted">한국 전용</span></h4>
+<p>그날 목록에 <strong>새로</strong> 든 종목(직전 <strong>7일</strong>엔 없던) 중 상위 <strong>5개</strong>만 골라, 한국 시장 분석가 5종이 읽고 AI가 2~3줄로 종합합니다.
+이 단계가 한국 전용인 이유는 핵심인 <strong>수급 분석가가 KIS(한국투자증권) 한국 수급 데이터</strong>에 기반하기 때문입니다(미국이면 이 단계 건너뜀).</p>
+<table class="tight">
+  <thead><tr><th>분석가</th><th>무엇을 읽나</th></tr></thead>
+  <tbody>
+    <tr><td><strong>수급</strong> <span class="muted">supply_demand</span></td><td>KIS 외국인·기관 매매, 프로그램 매매, 공매도 <span class="muted">← 한국 전용 핵심</span></td></tr>
+    <tr><td><strong>감성</strong> <span class="muted">sentiment</span></td><td>뉴스 헤드라인 등 보완 소스의 감성</td></tr>
+    <tr><td><strong>시장</strong> <span class="muted">market</span></td><td>가격 데이터 + 기술지표</td></tr>
+    <tr><td><strong>뉴스</strong> <span class="muted">news</span></td><td>종목 뉴스 + 글로벌 뉴스</td></tr>
+    <tr><td><strong>재무</strong> <span class="muted">fundamentals</span></td><td>손익·재무상태·현금흐름표</td></tr>
+  </tbody>
+</table>
+<p>분석가 5종은 <strong>로컬에서 도는 무료 AI(Ollama gemma)</strong>라 비용이 0원이고, 마지막 2~3줄 종합만 저렴한 mini 모델이 맡습니다.
+종합 AI가 실패해도 분석가(무료) 결과 일부로 폴백 저장해, 다음 날 같은 종목을 다시 돌리지 않습니다.</p>
+<div class="callout">
+  <h4 style="margin:0 0 6px">비용·시간 통제 5가지</h4>
+  ① 신규(또는 3일 이상 오래된)만 분석 · ② 한 번에 상위 5개 캡 · ③ <strong>시간예산 200초</strong> 초과분은 다음 날로 미룸 ·
+  ④ (시장·종목·날짜) <strong>캐시</strong> 적중이면 분석 0회 · ⑤ <code>TREND_DEEPEN=0</code>으로 통째로 끄기.
+</div>
+
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 한 번 실행(cron tick)의 시간 예산 분배 — 540초 안에 다 끝내기</div>
+  <div class="viz-cap">한국 파이프라인은 하루 한 번 <strong>540초(9분) 상한</strong> 안에서 돕니다. 심층분석이 길어져도 발송 단계를 굶기지 않도록 단계마다 시간 상자를 둡니다(심층분석은 200초 예산 + 280초 백스톱).</div>
+  <div class="chart-box short"><canvas id="krBudget"></canvas><div class="chart-fallback" id="fbKrBudget" hidden>차트를 불러오지 못했습니다(인터넷 연결 필요).</div></div>
+</div>
+
+<h4><span class="step-no">⑤</span>다이제스트 조립 → 텔레그램 발송 <span class="muted">하루 한 번, 자동</span></h4>
+<p>평일 16:00 KST에 자동 실행되는 한 번의 작업(cron tick)은 이 순서로 돕니다:</p>
+<ol class="steps">
+  <li><strong>잠금 + 방 확인</strong> — 동시 실행을 막고(파일 잠금), 트렌드 <strong>전용</strong> 텔레그램 방을 확인(전략 알림 방으로 새지 않게).</li>
+  <li><strong>수집 + 다이제스트</strong> — 한국 소스를 모아 과열 종목 원본 요약을 만듭니다(<code>trend_collect --market kr --digest</code>).</li>
+  <li><strong>발송 스킵 가드</strong> — 그날 신호가 없어 "신호 없음"이거나 출력이 비면 <strong>여기서 종료</strong>(메시지·심층분석·AI 모두 생략).</li>
+  <li><strong>심층분석</strong> — ④의 분석가 5종을 돌려 요약 캐시를 채웁니다(<code>trend_deepen --market kr</code>, 백스톱 280초).</li>
+  <li><strong>AI 내러티브</strong> — trend-analyzer가 원본 요약을 사람이 읽기 쉬운 몇 줄로 다시 씁니다(150초). 실패하면 원본 그대로 폴백.</li>
+  <li><strong>전송</strong> — 트렌드 전용 봇으로 텔레그램 발송.</li>
+</ol>
+<p class="calc-msg">전체에 <strong>540초 상한</strong>이 걸려 있고, 무슨 일이 있어도 <strong>정상 종료(exit 0)</strong>해 다음 날 자가복구합니다. 한국 다이제스트는 미국과 달리
+업종(섹터) 블록이 없고(데이터 미보유), 그 자리를 <strong>"🇺🇸→🇰🇷 연결근거"</strong>가 대신합니다.</p>
+
+<h4><span class="step-no">⑥</span>사람·AI가 들여다보는 조회 도구 (MCP) <span class="muted">읽기 전용</span></h4>
+<p>위에서 쌓아 둔 결과는 아래 도구로 꺼내 봅니다. <strong>비싼 분석은 cron이 미리 해 두고, 이 도구들은 저장된 걸 읽기만</strong> 합니다(AI 호출 0).</p>
+<table class="tight">
+  <thead><tr><th>도구</th><th>무엇을 돌려주나</th><th class="c">AI</th></tr></thead>
+  <tbody>
+    <tr><td><code>get_kr_trend_watchlist</code></td><td>한국 과열 종목 다이제스트(텍스트)</td><td class="c">없음</td></tr>
+    <tr><td><code>list_trend_signals</code></td><td>현황 — 적용 중인 필터(2소스 등) + 상위 종목·동의 소스 수</td><td class="c">없음</td></tr>
+    <tr><td><code>get_trend_deep_dive</code></td><td>저장된 심층요약(7일 이내)</td><td class="c">없음</td></tr>
+    <tr><td><code>get_trend_context</code></td><td>"왜 떴나" — 토론방 제목·뉴스 헤드라인</td><td class="c">없음</td></tr>
+    <tr><td><code>get_trend_market_context</code></td><td>가격·등락·괴리(관심↑·주가↓면 페이드 경고 강화)</td><td class="c">없음</td></tr>
+    <tr><td><code>update_trend_filter</code></td><td>필터(2소스 동의 등) 변경·저장</td><td class="c">없음</td></tr>
+  </tbody>
+</table>
+
+<h3 style="margin-top:34px">미국 vs 한국 — 한눈에 비교</h3>
+<table>
+  <thead><tr><th>구분</th><th>🇺🇸 미국 (US)</th><th>🇰🇷 한국 (KR)</th></tr></thead>
+  <tbody>
+    <tr><td><strong>어떤 종목을 보나</strong></td><td>레딧·거래량 등으로 떠오른 <strong>미국 종목 자체</strong></td><td>미국에서 떠오른 종목의 <strong>한국 짝</strong>(AI가 닮은 종목 매핑)</td></tr>
+    <tr><td><strong>정보원</strong></td><td>6개 (레딧·거래량·검색·소셜·옵션·섹터)</td><td>2개 (네이버 토론방 글수·분위기, 네이버 검색량)</td></tr>
+    <tr><td><strong>2곳 동의 기준</strong></td><td>항상 2곳 이상</td><td><span class="ok">2곳 동의</span> — 토론방+검색량(2026-06-06 승격). 검색량 커버리지는 확대 중</td></tr>
+    <tr><td><strong>업종(섹터) 흐름</strong></td><td>있음 (11개 업종 RRG 지도)</td><td>없음 — 대신 "미국 짝" 연결근거로 대체</td></tr>
+    <tr><td><strong>종목 심층분석</strong></td><td>없음 (목록만)</td><td><span class="ok">있음</span> — 신규 진입 종목을 분석가 5종으로 심층분석 + 요약</td></tr>
+    <tr><td><strong>보내는 시각</strong></td><td>화~토 06:30 (미국장 마감 후)</td><td>평일 16:00 (한국장 마감 후)</td></tr>
+  </tbody>
+</table>
+
+<p>한국 메시지는 이런 모습입니다(예시) — 미국 메시지와 달리 <strong>"🇺🇸어느 미국 종목의 짝인지"</strong> 연결근거가 붙고,
+맨 끝 <strong>판정</strong>은 종목마다 <strong>주가 5일 괴리</strong>로 달라집니다(아래 두 종목이 서로 다른 판정):</p>
+<div class="tg">
+  <div class="tg-head">
+    <div class="tg-ava" style="background:linear-gradient(135deg,#f85149,#db6d28)">🇰🇷</div>
+    <div><div class="tg-name">트렌드 모니터 · 한국</div><div class="tg-sub">@trend_monitor_bot · 평일 16:00</div></div>
+  </div>
+  <div class="tg-body"><pre>📊 과열 주목 종목 [KR]   2026-06-08
+(미국에서 달아오른 종목의 한국 짝 — 토론방·검색량이 함께 달아오름)
+1. 🟡 관심 쏠림 시작  한미반도체(042700)  쏠림점수 0.61 · 2곳 동의
+   연결: 🇺🇸NVDA · HBM 공급망 → 한국 짝
+   근거:
+     · 토론방 글 +180%(당일)
+     · 검색량 ASVI +0.42 (평소 대비 급증)
+     · 토론방 분위기: 낙관 우세
+   → 판정: 관심 뜨거운데 주가 5일 -7.2% — 페이드(천장) 경고 강화
+2. 🟡 관심 쏠림 시작  SK텔레콤(017670)  쏠림점수 0.58 · 2곳 동의
+   연결: 🇺🇸NOK · 5G/네트워크 테마 → 한국 짝
+   근거:
+     · 검색량 ASVI +1.10 (급증)
+     · 토론방 글 +90%(당일)
+   → 판정: 관심·주가 5일 +6.1% 동반 급등 — 추격 과열 주의</pre></div>
+  <div class="tg-time">오후 4:00</div>
+</div>
+<p class="calc-msg">위 목록과 별개로, 새로 진입한 <code>042700</code> 같은 종목은 분석가 5종이 수급·뉴스·재무를 읽어
+"외국인 순매수 지속·HBM 수주 기대" 같은 <strong>2~3줄 배경 요약</strong>을 만들어 두고, 실제 발송 메시지(AI가 다시 쓴 글)에 함께 엮습니다.</p>
+
+<h3>한국 파이프라인 진행 현황 <span class="real-badge">실측</span>
+  <span style="color:var(--muted);font-size:14px;font-weight:400">· 2026-06-08 기준 스냅샷</span></h3>
+<p>여기부터는 <strong>예시가 아닙니다.</strong> 실제로 돌고 있는 한국 파이프라인이 지금까지 모은 데이터를 트렌드 저장소에서 직접 집계한 것입니다.</p>
+<div class="status-grid">
+  <div class="stat"><div class="k">가동 일수</div><div class="v">3일 <span style="font-size:12px;color:var(--muted)">(6/5~6/8)</span></div></div>
+  <div class="stat"><div class="k">정보원 가동</div><div class="v">2 / 2 <span style="font-size:12px;color:var(--muted)">토론방·검색량</span></div></div>
+  <div class="stat"><div class="k">2소스 동의 승격</div><div class="v ok">✅ 2026-06-06</div></div>
+  <div class="stat"><div class="k">누적 심층분석</div><div class="v">3건</div></div>
+  <div class="stat"><div class="k">토론방 분위기(평균)</div><div class="v ok">낙관 우세 +0.33</div></div>
+  <div class="stat"><div class="k">6/8 2소스 동의 종목</div><div class="v">5종</div></div>
+</div>
+
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 소스 가동 추이 — 검색량이 켜지자 "2소스 동의"가 생겼다 (실측)</div>
+  <div class="viz-cap">막대 = 그날 신호가 잡힌 종목 수(소스별) · 초록 선 = 토론방·검색량 <strong>둘 다</strong> 잡힌 "2소스 동의" 종목 수.
+    6/5엔 토론방만 있어 동의 0 → 6/6 검색량 가동 후 동의가 생겼습니다.</div>
+  <div class="chart-box short"><canvas id="krRollout"></canvas><div class="chart-fallback" id="fbKrRoll" hidden>차트를 불러오지 못했습니다(인터넷 연결 필요).</div></div>
+</div>
+
+<div class="viz">
+  <div class="viz-h"><span class="dot"></span> 두 정보원은 서로 다른 걸 잡는다 (6/8 2소스 동의 종목, 실측)</div>
+  <div class="viz-cap">가로 = 네이버 토론방 글수(개인 수다) · 세로 = 네이버 검색량 ASVI(검색 급증). 둘이 독립이라,
+    <strong>이오테크닉스</strong>처럼 토론방은 잠잠해도 검색이 튀어 잡히는 종목이 따로 나옵니다 — 한 곳만 봤으면 놓쳤을 신호예요.</div>
+  <div class="chart-box short"><canvas id="krSignals"></canvas><div class="chart-fallback" id="fbKrSig" hidden>차트를 불러오지 못했습니다(인터넷 연결 필요).</div></div>
+</div>
+
+<h4 style="margin-top:22px">실제로 만들어진 심층분석 (분석가 5종 종합, 실측)</h4>
+<p>2소스 동의로 새로 진입한 종목에 분석가 5종(수급·감성·시장·뉴스·재무)이 붙어 만든 <strong>실제 요약</strong>입니다(원문 일부):</p>
+<div class="dd-card">
+  <div class="dd-h"><span class="dd-name">삼성전자 (005930)</span><span class="dd-tag">분석가 5종 종합</span><span class="dd-date">2026-06-08</span></div>
+  <p>외국인·기관의 대규모 <strong>매도 전환</strong>으로 수급상 하방 압력이 강해진 모습. 미국 고용지표發 금리인하 기대 후퇴, 중동 갈등, 반도체 동반 약세, KOSPI 급락 같은 재료가 겹쳐 종목토론실에 패닉셀링 우려가 반영됨.</p>
+</div>
+<div class="dd-card">
+  <div class="dd-h"><span class="dd-name">SK하이닉스 (000660)</span><span class="dd-tag">분석가 5종 종합</span><span class="dd-date">2026-06-06</span></div>
+  <p>외국인·기관 매수세가 6/5를 기점으로 <strong>동반 매도 전환</strong>. 젠슨 황 방한·HBM4 인증 같은 개별 호재에도, 미 금리 우려·나스닥 급락·반도체 매도세가 겹쳐 심리는 하방 우세 — "AI 모멘텀 vs 매크로 악재 충돌" 구도.</p>
+</div>
+<div class="dd-card">
+  <div class="dd-h"><span class="dd-name">카카오 (035720)</span><span class="dd-tag">분석가 5종 종합</span><span class="dd-date">2026-06-06</span></div>
+  <p>노사 갈등(부분파업 예고)·자회사 경영진 교체·보안 이슈로 단기 불확실성 부각. 정서는 중립~약세, 토론방은 관망 우세. 네이버 대비 경쟁력 논의가 자주 등장.</p>
+</div>
+<p class="calc-msg">이 요약들은 실제 발송되는 한국 텔레그램 메시지(AI가 다시 쓴 글)에 종목별로 한 줄씩 엮여 들어갑니다.</p>
+
+<h2 id="s10">10. 언제·어떻게 자동 실행되나</h2>
 <ul>
   <li><strong>실행 시각(미국)</strong>: 화요일~토요일 <strong>아침 6시 30분</strong>(한국 시간). 미국 장이 막 끝난 직후라, 그날 결과를 정리하기 좋은 때입니다.</li>
   <li><strong>실행 시각(한국)</strong>: 평일(월~금) <strong>오후 4시</strong>(한국 시간). 한국 장 마감 직후, 한국 짝 종목을 별도 메시지로 보냅니다.</li>
@@ -257,13 +703,13 @@
   <li><strong>AI 연구 도우미 연동</strong>: 별도의 AI 연구 보조(Hermes)가 "오늘 미국 관심 현황 보여 줘"라고 요청하면, 저장해 둔 <strong>원본 요약을 그대로</strong> 받아 갑니다 — 이 <strong>요청-응답 도구</strong>는 추가 분석 없이 전달만 합니다. (반면 위의 매일 자동 텔레그램은 8장처럼 AI가 한 번 더 다듬어 보내는, 서로 다른 경로입니다.)</li>
 </ul>
 
-<h2 id="s10">10. 솔직한 한계</h2>
+<h2 id="s11">11. 솔직한 한계</h2>
 <p>정확히 알고 쓰도록, 아직 완성되지 않았거나 범위 밖인 부분을 그대로 밝힙니다.</p>
 <table>
   <thead><tr><th>항목</th><th>현재 상태</th></tr></thead>
   <tbody>
     <tr><td>대상 시장</td><td><span class="mid">미국 주식이 주력.</span> 한국 시장도 별도 파이프라인이 <strong>이미 가동 중</strong>입니다 —
-      다만 "한국에서 자생한 화제"가 아니라 <strong>미국에서 달아오른 테마의 한국 짝 종목</strong>을 네이버 토론방·검색량으로 살펴보는 방식이고, 둘째 한국 정보원(검색량)은 아직 연동을 붙이는 중입니다.</td></tr>
+      다만 "한국에서 자생한 화제"가 아니라 <strong>미국에서 달아오른 테마의 한국 짝 종목</strong>을 네이버 토론방·검색량으로 살펴보는 방식입니다. 둘째 한국 정보원(검색량)도 가동되어 <strong>2026-06-06부터 2곳 동의로 운영</strong>되며, 검색량 커버리지는 확대 중입니다.</td></tr>
     <tr><td>"평소 대비" 계산</td><td>일부 정보원(소셜 글 개수, 옵션 쏠림)은 아직 <span class="mid">평소 기준선이 충분히 쌓이지 않아</span>, 당분간 원본 수치를 그대로 쓰면서 데이터를 모으는 중입니다.</td></tr>
     <tr><td>용도</td><td><span class="no">수익을 내는 매매 신호가 아니라</span>, 과열·쏠림을 알려 주는 <strong>모니터링/경고</strong>용입니다.</td></tr>
     <tr><td>"기관 자금이면 경고를 낮춘다" 같은 세부 규칙</td><td>계획에는 있었으나 <span class="no">아직 구현 전</span>입니다.</td></tr>
@@ -279,9 +725,269 @@
 </div>
 
 <footer class="doc">
-  trading-ai 트렌드 모니터링 기능 설명 · 저장 위치 <code>notebooks/trend_monitoring_overview.html</code>
+  trading-ai 트렌드 모니터링 기능 설명 · 저장 위치 <code>notebooks/trend_monitoring_overview.html</code> · 차트 숫자는 개념 예시
 </footer>
 
 </div>
+
+<script>
+(function () {
+  "use strict";
+  var FG = "#e6edf3", MUTED = "#8b949e", GRID = "rgba(48,54,61,0.8)";
+  var GREEN = "#3fb950", BLUE = "#58a6ff", ORANGE = "#db6d28", RED = "#f85149";
+  var hasChart = typeof window.Chart !== "undefined";
+
+  /* ---------- 탭 ---------- */
+  document.querySelectorAll(".tabs").forEach(function (tabs) {
+    var viz = tabs.closest(".viz");
+    tabs.querySelectorAll(".tab-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        tabs.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+        viz.querySelectorAll(".tab-panel").forEach(function (p) {
+          p.classList.toggle("active", p.getAttribute("data-panel") === btn.getAttribute("data-tab"));
+        });
+      });
+    });
+  });
+
+  /* ---------- 정보원 막대 차트 ---------- */
+  function barChart(canvasId, fbId, labels, data, colors) {
+    var el = document.getElementById(canvasId);
+    if (!el) return;
+    if (!hasChart) { var fb = document.getElementById(fbId); if (fb) fb.hidden = false; return; }
+    new Chart(el, {
+      type: "bar",
+      data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderRadius: 5, barThickness: 22 }] },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: function (c) { return "비정상도 " + c.parsed.x.toFixed(2) + " (예시)"; } } } },
+        scales: {
+          x: { min: 0, max: 1, grid: { color: GRID }, ticks: { color: MUTED },
+               title: { display: true, text: "비정상도 (0=평소, 1=매우 튐) · 예시", color: MUTED, font: { size: 11 } } },
+          y: { grid: { display: false }, ticks: { color: FG, font: { size: 12.5 } } }
+        }
+      }
+    });
+  }
+  barChart("srcUs", "fbUs",
+    ["레딧 언급 (같이)", "비정상 거래량 (같이)", "검색량 ASVI (미리)", "소셜 글 (같이)", "옵션 쏠림 (같이)"],
+    [0.92, 0.70, 0.62, 0.50, 0.80],
+    [ORANGE, ORANGE, BLUE, ORANGE, ORANGE]);
+  barChart("srcKr", "fbKr",
+    ["토론방 글수 (같이)", "검색량 ASVI (미리)"],
+    [0.82, 0.66],
+    [ORANGE, BLUE]);
+
+  /* ---------- RRG 사분면 산점도 ---------- */
+  (function () {
+    var el = document.getElementById("rrg");
+    if (!el) return;
+    if (!hasChart) { var fb = document.getElementById("fbRrg"); if (fb) fb.hidden = false; return; }
+    var pts = [
+      { label: "Technology", x: 105, y: 11.5 }, { label: "Health Care", x: 101.5, y: 2 },
+      { label: "Cons.Disc.", x: 98.5, y: 6.5 }, { label: "Energy", x: 96.5, y: 3.5 },
+      { label: "Materials", x: 97, y: 1.2 }, { label: "Financials", x: 103, y: -2.5 },
+      { label: "Industrials", x: 101.2, y: -1 }, { label: "Utilities", x: 94, y: -3.5 },
+      { label: "Staples", x: 95.5, y: -1.5 }
+    ];
+    function qColor(p) {
+      var strong = p.x >= 100, rising = p.y >= 0;
+      if (strong && rising) return GREEN;
+      if (!strong && rising) return BLUE;
+      if (strong && !rising) return ORANGE;
+      return RED;
+    }
+    var bgPlugin = {
+      id: "rrgBg",
+      beforeDraw: function (chart) {
+        var a = chart.chartArea; if (!a) return;
+        var ctx = chart.ctx, cx = chart.scales.x.getPixelForValue(100), cy = chart.scales.y.getPixelForValue(0);
+        ctx.save();
+        ctx.fillStyle = "rgba(63,185,80,0.09)"; ctx.fillRect(cx, a.top, a.right - cx, cy - a.top);
+        ctx.fillStyle = "rgba(88,166,255,0.09)"; ctx.fillRect(a.left, a.top, cx - a.left, cy - a.top);
+        ctx.fillStyle = "rgba(219,109,40,0.09)"; ctx.fillRect(cx, cy, a.right - cx, a.bottom - cy);
+        ctx.fillStyle = "rgba(248,81,73,0.09)"; ctx.fillRect(a.left, cy, cx - a.left, a.bottom - cy);
+        ctx.strokeStyle = "rgba(139,148,158,0.5)"; ctx.setLineDash([4, 4]); ctx.beginPath();
+        ctx.moveTo(cx, a.top); ctx.lineTo(cx, a.bottom); ctx.moveTo(a.left, cy); ctx.lineTo(a.right, cy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = "600 12px sans-serif"; ctx.textBaseline = "top";
+        ctx.fillStyle = "rgba(63,185,80,0.9)"; ctx.textAlign = "right"; ctx.fillText("Leading 주도", a.right - 8, a.top + 6);
+        ctx.fillStyle = "rgba(88,166,255,0.9)"; ctx.textAlign = "left"; ctx.fillText("Improving 개선", a.left + 8, a.top + 6);
+        ctx.textBaseline = "bottom";
+        ctx.fillStyle = "rgba(219,109,40,0.95)"; ctx.textAlign = "right"; ctx.fillText("Weakening 약화", a.right - 8, a.bottom - 6);
+        ctx.fillStyle = "rgba(248,81,73,0.95)"; ctx.textAlign = "left"; ctx.fillText("Lagging 부진", a.left + 8, a.bottom - 6);
+        ctx.restore();
+      }
+    };
+    var labelPlugin = {
+      id: "rrgLabels",
+      afterDatasetsDraw: function (chart) {
+        var ctx = chart.ctx, meta = chart.getDatasetMeta(0);
+        ctx.save(); ctx.font = "11px sans-serif"; ctx.fillStyle = FG; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        meta.data.forEach(function (pt, i) { ctx.fillText(" " + pts[i].label, pt.x + 5, pt.y); });
+        ctx.restore();
+      }
+    };
+    new Chart(el, {
+      type: "scatter",
+      data: { datasets: [{ data: pts, pointRadius: 6, pointHoverRadius: 8,
+        backgroundColor: pts.map(qColor), borderColor: "#0d1117", borderWidth: 1.5 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: function (c) {
+            return pts[c.dataIndex].label + " — 강도 " + c.parsed.x + ", 속도 " + (c.parsed.y > 0 ? "+" : "") + c.parsed.y + "% (예시)";
+          } } } },
+        scales: {
+          x: { min: 90, max: 110, grid: { color: GRID }, ticks: { color: MUTED },
+               title: { display: true, text: "시장 대비 강도 (100=평균)", color: MUTED, font: { size: 11 } } },
+          y: { min: -12, max: 14, grid: { color: GRID }, ticks: { color: MUTED, callback: function (v) { return v + "%"; } },
+               title: { display: true, text: "상승 속도 (모멘텀)", color: MUTED, font: { size: 11 } } }
+        }
+      },
+      plugins: [bgPlugin, labelPlugin]
+    });
+  })();
+
+  /* ---------- 등급 계산기 ---------- */
+  (function () {
+    var box = document.getElementById("calcSrcs");
+    if (!box) return;
+    var toggles = box.querySelectorAll(".src-toggle");
+    var nEl = document.getElementById("calcN"), badge = document.getElementById("calcBadge"), msg = document.getElementById("calcMsg");
+    function render() {
+      var n = 0;
+      toggles.forEach(function (t) { if (t.classList.contains("on")) n++; });
+      nEl.textContent = n;
+      badge.className = "tier-badge";
+      if (n >= 4) { badge.classList.add("tier-4"); badge.textContent = "🔴 관심 매우 쏠림"; msg.textContent = "4곳 이상 동시 — 매우 과열. 가장 강한 주의 신호입니다."; }
+      else if (n === 3) { badge.classList.add("tier-3"); badge.textContent = "🟠 관심 많이 쏠림"; msg.textContent = "3곳 동시 — 과열 주의 단계."; }
+      else if (n === 2) { badge.classList.add("tier-2"); badge.textContent = "🟡 관심 쏠림 시작"; msg.textContent = "2곳 동시 — 막 달아오르기 시작. 와치리스트에 올라갑니다."; }
+      else { badge.classList.add("tier-x"); badge.textContent = "와치리스트 제외"; msg.textContent = (n === 1 ? "1곳만 켜졌어요 — 가짜 화제일 수 있어 무시합니다. 2곳 이상 켜 보세요." : "한 곳도 안 켜져 있어요. 정보원을 2곳 이상 켜 보세요."); }
+    }
+    toggles.forEach(function (t) {
+      t.addEventListener("click", function () { t.classList.toggle("on"); render(); });
+    });
+    render();
+  })();
+
+  /* ---------- 타이밍 타임라인 칩 ---------- */
+  (function () {
+    var svg = document.getElementById("tlSvg");
+    if (!svg) return;
+    var zones = svg.querySelectorAll(".tl-zone");
+    document.querySelectorAll(".tl-chip").forEach(function (chip) {
+      var z = chip.getAttribute("data-zone");
+      function on() { zones.forEach(function (r) { r.classList.toggle("dim", r.getAttribute("data-zone") !== z); }); }
+      function off() { zones.forEach(function (r) { r.classList.remove("dim"); }); }
+      chip.addEventListener("mouseenter", on); chip.addEventListener("mouseleave", off);
+      chip.addEventListener("click", on);
+    });
+  })();
+
+  /* ---------- append-only 토글 ---------- */
+  (function () {
+    var safe = document.getElementById("aoSafe"), over = document.getElementById("aoOver");
+    var bar = document.getElementById("aoBar"), exp = document.getElementById("aoExplain");
+    if (!safe) return;
+    function setSafe() {
+      safe.classList.add("active"); over.classList.remove("active");
+      bar.className = "ao-bar real"; bar.style.width = "46%"; bar.textContent = "실제로 그날 알 수 있던 정보로만 계산";
+      exp.innerHTML = "<strong>append-only</strong>: 그날 저장한 값을 영구히 잠급니다. 나중에 다시 들춰 봐도 그날 실제로 보였던 값 그대로 → 검증이 공정합니다.";
+    }
+    function setOver() {
+      over.classList.add("active"); safe.classList.remove("active");
+      bar.className = "ao-bar fake"; bar.style.width = "92%"; bar.textContent = "나중에 바뀐 값으로 과거를 덮어씀 → 부풀려진 성과";
+      exp.innerHTML = "<strong>덮어쓰기</strong>: 검색량 같은 지표는 나중에 과거 수치가 다시 조정됩니다. 그 값으로 옛 기록을 덮으면, 검증이 <span class='no'>미래를 미리 엿본 셈</span>이 되어 성과가 실제보다 좋아 보입니다(착시).";
+    }
+    safe.addEventListener("click", setSafe); over.addEventListener("click", setOver);
+  })();
+
+  /* ---------- 한국 진행 현황 차트 (실측 데이터) ---------- */
+  (function () {
+    if (!hasChart) { ["fbKrRoll", "fbKrSig"].forEach(function (id) { var f = document.getElementById(id); if (f) f.hidden = false; }); return; }
+    var roll = document.getElementById("krRollout");
+    if (roll) new Chart(roll, {
+      data: {
+        labels: ["6/5", "6/6", "6/8"],
+        datasets: [
+          { type: "bar", label: "토론방(글수)", data: [30, 36, 19], backgroundColor: ORANGE, stack: "s", yAxisID: "y" },
+          { type: "bar", label: "검색량(ASVI)", data: [0, 9, 5], backgroundColor: BLUE, stack: "s", yAxisID: "y" },
+          { type: "line", label: "2소스 동의 종목", data: [0, 7, 5], borderColor: GREEN, backgroundColor: GREEN, yAxisID: "y2", tension: 0.3, pointRadius: 4, borderWidth: 2 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: FG, boxWidth: 12, font: { size: 12 } } } },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { color: FG } },
+          y: { stacked: true, beginAtZero: true, grid: { color: GRID }, ticks: { color: MUTED },
+               title: { display: true, text: "잡힌 종목 수(소스별)", color: MUTED, font: { size: 11 } } },
+          y2: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { color: GREEN },
+                title: { display: true, text: "2소스 동의 종목", color: GREEN, font: { size: 11 } } }
+        }
+      }
+    });
+    var sig = document.getElementById("krSignals");
+    if (sig) {
+      var sp = [
+        { label: "삼성전자", x: 199, y: 0.184, dy: -9 }, { label: "SK하이닉스", x: 200, y: 0.198, dy: 10 },
+        { label: "KODEX레버리지", x: 92, y: 0.057, dy: 0 }, { label: "KODEX200", x: 38, y: 0.072, dy: 0 },
+        { label: "이오테크닉스", x: 1, y: 0.647, dy: 0 }
+      ];
+      new Chart(sig, {
+        type: "scatter",
+        data: { datasets: [{ data: sp, pointRadius: 7, pointHoverRadius: 9,
+          backgroundColor: sp.map(function (p) { return p.y >= 0.3 ? BLUE : ORANGE; }), borderColor: "#0d1117", borderWidth: 1.5 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: function (c) { return sp[c.dataIndex].label + " — 토론방 " + c.parsed.x + "글, ASVI " + c.parsed.y; } } } },
+          scales: {
+            x: { beginAtZero: true, max: 240, grid: { color: GRID }, ticks: { color: MUTED },
+                 title: { display: true, text: "네이버 토론방 글수 (건)", color: MUTED, font: { size: 11 } } },
+            y: { beginAtZero: true, grid: { color: GRID }, ticks: { color: MUTED },
+                 title: { display: true, text: "네이버 검색량 ASVI (검색 급증)", color: MUTED, font: { size: 11 } } }
+          }
+        },
+        plugins: [{ id: "krSigLab", afterDatasetsDraw: function (ch) {
+          var ctx = ch.ctx, m = ch.getDatasetMeta(0);
+          ctx.save(); ctx.font = "11px sans-serif"; ctx.fillStyle = FG; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+          m.data.forEach(function (pt, i) { ctx.fillText(" " + sp[i].label, pt.x + 6, pt.y + (sp[i].dy || 0)); });
+          ctx.restore();
+        } }]
+      });
+    }
+  })();
+
+  /* ---------- KR cron 시간 예산 차트 (540초 분배) ---------- */
+  (function () {
+    var el = document.getElementById("krBudget");
+    if (!el) return;
+    if (!hasChart) { var f = document.getElementById("fbKrBudget"); if (f) f.hidden = false; return; }
+    new Chart(el, {
+      type: "bar",
+      data: { labels: ["cron tick"], datasets: [
+        { label: "수집·다이제스트 ~22초", data: [22], backgroundColor: BLUE },
+        { label: "심층분석(분석가 5종) 200초", data: [200], backgroundColor: ORANGE },
+        { label: "AI 내러티브 150초", data: [150], backgroundColor: "#bc8cff" },
+        { label: "여유 ~168초", data: [168], backgroundColor: "rgba(139,148,158,0.35)" }
+      ] },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: FG, boxWidth: 12, font: { size: 12 } } },
+          tooltip: { callbacks: { label: function (c) { return c.dataset.label; } } } },
+        scales: {
+          x: { stacked: true, max: 540, grid: { color: GRID }, ticks: { color: MUTED, callback: function (v) { return v + "초"; } },
+               title: { display: true, text: "하루 한 번, 540초(9분) 상한", color: MUTED, font: { size: 11 } } },
+          y: { stacked: true, grid: { display: false }, ticks: { color: FG } }
+        }
+      }
+    });
+  })();
+})();
+</script>
 </body>
 </html>
