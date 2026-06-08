@@ -49,6 +49,7 @@ from tradingagents.hermes.statistics_tools import (
 )
 from tradingagents.hermes.strategy_spec import spec_hash, validate_spec
 from tradingagents.hermes.strategy_store import StrategyStore
+from tradingagents.hermes.trend_rank import _kr_price
 from tradingagents.llm_clients.factory import create_llm_client
 
 # 사용자 피드백 시점 분기 임계값 — 가설 as_of_date 와 today 차이가 이 일수
@@ -522,52 +523,6 @@ def get_trend_deep_dive(market: str = "kr") -> list[dict]:
         out.append({"entity": la["entity"], "name": la.get("name"),
                     "summary": la["summary"], "asof_date": la["asof_date"]})
     return out
-
-
-def _kr_price(code: str) -> Optional[dict]:
-    """6자리 코드 → 주가·등락·거래량(yfinance, .KS→.KQ 폴백). 실패/NaN 시 None.
-
-    상폐·거래정지 종목은 NaN 을 반환할 수 있는데, NaN 은 JSON 직렬화 불가(MCP
-    실패)라 모든 값을 유한값으로 가드하고 비유한이면 다음 접미사/ None 으로 degrade.
-    """
-    import math
-
-    try:
-        import yfinance as yf
-    except Exception:
-        return None
-
-    def _fin(x: float) -> bool:
-        return isinstance(x, float) and math.isfinite(x)
-
-    for suf in (".KS", ".KQ"):
-        try:
-            h = yf.Ticker(f"{code}{suf}").history(period="1mo")
-        except Exception:
-            continue
-        if h is None or h.empty or len(h) < 2:
-            continue
-        close = h["Close"].astype(float)
-        vol = h["Volume"].astype(float)
-        cur = float(close.iloc[-1])
-        prev = float(close.iloc[-2])
-        if not _fin(cur) or cur <= 0:  # 상폐/이상치 → 다음 접미사 시도
-            continue
-        chg1 = (cur / prev - 1) * 100 if _fin(prev) and prev > 0 else 0.0
-        base5 = float(close.iloc[-6]) if len(close) >= 6 else float(close.iloc[0])
-        chg5 = (cur / base5 - 1) * 100 if _fin(base5) and base5 > 0 else 0.0
-        vlast = float(vol.iloc[-1])
-        vlast = vlast if _fin(vlast) else 0.0
-        vavg = float(vol.iloc[-20:].mean()) if len(vol) >= 5 else float(vol.mean())
-        vol_ratio = (vlast / vavg) if _fin(vavg) and vavg > 0 else 0.0
-        return {
-            "price": round(cur),
-            "change_1d_pct": round(chg1, 1),
-            "change_5d_pct": round(chg5, 1),
-            "volume": int(vlast),
-            "volume_ratio": round(vol_ratio, 1),
-        }
-    return None
 
 
 @mcp.tool()

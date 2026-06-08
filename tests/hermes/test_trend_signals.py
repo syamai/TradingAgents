@@ -369,6 +369,45 @@ def test_digest_kr_single_source_and_provenance(monkeypatch, tmp_path):
     assert "업종 흐름" not in d               # KR 은 섹터 로테이션 섹션 없음
 
 
+def test_digest_kr_verdict_varies_with_price(monkeypatch, tmp_path):
+    """enrich_price=True 면 KR '판정' 줄이 주가 5일 괴리로 종목마다 달라진다(상수 탈피)."""
+    from tradingagents.hermes import trend_rank
+    s = TrendStore(root=tmp_path)
+    s.write([
+        SignalRow("2026-06-08", "2026-06-08", "kr", "005930", "naver_board",
+                  "board_volume", COINCIDENT, raw_value=200, abnormal_value=200, rank=1),
+        SignalRow("2026-06-08", "2026-06-08", "kr", "000660", "naver_board",
+                  "board_volume", COINCIDENT, raw_value=190, abnormal_value=190, rank=2),
+    ])
+    monkeypatch.delenv("TREND_KR_MIN_SOURCES", raising=False)
+    monkeypatch.setattr(trend_rank, "_kr_provenance", lambda codes, **kw: {})
+    monkeypatch.setattr(
+        trend_rank, "_kr_price",
+        lambda code: {"change_5d_pct": -5.0} if code == "005930" else {"change_5d_pct": 6.0},
+    )
+    d = trend_rank.format_digest("kr", store=s, enrich_price=True)
+    assert "페이드(천장) 경고 강화" in d        # 005930: 주가 5일 -5% → 페이드 경고
+    assert "추격 과열 주의" in d                  # 000660: 주가 5일 +6% → 추격 과열
+    assert "→ 판정:" in d and "신호 성격" not in d  # 결론이 종목별 '판정'으로 교체됨
+
+    # 기본(off)이면 옛 상수 동작 유지 — 두 종목 모두 같은 '신호 성격'(상수)
+    d0 = trend_rank.format_digest("kr", store=s, enrich_price=False)
+    assert d0.count("막 달아오르는 중") == 2 and "판정" not in d0
+
+
+def test_digest_kr_verdict_falls_back_when_no_price(monkeypatch, tmp_path):
+    """enrich_price=True 라도 주가 조회 실패(None)면 기존 '신호 성격'으로 폴백."""
+    from tradingagents.hermes import trend_rank
+    s = TrendStore(root=tmp_path)
+    s.write([SignalRow("2026-06-08", "2026-06-08", "kr", "005930", "naver_board",
+                       "board_volume", COINCIDENT, raw_value=200, abnormal_value=200, rank=1)])
+    monkeypatch.delenv("TREND_KR_MIN_SOURCES", raising=False)
+    monkeypatch.setattr(trend_rank, "_kr_provenance", lambda codes, **kw: {})
+    monkeypatch.setattr(trend_rank, "_kr_price", lambda code: None)
+    d = trend_rank.format_digest("kr", store=s, enrich_price=True)
+    assert "신호 성격" in d and "판정" not in d
+
+
 # === Phase 2: 토론방 감성 틸트 + 네이버 DataLab 검색량 + min_sources 승격 ===
 
 def test_naver_board_sentiment_tilt(monkeypatch):

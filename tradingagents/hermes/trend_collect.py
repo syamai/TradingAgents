@@ -130,7 +130,9 @@ def main(argv: Optional[list] = None) -> int:
     if args.digest:
         from .trend_rank import format_digest
 
-        print(format_digest(args.market, asof_date=args.asof_date))
+        # cron 다이제스트만 주가 괴리 기반 '판정'으로 KR 결론을 종목별로 달리한다
+        # (yfinance 호출 — 즉시 응답 MCP 패스스루는 off 유지).
+        print(format_digest(args.market, asof_date=args.asof_date, enrich_price=True))
     else:
         print(json.dumps(results, ensure_ascii=False))
     return 0

@@ -69,6 +69,61 @@ _LEAD_MOVE = {
     "Lag": "가격보다 뒤늦게 움직임",
 }
 
+
+def _kr_price(code: str) -> Optional[dict]:
+    """6자리 코드 → 주가·5일 등락(yfinance, .KS→.KQ 폴백). 실패/NaN 시 None.
+
+    상폐·거래정지 종목은 NaN 을 낼 수 있어 모든 값을 유한값으로 가드한다.
+    """
+    import math
+
+    try:
+        import yfinance as yf
+    except Exception:
+        return None
+
+    def _fin(x: float) -> bool:
+        return isinstance(x, float) and math.isfinite(x)
+
+    for suf in (".KS", ".KQ"):
+        try:
+            h = yf.Ticker(f"{code}{suf}").history(period="1mo")
+        except Exception:
+            continue
+        if h is None or h.empty or len(h) < 2:
+            continue
+        close = h["Close"].astype(float)
+        vol = h["Volume"].astype(float)
+        cur = float(close.iloc[-1])
+        prev = float(close.iloc[-2])
+        if not _fin(cur) or cur <= 0:  # 상폐/이상치 → 다음 접미사 시도
+            continue
+        chg1 = (cur / prev - 1) * 100 if _fin(prev) and prev > 0 else 0.0
+        base5 = float(close.iloc[-6]) if len(close) >= 6 else float(close.iloc[0])
+        chg5 = (cur / base5 - 1) * 100 if _fin(base5) and base5 > 0 else 0.0
+        vlast = float(vol.iloc[-1])
+        vlast = vlast if _fin(vlast) else 0.0
+        vavg = float(vol.iloc[-20:].mean()) if len(vol) >= 5 else float(vol.mean())
+        vol_ratio = (vlast / vavg) if _fin(vavg) and vavg > 0 else 0.0
+        return {
+            "price": round(cur),
+            "change_1d_pct": round(chg1, 1),
+            "change_5d_pct": round(chg5, 1),
+            "volume": int(vlast),
+            "volume_ratio": round(vol_ratio, 1),
+        }
+    return None
+
+
+def _divergence_verdict(change_5d_pct: float) -> str:
+    """관심(fade)은 양만 본다 → 주가 5일 등락으로 '관심 vs 주가' 괴리를 판정해
+    종목마다 다른 결론을 낸다(관심↑·주가↓ 면 페이드=천장 경고 강화)."""
+    if change_5d_pct <= -3:
+        return f"관심 뜨거운데 주가 5일 {change_5d_pct:+.1f}% — 페이드(천장) 경고 강화"
+    if change_5d_pct >= 5:
+        return f"관심·주가 5일 {change_5d_pct:+.1f}% 동반 급등 — 추격 과열 주의"
+    return f"관심 떴지만 주가 5일 {change_5d_pct:+.1f}% 보합 — 관망"
+
 # 소스 metric → 사람이 읽는 근거 포맷. fade 점수의 '왜'(동시 과열의 실제 신호값)를 명시.
 _EVIDENCE_FMT = {
     "mention_momentum_24h": lambda r: f"레딧 언급 {float(r['abnormal_value']):+.0%}(24시간)",
@@ -343,12 +398,17 @@ def format_digest(
     asof_date: Optional[str] = None,
     top_n: int = 10,
     store: Optional[TrendStore] = None,
+    enrich_price: bool = False,
 ) -> str:
     """Telegram 일일 다이제스트 — 알림 + 업종 흐름 + 과열 주목 종목.
 
-    KR 은 단일 소스(종목토론방)·``min_sources=1`` 이며, 각 종목에 '어떤 미국
-    종목에서 연결됐나'(연결근거)를 함께 표기한다. 업종 흐름은 미국 전용이라
-    KR 에선 데이터가 없어 자동으로 빠진다.
+    KR 은 각 종목에 '어떤 미국 종목에서 연결됐나'(연결근거)를 함께 표기한다.
+    업종 흐름은 미국 전용이라 KR 에선 데이터가 없어 자동으로 빠진다.
+
+    ``enrich_price=True`` 면 KR 종목의 '신호 성격' 줄을 주가 5일 괴리 기반
+    **판정**(페이드 경고/추격 과열/관망)으로 바꾼다 — 종목마다 결론이 달라진다.
+    yfinance 네트워크 호출이 들어가므로 cron 다이제스트에서만 켜고, 즉시 응답하는
+    MCP 패스스루(get_kr_trend_watchlist)·테스트는 기본 off 로 둔다.
     """
     store = store or TrendStore()
     mkt = market.upper()
@@ -415,9 +475,17 @@ def format_digest(
                 lines.append("   근거:")
                 for e in ev:
                     lines.append(f"     · {e}")
-            move = _LEAD_MOVE.get(row["leadingness"], "가격과 같이 움직임")
-            tail = f"{move}(추격 위험) — 과열 주의" if n >= 3 else f"{move} — 막 달아오르는 중"
-            lines.append(f"   → 신호 성격: {tail}")
+            verdict = None
+            if enrich_price and is_kr:
+                px = _kr_price(code)
+                if px:
+                    verdict = _divergence_verdict(px["change_5d_pct"])
+            if verdict:
+                lines.append(f"   → 판정: {verdict}")
+            else:
+                move = _LEAD_MOVE.get(row["leadingness"], "가격과 같이 움직임")
+                tail = f"{move}(추격 위험) — 과열 주의" if n >= 3 else f"{move} — 막 달아오르는 중"
+                lines.append(f"   → 신호 성격: {tail}")
         # 관심 집중 섹터(US 전용 — yfinance 섹터). KR 은 연결근거가 대신함.
         if not is_kr:
             secmap = attention_by_sector(market, store=store, fade=fade)
