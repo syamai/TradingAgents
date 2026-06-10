@@ -14,6 +14,7 @@ from typing import Optional
 from tradingagents.hermes.strategy_spec import spec_hash
 from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
 from tradingagents.hermes.strategy_store import StrategyStore
+from tradingagents.hermes.backtest_engine_v2 import passes_full_gate_v2
 
 
 # v3 추가 컬럼 — 시간분할 검증 결과 + 엔진 버전(provenance).
@@ -33,9 +34,9 @@ _V3_COLUMNS = (
 )
 
 # v4 추가 컬럼 — 공정 게이트(walk-forward × 시장대비 초과수익 IR) 결과.
-# gate_passed 의미가 v4 부터 **walk-forward 초과수익 IR 게이트**로 단일화된다
-# (기존 xsec AND single-time-split → 다중구간 시장중립 알파). time_* (v3, single
-# split) 와 xsec in_*/out_* 는 진단용으로 유지.
+# gate_passed 의미는 v5 부터 **WF 초과수익 IR AND xsec 품질 게이트**다.
+# xsec 품질은 Sharpe/MDD/거래수만 보며 승률 조건은 제외한다. time_* (v3,
+# single split) 는 진단용으로 유지.
 _V4_COLUMNS = (
     ("wf_excess_ir_median", "REAL"),
     ("wf_excess_ir_min", "REAL"),
@@ -74,10 +75,10 @@ class StrategyStoreV2(StrategyStore):
         """전략 + 백테스트 result 저장. 반환 ``(strategy_id, is_new)``.
 
         ``result`` 는 종목분할(xsec) 백테스트(``run_universe_backtest_v2``, 진단용).
-        ``wf_result`` 가 주어지면(``run_walk_forward_validation``) **공정 게이트**
-        — walk-forward × 시장대비 초과수익 IR — 결과를 기록하고 ``gate_passed`` 를
-        그 게이트로 단일화한다(v4). ``time_result``(single split, v3)는 주어지면
-        진단 컬럼으로만 저장. 둘 다 없으면 xsec 게이트(레거시 하위호환).
+        ``wf_result`` 가 주어지면(``run_walk_forward_validation``) WF 결과를 기록하고,
+        ``gate_passed`` 는 WF 초과수익 IR AND xsec 품질(Sharpe/MDD/거래수, 승률 제외)
+        결합으로 저장한다(v5). ``time_result``(single split, v3)는 주어지면 진단
+        컬럼으로만 저장. 둘 다 없으면 xsec 게이트(레거시 하위호환).
         spec_hash 중복이면 재실행 없이 기존 id 와 ``is_new=False``.
         """
         validate_spec_v2(spec)
@@ -93,9 +94,13 @@ class StrategyStoreV2(StrategyStore):
         else:
             t_in = t_out = t_gate = t_json = None
 
-        # v4 공정 게이트(walk-forward 초과수익 IR). 있으면 이게 gate_passed 의 단일 출처.
+        xsec_quality_gate = passes_full_gate_v2(in_m, out_m)
+        wf_gate = None
+
+        # v5 공정 게이트: WF 초과수익 IR AND xsec 품질(승률 제외).
         if wf_result is not None:
-            gate = bool(wf_result["gate_passed"])
+            wf_gate = bool(wf_result["gate_passed"])
+            gate = wf_gate and xsec_quality_gate
             wf_med = wf_result.get("oos_excess_ir_median")
             wf_min = wf_result.get("oos_excess_ir_min")
             wf_nw = wf_result.get("n_windows")
@@ -143,7 +148,7 @@ class StrategyStoreV2(StrategyStore):
                     t_in, t_out, t_gate,
                     engine_version, t_json,
                     wf_med, wf_min, wf_nw,
-                    (1 if gate else 0) if wf_result is not None else None, wf_json,
+                    (1 if wf_gate else 0) if wf_result is not None else None, wf_json,
                 ),
             )
             return cur.lastrowid, True

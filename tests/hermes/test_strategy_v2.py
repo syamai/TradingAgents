@@ -228,7 +228,7 @@ class TestDelegation:
         pd.testing.assert_series_equal(a, b)
 
 
-# === 완화 게이트 (win>0.50, sharpe>1.0, strict) ===
+# === 완화 게이트 (승률 제외, sharpe>1.0, MDD/거래수 strict) ===
 
 @pytest.mark.unit
 class TestGateV2:
@@ -237,9 +237,9 @@ class TestGateV2:
                 "mdd_pct": mdd, "cum_return_pct": 1.0, "avg_hold_days": 5.0,
                 "avg_net_ret_pct": 1.0, "avg_excess_ret_pct": 1.0}
 
-    def test_win_must_exceed_half_strict(self):
+    def test_win_rate_is_not_a_gate_condition(self):
         assert v2.passes_single_gate_v2(self._m(0.51, 1.1)) is True
-        assert v2.passes_single_gate_v2(self._m(0.50, 1.1)) is False  # strict >
+        assert v2.passes_single_gate_v2(self._m(0.40, 1.1)) is True
 
     def test_sharpe_must_exceed_one_strict(self):
         assert v2.passes_single_gate_v2(self._m(0.55, 1.01)) is True
@@ -249,11 +249,11 @@ class TestGateV2:
         assert v2.passes_single_gate_v2(self._m(0.6, 1.5, mdd=-25.0)) is False
         assert v2.passes_single_gate_v2(self._m(0.6, 1.5, n=40)) is False
 
-    def test_full_gate_requires_both_and_gap(self):
+    def test_full_gate_requires_both_not_win_gap(self):
         good = self._m(0.55, 1.2)
         assert v2.passes_full_gate_v2(good, dict(good)) is True
-        assert v2.passes_full_gate_v2(self._m(0.65, 1.2), self._m(0.52, 1.2)) is False
-        assert v2.passes_full_gate_v2(good, self._m(0.48, 1.2)) is False
+        assert v2.passes_full_gate_v2(self._m(0.65, 1.2), self._m(0.40, 1.2)) is True
+        assert v2.passes_full_gate_v2(good, self._m(0.48, 0.9)) is False
 
 
 # === 종목군 진입점 shape ===

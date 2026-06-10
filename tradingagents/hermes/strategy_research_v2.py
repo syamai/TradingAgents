@@ -1,7 +1,7 @@
 """수급 룰 전략 자율 연구 루프 v2 (LLM-free, 결정론적).
 
-승률(>0.5)·샤프(>1.0) 완화 게이트를 목표로 신규 신호(price_drop/trend_slope/
-rolling_corr)를 활용한 후보 전략을 생성→백테스트→게이트 판정→영속화한다.
+WF 시장초과 IR + xsec 품질(샤프>1.0·MDD≥-20%·거래≥50, 승률 제외) 엄격 게이트를
+목표로 신규 신호(price_drop/trend_slope/rolling_corr)를 활용한 후보 전략을 생성→백테스트→게이트 판정→영속화한다.
 
 종료: gate_passed=1 발견 OR ``MAX_EVAL``(=100) 개 평가 완료.
 실행: ``uv run python -m tradingagents.hermes.strategy_research_v2``

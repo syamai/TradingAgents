@@ -1,4 +1,4 @@
-"""trading-ai → Hermes MCP 서버 v2 (신규 신호 + 완화 게이트).
+"""trading-ai → Hermes MCP 서버 v2 (신규 신호 + 엄격 게이트).
 
 기존 ``mcp_server.py`` 를 무수정 유지하고, v2 전략 도구만 노출하는 **별도 stdio
 서버**. Hermes 가 ``strategy-researcher-v2`` 스킬로 이 서버의 도구를 호출해
@@ -11,8 +11,8 @@
   - ``save_strategy_v2``      : 내부 재백테스트 후 ``strategies_v2.db`` 영구 저장
   - ``list_strategies_v2``    : 누적 시도/통과 조회 (기본 brief — 토큰 절약)
 
-게이트(v2): 승률>0.50 · 샤프>1.0 · MDD≥-20% · 거래≥50 · in/out 격차≤10%p,
-in/out 양쪽 충족 시에만 ``gate_passed=True``.
+게이트(v2): WF 시장초과 IR 통과 AND xsec in/out 양쪽 샤프>1.0 · MDD≥-20% ·
+거래≥50. 승률 조건은 쓰지 않는다.
 
 실행: ``uv run python -m tradingagents.hermes.mcp_server_v2``
 저장: ``~/.tradingagents/hermes/strategies_v2.db`` (기존 strategies.db 와 분리).
@@ -23,7 +23,7 @@ from typing import Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 
-from tradingagents.hermes.backtest_engine_v2 import run_universe_backtest_v2
+from tradingagents.hermes.backtest_engine_v2 import passes_full_gate_v2, run_universe_backtest_v2
 from tradingagents.hermes.mcp_server import _engine_loader, _universe
 from tradingagents.hermes.strategy_spec import spec_hash
 from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
@@ -42,21 +42,19 @@ def _v2_store() -> StrategyStoreV2:
 mcp = FastMCP("trading-ai-hermes-v2")
 
 
-def _fair_gate(wf: dict) -> bool:
-    """공정 게이트 — walk-forward × 시장대비 초과수익 IR. 모든 OOS 창에서 시장을
-    이기고(IR>0) 중앙 IR>임계 여야 True. 단일 분할 레짐편향·시장베타 오인 제거."""
-    return bool(wf["gate_passed"])
+def _fair_gate(result: dict, wf: dict) -> bool:
+    """공정 게이트 — WF 시장초과 IR AND xsec 품질(Sharpe/MDD/거래수, 승률 제외)."""
+    return bool(wf["gate_passed"]) and passes_full_gate_v2(result["in_sample"], result["out_sample"])
 
 
 @mcp.tool()
 def backtest_strategy_v2(spec: dict, universe: Optional[list[str]] = None) -> dict:
     """v2 수급 룰 전략을 종목군에 백테스트 (탐색용 — 저장 안 함).
 
-    ★ v3: 종목분할(xsec)과 **시간분할(time, IS=과거/OOS=미래)** 을 모두 평가한다.
-    최종 ``gate_passed`` 는 **두 게이트 모두 통과**해야 True. 시간분할이 진짜
-    관문이다 — 종목분할만 좋고 시간분할이 무너지는 전략(레짐 베팅)은 통과 못 한다.
-    전략을 개선할 때 ``time_out_sample.sharpe`` (미래 구간)와 ``time_in_sample.sharpe``
-    (과거 구간)가 **둘 다 1.0 초과**하도록 맞춰라 — 한쪽만 높으면 시간 게이트 실패.
+    ★ v5: 종목분할(xsec) 진단과 walk-forward 시장초과 IR 을 모두 평가한다.
+    최종 ``gate_passed`` 는 **WF 시장초과 IR 통과 AND xsec 품질 통과**해야 True.
+    xsec 품질은 in/out 양쪽 Sharpe>1.0 · MDD≥-20% · 거래≥50 만 본다.
+    승률 50% 및 in/out 승률 격차 조건은 쓰지 않는다.
 
     v2 신호 어휘 (기존 5종 + 신규 3종):
       - ``price_drop``   : 최근 W일 종가 수익률 <= -X% (눌림목/역추세 진입)
@@ -79,8 +77,8 @@ def backtest_strategy_v2(spec: dict, universe: Optional[list[str]] = None) -> di
     returns:
         ``{in_sample:{win_rate,sharpe,mdd_pct,cum_return_pct,n_trades,...},
            out_sample:{...}, gate_passed:bool, universe_size, n_in, n_out}``.
-        게이트(승률>0.50·샤프>1.0·MDD≥-20%·거래≥50·in/out격차≤10%p)는 in/out
-        양쪽 충족 시에만 True.
+        WF 시장초과 IR 조건과 xsec in/out Sharpe>1.0 · MDD≥-20% · 거래≥50을
+        모두 통과해야 True. 승률 조건은 쓰지 않는다.
     """
     validate_spec_v2(spec)
     tickers = universe if universe else _universe()
@@ -94,7 +92,7 @@ def backtest_strategy_v2(spec: dict, universe: Optional[list[str]] = None) -> di
         "wf_excess_ir_median": wf["oos_excess_ir_median"],
         "wf_excess_ir_min": wf["oos_excess_ir_min"],
         "wf_oos_sharpe_median": wf["oos_sharpe_median"],   # raw(진단)
-        "gate_passed": _fair_gate(wf),
+        "gate_passed": _fair_gate(xsec, wf),
         "gate_min_ir": wf["gate_min_ir"],
         "portfolio_policy": xsec.get("portfolio_policy"),
         "universe_size": xsec["universe_size"],
@@ -137,7 +135,7 @@ def save_strategy_v2(spec: dict, name: Optional[str] = None) -> dict:
     return {
         "strategy_id": sid,
         "duplicate": False,
-        "gate_passed": _fair_gate(wf_result),
+        "gate_passed": _fair_gate(result, wf_result),
         "in_sample": result["in_sample"],
         "out_sample": result["out_sample"],
         "wf_n_windows": wf_result["n_windows"],
