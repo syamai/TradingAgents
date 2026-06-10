@@ -11,8 +11,9 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, time as dtime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -33,10 +34,20 @@ BASE_WEIGHT = STOCK_WEIGHT / MAX_POSITIONS
 MAX_SINGLE_WEIGHT = 0.05
 INITIAL_CAPITAL_KRW = 100_000_000
 TOP_SHOW = 20
-# Selected 5-strategy paper-trading basket requested by user.
-# 1518/1561 already contain KOSPI80 stock20 overlay in DB spec.
-# 1841 contains FX overlay in DB spec. 1035/1081 get FX overlay at load time.
-SELECTED_STRATEGY_IDS = [1561, 1518, 1035, 1081, 1841]
+KST = ZoneInfo("Asia/Seoul")
+DAILY_SUPPLY_CONFIRM_TIME = dtime(16, 40)
+# 2026-06-10 재선정 — 새 비용 게이트(매도세 0.18% 반영, engine 039c49bd) + 3-arm forward 실험.
+#   Arm A (틱손절, 견고성 바스켓): 1087 1091 1081(+FX overlay) 2746 1013
+#   Arm B (ride 변형 — 넓은손절 SL40/긴보유 180d, 휩쏘 회피 가설): 3009 3010 3011
+#     (각각 1087/1091/1081 entry + ride exit. minIR 0.64/1.00/0.61 으로 원본 대비 견고성↑)
+#   Arm C (벤치마크): KOSPI buy&hold — 슬리브 아님. 평가 시 동기간 수익률로 비교.
+#   Arm D (2026-06-10 추가, 생존편향 중립 검증): maB-aboveMA-closevol plateau 2930/2939/2942
+#     — 추세+종가위치+거래량급증. 생존풀-초과 walk-forward 견고 + 미사용기간 양수로 독립검증된
+#     진짜 실력 패밀리(형제 다수 견고). 2930/2942는 옛 KOSPI 게이트 위음성(gate_passed=0).
+#   Arm E (생존풀 게이트 통과 고-min 수급): 2884(consensus-breakout)·2866(absorption)·634(fu-corr).
+#     생존풀 walk-forward robust 통과(min 0.72/0.51/0.42). 단 2884는 과거 forward -8.4%(레짐 휩쏘) — 재검증 관찰.
+# 폐기: 직전 돌파 바스켓 중 [1561, 1841, 1518, 2902] — forward -8~-9.6%(KOSPI +54.7% 폭등장 손실).
+SELECTED_STRATEGY_IDS = [1087, 1091, 1081, 2746, 1013, 3009, 3010, 3011, 2930, 2939, 2942, 2884, 2866, 634]
 FX20_GE2_MA60_STOCK30 = {
     "type": "usdkrw_trailing_return_ma_scale",
     "window": 20,
@@ -62,8 +73,10 @@ def load_passed() -> list[dict]:
     placeholders = ",".join("?" for _ in SELECTED_STRATEGY_IDS)
     with sqlite3.connect(DB) as con:
         con.row_factory = sqlite3.Row
+        # 큐레이션된 SELECTED 가 관찰셋의 권위(게이트는 연구 선별용 — 위음성 있음).
+        # 독립 검증된 전략은 gate_passed=0 이어도 관찰. 따라서 gate 필터 제거.
         rows = con.execute(
-            f"SELECT * FROM strategies WHERE gate_passed=1 AND id IN ({placeholders})",
+            f"SELECT * FROM strategies WHERE id IN ({placeholders})",
             SELECTED_STRATEGY_IDS,
         ).fetchall()
     out = []
@@ -105,6 +118,24 @@ def ticker_name(ticker: str, metas: dict[str, dict]) -> str:
     meta = metas.get(ticker) or {}
     name = meta.get("name") or meta.get("ticker_name") or ""
     return f"{ticker} {name}".strip()
+
+
+def expected_kis_daily_date(kospi) -> str | None:
+    """KIS 일별 수급 기준 기대 최신일.
+
+    investor/program/short 는 한국 주식장 종료 후 약 1시간 뒤 당일분(T)이
+    조회된다. 확정 시간 이후에는 오늘이 거래일이면 오늘을 기대 기준일로,
+    그 전에는 직전 거래일을 기대 기준일로 본다.
+    """
+    if kospi is None or getattr(kospi, "empty", True) or "date" not in kospi:
+        return None
+    now = datetime.now(KST)
+    today = now.date().isoformat()
+    dates = sorted(str(d)[:10] for d in kospi["date"].dropna().tolist())
+    if today in dates and now.time() >= DAILY_SUPPLY_CONFIRM_TIME:
+        return today
+    prior = [d for d in dates if d < today]
+    return prior[-1] if prior else (dates[-1] if dates else None)
 
 
 def overlay_stock_weight(spec: dict, latest_date: str, kospi, usdkrw) -> float:
@@ -313,6 +344,14 @@ def main() -> int:
 
     kospi = kf(None, None)
     usdkrw = uf(None, None)
+    expected_date = expected_kis_daily_date(kospi)
+    if expected_date and latest_date < expected_date and not bool(int(__import__("os").environ.get("PAPERTRADE_ALLOW_STALE", "0"))):
+        print("## 일일 페이퍼트레이딩 보류 — 원천 수급 데이터 지연")
+        print(f"- 현재 holdings 최신일: **{latest_date}**")
+        print(f"- 기대 최신일: **{expected_date}**")
+        print("- 조치: KIS 일별 수급 업데이트가 완료된 뒤 다시 실행하세요.")
+        print("- 강제 실행이 필요하면 `PAPERTRADE_ALLOW_STALE=1`을 지정하세요.")
+        return 3
 
     strategy_reports = []
     all_errors = []
@@ -391,7 +430,7 @@ def main() -> int:
         "strategies": strategy_reports,
         "errors": all_errors[:10],
     }
-    out_json = REPORT_DIR / f"papertrade_selected5_per_strategy_{latest_date}.json"
+    out_json = REPORT_DIR / f"papertrade_selected{len(strategy_reports)}_per_strategy_{latest_date}.json"
     snapshot["report_json_path"] = str(out_json)
     out_json.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     run_id = save_snapshot_to_db(snapshot, out_json)
@@ -407,12 +446,13 @@ def main() -> int:
     total_buys = sum(len(r["today_buys"]) for r in strategy_reports)
     total_sells = sum(len(r["today_sells"]) for r in strategy_reports)
     lines = []
-    lines.append("## 선정 5개 전략 독립 페이퍼트레이딩")
+    lines.append(f"## 선정 {len(strategy_reports)}개 전략 독립 페이퍼트레이딩")
     lines.append(f"- 데이터 기준일: **{latest_date}**")
     lines.append(f"- 운용 방식: **전략별 독립 계좌 1억원씩**")
     lines.append(f"- 총 가상자산: **{fmt_krw(INITIAL_CAPITAL_KRW * len(strategy_reports))}**")
     lines.append(f"- 선정 ID: `{', '.join(str(x) for x in SELECTED_STRATEGY_IDS)}`")
-    lines.append("- Overlay: `1561=KOSPI80(DB)`, `1518=KOSPI80(DB)`, `1035=FX20>=2%&>60MA`, `1081=FX20>=2%&>60MA`, `1841=FX20>=2%&>60MA(DB)`")
+    overlay_summary = ", ".join(f"{r['strategy_id']}={r['overlay_label']}" for r in strategy_reports)
+    lines.append(f"- Overlay: `{overlay_summary}`")
     lines.append(f"- 전체 신규 진입: **{total_buys}건** / 청산: **{total_sells}건**")
     lines.append("")
 
