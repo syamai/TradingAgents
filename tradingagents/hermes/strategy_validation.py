@@ -17,8 +17,8 @@ generalization)를 측정하지 못한다. 진단(``scripts/v3_timesplit_diagnos
   경계 거래의 조기청산 — 둘 다 **보수적**(과대평가가 아니라 과소평가) 방향이다.
   embargo 는 IS 종료와 OOS 시작 사이에 거래일 갭을 둬 잔존 직렬상관을 끊는다.
 
-게이트는 ``passes_full_gate_v2`` 를 그대로 재사용한다(두 split 모두 통과 + 승률
-격차 — 의미 동일, 축만 시간). 즉 IS·OOS **양쪽**에서 강해야 통과한다.
+게이트는 ``passes_full_gate_v2`` 를 그대로 재사용한다(두 split 모두 Sharpe/MDD/거래수
+통과, 승률 조건 없음 — 의미 동일, 축만 시간). 즉 IS·OOS **양쪽**에서 강해야 통과한다.
 
 참고: 본 모듈은 우선순위 1(시간분할)·2(purge/embargo)를 구현한다. PBO/Deflated
 Sharpe/CPCV(우선순위 4~6)는 통과 후보가 복수로 나온 뒤 별도 추가한다.
@@ -46,7 +46,11 @@ from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
 IN_SAMPLE_PCT = 70           # 시간축 IS 비율(종목분할과 동일 — 축만 다름)
 DEFAULT_EMBARGO_DAYS = 12    # IS↔OOS 갭(거래일). López de Prado h≈1%·T 권장에 부합.
 _HI_SENTINEL = "9999-12-31"  # 마지막 날짜까지 포함하기 위한 상한
-GATE_EXCESS_MIN_IR = 0.5     # 채택 게이트: 시장(KOSPI) 대비 초과수익 정보비율(IR) 하한
+GATE_EXCESS_MIN_IR = 0.5     # (구) KOSPI 대비 초과 IR 하한 — 생존편향 포함이라 위양성多. 진단용 보존.
+GATE_POOL_MIN_IR = 0.3       # (신) 생존풀(유니버스 동일가중) 대비 초과 IR 하한 — 생존편향 중립 '실력'.
+# 유니버스가 전부 현재 생존자라 KOSPI 초과는 생존 프리미엄(클린기간 ~3.3배)을 실력으로 오인한다.
+# 벤치마크를 생존풀로 바꾸면 그 프리미엄이 전략·벤치마크 양쪽에서 상쇄돼 순수 종목선택력만 남는다.
+# 신호 계산은 실제 KOSPI 유지(market_filter 등 불변), 초과수익 벤치마크만 생존풀로 교체한다.
 # OOS/IS 채점 상한 — 2025-06 이후 한국 증시 비정상 급등(생존자 풀 동일가중 ~18.8배 vs
 # KOSPI ~4.3배)이 검증에 섞이면 성과가 구조적으로 과대평가된다(CLAUDE.md 규칙). 데이터
 # 그리드를 이 날짜에서 잘라 채점하면 IS·OOS 모두 상한이 적용된다. 포워드 관찰은 date_hi=None.
@@ -61,7 +65,29 @@ def _universe_dates(holdings: dict[str, pd.DataFrame]) -> list[str]:
     return sorted(dates)
 
 
-def _window_metrics(spec: dict, holdings: dict, kospi, lo: str, hi: str, usdkrw=None) -> dict:
+def _survivor_pool_index(holdings: dict) -> Optional[pd.DataFrame]:
+    """유니버스(생존 종목군) 동일가중 누적 인덱스 — 생존편향 중립 벤치마크.
+
+    종목이 전부 현재 생존자라 KOSPI 초과는 생존 프리미엄을 실력으로 오인한다. 이 풀을
+    벤치마크로 쓰면 프리미엄이 전략·벤치마크 양쪽에서 상쇄돼 순수 종목선택력만 남는다.
+    반환 형식은 KOSPI df 와 동일(date/close)이라 bt._market_daily_returns 가 그대로 쓴다.
+    """
+    rets = []
+    for _tk, df in holdings.items():
+        d = df[bt._num(df["close"]) > 0]
+        if d.empty:
+            continue
+        idx = d["date"].astype(str).to_numpy()
+        rets.append(pd.Series(bt._num(d["close"]).pct_change().to_numpy(), index=idx, name=_tk))
+    if not rets:
+        return None
+    ew = pd.concat(rets, axis=1).sort_index().mean(axis=1).fillna(0.0)
+    close = (1.0 + ew).cumprod()
+    return pd.DataFrame({"date": close.index, "close": close.to_numpy()})
+
+
+def _window_metrics(spec: dict, holdings: dict, kospi, lo: str, hi: str, usdkrw=None,
+                    benchmark=None) -> dict:
     """``[lo, hi)`` 날짜 구간만 잘라 종목군 시뮬 → 메트릭(bt._metrics).
 
     각 종목 df 를 구간으로 필터해 ``_simulate_v2`` 에 넘긴다. 구간 밖 데이터는
@@ -84,14 +110,15 @@ def _window_metrics(spec: dict, holdings: dict, kospi, lo: str, hi: str, usdkrw=
         all_trades.extend(trades)
         n_tk += 1
     port = bt._combine_korea_stock_portfolio(ret_frames, act_frames)
+    bench = kospi if benchmark is None else benchmark   # 초과수익 벤치마크(신호는 kospi 고정)
     overlay_mult = _market_overlay_multiplier(port.index, kospi, spec.get("market_overlay"), usdkrw=usdkrw)
     if spec.get("market_overlay"):
         port = port * overlay_mult
-        market = bt._market_daily_returns(kospi, port.index)
+        market = bt._market_daily_returns(bench, port.index)
         invested = bt._invested_weight_korea(act_frames).reindex(port.index).fillna(0.0) * overlay_mult
         excess = port - invested * market
     else:
-        excess = bt._excess_daily_korea(port, act_frames, kospi)
+        excess = bt._excess_daily_korea(port, act_frames, bench)
     m = bt._metrics(all_trades, port, excess_daily=excess)
     m["_window"] = [lo, hi if hi != _HI_SENTINEL else "end"]
     m["_n_tickers"] = n_tk
@@ -185,6 +212,7 @@ def run_walk_forward_validation(
     mode: str = "rolling",          # "rolling" | "anchored"
     embargo_days: int = DEFAULT_EMBARGO_DAYS,
     date_hi: Optional[str] = SCORE_DATE_HI,
+    benchmark: str = "pool",        # "pool"=생존풀(신 게이트, 생존편향 중립) | "kospi"=구 게이트
 ) -> dict:
     """Walk-forward 검증 — 윈도우를 전진시키며 (IS→OOS) 사이클 반복.
 
@@ -225,6 +253,11 @@ def run_walk_forward_validation(
         except Exception:        # noqa: BLE001
             usdkrw = None
 
+    if benchmark not in ("pool", "kospi"):
+        raise ValueError(f"benchmark must be pool|kospi, got {benchmark!r}")
+    bench_df = _survivor_pool_index(holdings) if benchmark == "pool" else None
+    gate_min_ir = GATE_POOL_MIN_IR if benchmark == "pool" else GATE_EXCESS_MIN_IR
+
     dates = _universe_dates(holdings)
     is_len = int(is_years * bt.TRADING_DAYS_PER_YEAR)
     oos_len = int(oos_years * bt.TRADING_DAYS_PER_YEAR)
@@ -245,8 +278,8 @@ def run_walk_forward_validation(
 
     results = []
     for (is_lo, is_hi, oos_lo, oos_hi) in windows:
-        is_m = _window_metrics(spec, holdings, kospi, is_lo, is_hi, usdkrw=usdkrw)
-        oos_m = _window_metrics(spec, holdings, kospi, oos_lo, oos_hi, usdkrw=usdkrw)
+        is_m = _window_metrics(spec, holdings, kospi, is_lo, is_hi, usdkrw=usdkrw, benchmark=bench_df)
+        oos_m = _window_metrics(spec, holdings, kospi, oos_lo, oos_hi, usdkrw=usdkrw, benchmark=bench_df)
         results.append({
             "is_window": [is_lo, is_hi], "oos_window": [oos_lo, oos_hi],
             "in_sample": is_m, "out_sample": oos_m,
@@ -265,7 +298,7 @@ def run_walk_forward_validation(
         len(results) >= 2
         and len(valid_excess) == len(results)
         and oos_ex_min is not None and oos_ex_min > 0
-        and oos_ex_median is not None and oos_ex_median > GATE_EXCESS_MIN_IR
+        and oos_ex_median is not None and oos_ex_median > gate_min_ir
     )
 
     oos_sharpes = [r["out_sample"]["sharpe"] for r in results
@@ -283,7 +316,8 @@ def run_walk_forward_validation(
         "oos_sharpe_min": oos_min,          # 진단용(raw)
         "gate_passed": passed,
         "gate_metric": "excess_ir",
-        "gate_min_ir": GATE_EXCESS_MIN_IR,
+        "benchmark": benchmark,            # "pool"(생존편향 중립) | "kospi"(구)
+        "gate_min_ir": gate_min_ir,
         "data_span": [min_d, max_d],
     }
 

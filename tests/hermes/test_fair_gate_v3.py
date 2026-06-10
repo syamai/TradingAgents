@@ -119,25 +119,36 @@ def _osc_loader(n: int):
 @pytest.mark.unit
 class TestWalkForwardExcessGate:
     def test_gate_keyed_on_excess_ir(self):
+        # 구 KOSPI 벤치마크 경로(benchmark='kospi') — 임계 GATE_EXCESS_MIN_IR.
         r = V.run_walk_forward_validation(
             _price_drop_spec(), ["A"],
             loader=_osc_loader(1500), kospi_fetcher=lambda _s, _e: None,
-            is_years=2.0, oos_years=1.0, mode="rolling")
+            is_years=2.0, oos_years=1.0, mode="rolling", benchmark="kospi")
         assert r["gate_metric"] == "excess_ir"
+        assert r["benchmark"] == "kospi"
         assert r["gate_min_ir"] == V.GATE_EXCESS_MIN_IR
         assert {"oos_excess_ir_median", "oos_excess_ir_min"} <= set(r)
         # raw sharpe 는 진단용으로 함께 보고.
         assert {"oos_sharpe_median", "oos_sharpe_min"} <= set(r)
         assert isinstance(r["gate_passed"], bool)
+
+    def test_default_benchmark_is_survivor_pool(self):
+        # 신 게이트: 기본 벤치마크=생존풀(생존편향 중립), 임계 GATE_POOL_MIN_IR.
+        r = V.run_walk_forward_validation(
+            _price_drop_spec(), ["A"],
+            loader=_osc_loader(1500), kospi_fetcher=lambda _s, _e: None,
+            is_years=2.0, oos_years=1.0, mode="rolling")
+        assert r["benchmark"] == "pool"
+        assert r["gate_min_ir"] == V.GATE_POOL_MIN_IR
         for w in r["windows"]:
             assert "excess_sharpe" in w["out_sample"]
 
 
-def _metric_dict(sharpe, win, n=100):
+def _metric_dict(sharpe, win, n=100, mdd=-5.0):
     return {
         "n_trades": n, "win_rate": win, "avg_net_ret_pct": 1.0,
         "avg_hold_days": 3.0, "cum_return_pct": 10.0, "sharpe": sharpe,
-        "mdd_pct": -5.0, "avg_excess_ret_pct": 0.2,
+        "mdd_pct": mdd, "avg_excess_ret_pct": 0.2,
         "excess_sharpe": 0.1, "excess_cum_return_pct": 1.0, "excess_mdd_pct": -2.0,
     }
 
@@ -154,7 +165,7 @@ class TestStoreV4:
         assert {"wf_excess_ir_median", "wf_excess_ir_min", "wf_n_windows",
                 "wf_gate_passed", "wf_result_json"} <= cols
 
-    def test_gate_passed_from_wf_result(self, tmp_path):
+    def test_wf_pass_alone_does_not_pass_without_strict_xsec(self, tmp_path):
         store = StrategyStoreV2(root=tmp_path)
         result = {"in_sample": _metric_dict(0.3, 0.45),
                   "out_sample": _metric_dict(0.2, 0.43),
@@ -167,12 +178,28 @@ class TestStoreV4:
             r = c.execute("SELECT gate_passed, wf_gate_passed, wf_excess_ir_median,"
                           " wf_excess_ir_min, wf_n_windows FROM strategies WHERE id=?",
                           (sid,)).fetchone()
-        # gate_passed 는 wf 게이트 단일 출처 (xsec gate_passed=False 여도 wf=True 면 1)
-        assert r["gate_passed"] == 1
+        # gate_passed 는 WF 통과와 xsec 품질(Sharpe/MDD/거래수)의 AND. 승률은 제외.
+        assert r["gate_passed"] == 0
         assert r["wf_gate_passed"] == 1
         assert abs(r["wf_excess_ir_median"] - 0.8) < 1e-9
         assert abs(r["wf_excess_ir_min"] - 0.6) < 1e-9
         assert r["wf_n_windows"] == 5
+
+    def test_strict_gate_ignores_win_rate_threshold(self, tmp_path):
+        store = StrategyStoreV2(root=tmp_path)
+        # 승률은 50% 미만이지만 Sharpe/MDD/거래수 + WF 가 모두 통과하면 통과.
+        result = {"in_sample": _metric_dict(1.2, 0.45, n=100, mdd=-10.0),
+                  "out_sample": _metric_dict(1.1, 0.44, n=80, mdd=-8.0),
+                  "gate_passed": False, "universe_size": 150}
+        wf_pass = {"gate_passed": True, "oos_excess_ir_median": 0.8,
+                   "oos_excess_ir_min": 0.2, "n_windows": 5}
+        sid, _ = store.save(self._spec(), result, name="winrate_ignored", wf_result=wf_pass,
+                            engine_version="testeng1")
+        with store._conn() as c:
+            r = c.execute("SELECT gate_passed, wf_gate_passed FROM strategies WHERE id=?",
+                          (sid,)).fetchone()
+        assert r["gate_passed"] == 1
+        assert r["wf_gate_passed"] == 1
 
     def test_wf_fail_records_gate_zero(self, tmp_path):
         store = StrategyStoreV2(root=tmp_path)
