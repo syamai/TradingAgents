@@ -1,0 +1,4308 @@
+{
+  "quotas": {
+    "A_price_trend": 35,
+    "B_flow_trend": 35,
+    "C_regime_trend": 30
+  },
+  "specs": [
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break20_0-cons-fast_money-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 0.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break20_0-cons-broad_smart-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 0.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break20_0-cons-institution_defensive-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 0.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break20_2-cons-foreign_pair-fx60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break20_2-cons-fast_money-fx60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break20_2-cons-broad_smart-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break20_2-cons-institution_defensive-fx60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break60_2-cons-foreign_pair-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break60_2-cons-fast_money-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break60_2-cons-broad_smart-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break60_2-cons-institution_defensive-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break60_5-cons-foreign_pair-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break60_5-cons-fast_money-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break60_5-cons-broad_smart-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break60_5-cons-institution_defensive-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break120_5-cons-foreign_pair-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 120,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break120_5-cons-fast_money-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 120,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break120_5-cons-broad_smart-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 120,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma20-break120_5-cons-institution_defensive-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "breakout_high",
+            "window": 120,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break20_0-cons-foreign_pair-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 0.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break20_0-cons-fast_money-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 0.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break20_0-cons-broad_smart-fx60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 0.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break20_0-cons-institution_defensive-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 0.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break20_2-cons-foreign_pair-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break20_2-cons-fast_money-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break20_2-cons-broad_smart-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break20_2-cons-institution_defensive-none",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 20,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break60_2-cons-foreign_pair-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break60_2-cons-fast_money-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break60_2-cons-broad_smart-fx60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break60_2-cons-institution_defensive-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 2.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break60_5-cons-foreign_pair-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break60_5-cons-fast_money-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break60_5-cons-broad_smart-fx60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixA-ma60-break60_5-cons-institution_defensive-ko80",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "breakout_high",
+            "window": 60,
+            "proximity_pct": 5.0
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "A_price_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "가격이 MA 위에서 전고점 접근/돌파하고 다수 스마트머니가 동의할 때만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-fr-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-fr-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-fr-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-fr-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-fr-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-fr-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-fu-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-fu-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-fu-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-fu-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-fu-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-fu-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-pe-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-pe-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-pe-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-pe-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-pe-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-pe-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-it-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-it-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-it-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-it-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-it-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-it-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-pn-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-pn-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-pn-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-pn-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-pn-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-pn-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-ins-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "insurance",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "insurance",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-ins-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "insurance",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "insurance",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma20-zaccel-ins-z10_120_10-a10_60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "insurance",
+            "window": 10,
+            "lookback": 120,
+            "min_z": 1.0
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "insurance",
+            "short": 10,
+            "long": 60
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-ins-z3_60_15-a3_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "insurance",
+            "window": 3,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "insurance",
+            "short": 3,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixB-ma60-zaccel-ins-z5_120_15-a5_20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "insurance",
+            "window": 5,
+            "lookback": 120,
+            "min_z": 1.5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "insurance",
+            "short": 5,
+            "long": 20
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "B_flow_trend",
+      "research_note": "가격 추세가 살아있는 종목에서 동일 주체 수급의 이례성과 가속을 동시에 요구"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt20-ma20-break20_2-liq-ko80r20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "시장 레짐이 우호적일 때만 거래가능한 개별주 추세를 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt20-ma60-break20_2-liq-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 레짐이 우호적일 때만 거래가능한 개별주 추세를 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-ma20-break20_2-liq-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 레짐이 우호적일 때만 거래가능한 개별주 추세를 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-ma60-break20_2-liq-fx60r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 레짐이 우호적일 때만 거래가능한 개별주 추세를 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-ma20-break20_2-liq-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 레짐이 우호적일 때만 거래가능한 개별주 추세를 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-ma60-break20_2-liq-fx60r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 10.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 20,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 5
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 레짐이 우호적일 때만 거래가능한 개별주 추세를 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-institution_defensive-w5-l5-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-institution_defensive-w10-l10-ko80r20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-institution_defensive-w20-l20-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 20000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-broad_smart-w5-l5-fx60r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-broad_smart-w10-l10-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 10,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-broad_smart-w20-l20-fx60r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 20,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 20000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-foreign_pair-w5-l5-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-foreign_pair-w10-l10-ko80r20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt60-flow-foreign_pair-w20-l20-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 20000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-institution_defensive-w5-l5-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-institution_defensive-w10-l10-ko80r20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-institution_defensive-w20-l20-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 20000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-broad_smart-w5-l5-fx60r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-broad_smart-w10-l10-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 10,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-broad_smart-w20-l20-fx60r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 20,
+            "min_buyers": 3,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 20000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-foreign_pair-w5-l5-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-foreign_pair-w10-l10-ko80r20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 10000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt120-flow-foreign_pair-w20-l20-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 120
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 20000000000.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 15.0,
+        "stop_loss_pct": 8.0,
+        "max_hold_days": 40,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 10
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세와 수급 추세가 동시에 맞는 거래가능 종목만 편입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt20-close75-vol3_20_15-fx60r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 3,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 8.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 10,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세가 맞을 때 종가 품질과 거래 참여가 동시에 개선되는 개별주만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt20-close75-vol5_60_15-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 60,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 8.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 10,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세가 맞을 때 종가 품질과 거래 참여가 동시에 개선되는 개별주만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt20-close75-vol10_60_20-ko80r20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 10,
+            "long": 60,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 8.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 10,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "시장 추세가 맞을 때 종가 품질과 거래 참여가 동시에 개선되는 개별주만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt20-close90-vol3_20_15-fx60r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 3,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 8.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 10,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "usdkrw_trailing_return_ma_scale",
+        "window": 60,
+        "op": ">=",
+        "threshold_pct": 5.0,
+        "ma_window": 120,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세가 맞을 때 종가 품질과 거래 참여가 동시에 개선되는 개별주만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt20-close90-vol5_60_15-ko120r30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 60,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 8.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 10,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 120,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 30.0
+      },
+      "research_note": "시장 추세가 맞을 때 종가 품질과 거래 참여가 동시에 개선되는 개별주만 진입"
+    },
+    {
+      "spec_version": 2,
+      "name": "trendmixC-mkt20-close90-vol10_60_20-ko80r20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "market_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 10,
+            "long": 60,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "take_profit_pct": 8.0,
+        "stop_loss_pct": 5.0,
+        "max_hold_days": 10,
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ]
+      },
+      "research_family": "C_regime_trend",
+      "market_overlay": {
+        "type": "kospi_trailing_return_scale",
+        "window": 80,
+        "op": "<=",
+        "threshold_pct": 0.0,
+        "risk_stock_weight_pct": 20.0
+      },
+      "research_note": "시장 추세가 맞을 때 종가 품질과 거래 참여가 동시에 개선되는 개별주만 진입"
+    }
+  ]
+}

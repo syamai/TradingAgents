@@ -1,0 +1,3913 @@
+{
+  "created_at": "2026-06-09T18:39:51.482623",
+  "count": 100,
+  "families": {
+    "maA": "MA 위 추세 + 스마트머니 합의 + 유동성",
+    "maB": "MA 위 강한 종가 위치 + 거래량 급증",
+    "maC": "MA 아래 소외 구간 + 주체별 수급 z-score 전환",
+    "maD": "MA 위 변동성 수축 + 분산된 스마트머니 매수",
+    "maE": "MA 상태 + 주체별 수급 평균 가속 + 거래량대비 순매수"
+  },
+  "specs": [
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-001-ma20-foreign_pair-w5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-002-ma20-foreign_pair-w10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-003-ma20-foreign_pair-w20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-004-ma20-broad_smart-w5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-005-ma20-broad_smart-w10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-006-ma20-broad_smart-w20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-007-ma20-institution_defensive-w5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-008-ma20-institution_defensive-w10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-009-ma20-institution_defensive-w20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-010-ma20-fast_money-w5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": false
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-011-ma20-fast_money-w10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": false
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-012-ma20-fast_money-w20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "fast_money",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": false
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-013-ma60-foreign_pair-w5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-014-ma60-foreign_pair-w10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-015-ma60-foreign_pair-w20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "foreign_pair",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-016-ma60-broad_smart-w5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-017-ma60-broad_smart-w10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-018-ma60-broad_smart-w20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "broad_smart",
+            "window": 20,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-019-ma60-institution_defensive-w5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 5,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maA-trend-smart-020-ma60-institution_defensive-w10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_consensus",
+            "group": "institution_defensive",
+            "window": 10,
+            "min_buyers": 2,
+            "require_retail_sell": true
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 20,
+            "op": ">=",
+            "value": 5000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 10,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-001-ma20-cl06-vr15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.6
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-002-ma20-cl06-vr20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.6
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-003-ma20-cl06-vr30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.6
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 3.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-004-ma20-cl075-vr15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-005-ma20-cl075-vr20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-006-ma20-cl075-vr30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 3.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-007-ma20-cl09-vr15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-008-ma20-cl09-vr20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-009-ma20-cl09-vr30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 3.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-010-ma60-cl06-vr15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.6
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-011-ma60-cl06-vr20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.6
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-012-ma60-cl06-vr30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.6
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 3.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-013-ma60-cl075-vr15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-014-ma60-cl075-vr20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-015-ma60-cl075-vr30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 3.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-016-ma60-cl09-vr15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-017-ma60-cl09-vr20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-018-ma60-cl09-vr30",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 5,
+            "long": 20,
+            "min_ratio": 3.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 15,
+        "max_hold_days": 20
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-019-ma5-cl075-vr15-short3",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.75
+          },
+          {
+            "signal": "volume_surge",
+            "short": 3,
+            "long": 20,
+            "min_ratio": 1.5
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 3,
+        "take_profit_pct": 8,
+        "max_hold_days": 5
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maB-aboveMA-closevol-020-ma5-cl09-vr20-short3",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "close_location",
+            "min_pos": 0.9
+          },
+          {
+            "signal": "volume_surge",
+            "short": 3,
+            "long": 20,
+            "min_ratio": 2.0
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 5
+          }
+        ],
+        "stop_loss_pct": 3,
+        "take_profit_pct": 8,
+        "max_hold_days": 5
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-001-ma20-foreign_registered-z10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-002-ma20-foreign_registered-z15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-003-ma20-foreign_registered-z20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 2.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-004-ma20-foreign_unregistered-z10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-005-ma20-foreign_unregistered-z15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-006-ma20-foreign_unregistered-z20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 2.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-007-ma20-private_equity-z10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-008-ma20-private_equity-z15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-009-ma20-private_equity-z20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "private_equity",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 2.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-010-ma20-investment_trust-z10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-011-ma20-investment_trust-z15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-012-ma20-investment_trust-z20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "investment_trust",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 2.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-013-ma20-pension-z10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-014-ma20-pension-z15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-015-ma20-pension-z20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "pension",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 2.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-016-ma60-foreign_registered-z10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-017-ma60-foreign_registered-z15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-018-ma60-foreign_registered-z20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_registered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 2.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-019-ma60-foreign_unregistered-z10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.0
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maC-belowMA-flowturn-020-ma60-foreign_unregistered-z15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 60
+          },
+          {
+            "signal": "flow_zscore",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "lookback": 60,
+            "min_z": 1.5
+          },
+          {
+            "signal": "liquidity_filter",
+            "window": 60,
+            "op": ">=",
+            "value": 10000000000
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "fast_money_unwind",
+            "window": 3
+          }
+        ],
+        "stop_loss_pct": 8,
+        "take_profit_pct": 10,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-001-ma20-rng10-mx5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 10,
+            "max_pct": 5
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-002-ma20-rng10-mx10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 10,
+            "max_pct": 10
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-003-ma20-rng10-mx15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 10,
+            "max_pct": 15
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-004-ma20-rng10-mx20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 10,
+            "max_pct": 20
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-005-ma20-rng20-mx5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 20,
+            "max_pct": 5
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-006-ma20-rng20-mx10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 20,
+            "max_pct": 10
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-007-ma20-rng20-mx15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 20,
+            "max_pct": 15
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-008-ma20-rng20-mx20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 20,
+            "max_pct": 20
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-009-ma20-rng60-mx5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 60,
+            "max_pct": 5
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-010-ma20-rng60-mx10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 60,
+            "max_pct": 10
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-011-ma20-rng60-mx15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 60,
+            "max_pct": 15
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-012-ma20-rng60-mx20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "range_compression",
+            "window": 60,
+            "max_pct": 20
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-013-ma60-rng10-mx5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "range_compression",
+            "window": 10,
+            "max_pct": 5
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-014-ma60-rng10-mx10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "range_compression",
+            "window": 10,
+            "max_pct": 10
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-015-ma60-rng10-mx15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "range_compression",
+            "window": 10,
+            "max_pct": 15
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-016-ma60-rng10-mx20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "range_compression",
+            "window": 10,
+            "max_pct": 20
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-017-ma60-rng20-mx5",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "range_compression",
+            "window": 20,
+            "max_pct": 5
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-018-ma60-rng20-mx10",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "range_compression",
+            "window": 20,
+            "max_pct": 10
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-019-ma60-rng20-mx15",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "range_compression",
+            "window": 20,
+            "max_pct": 15
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maD-ma-squeeze-020-ma60-rng20-mx20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 60
+          },
+          {
+            "signal": "range_compression",
+            "window": 20,
+            "max_pct": 20
+          },
+          {
+            "signal": "flow_dispersion",
+            "group": "broad_smart",
+            "window": 10,
+            "max_share": 0.6
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "below_ma",
+            "window": 20
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 20,
+        "max_hold_days": 40
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-001-ma5-foreign_registered-s3l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 3,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_registered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_registered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-002-ma5-foreign_registered-s5l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 5,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_registered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_registered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-003-ma5-foreign_registered-s10l60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 10,
+            "long": 60
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_registered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_registered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-004-ma5-foreign_unregistered-s3l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 3,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_unregistered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-005-ma5-foreign_unregistered-s5l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 5,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_unregistered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-006-ma5-foreign_unregistered-s10l60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 10,
+            "long": 60
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_unregistered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-007-ma5-private_equity-s3l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 3,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "private_equity",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "private_equity",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-008-ma5-private_equity-s5l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 5,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "private_equity",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "private_equity",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-009-ma5-private_equity-s10l60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "private_equity",
+            "short": 10,
+            "long": 60
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "private_equity",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "private_equity",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-010-ma5-investment_trust-s3l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 3,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "investment_trust",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "investment_trust",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-011-ma5-investment_trust-s5l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 5,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "investment_trust",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "investment_trust",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-012-ma5-investment_trust-s10l60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "investment_trust",
+            "short": 10,
+            "long": 60
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "investment_trust",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "investment_trust",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-013-ma5-pension-s3l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 3,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "pension",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "pension",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-014-ma5-pension-s5l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 5,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "pension",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "pension",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-015-ma5-pension-s10l60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 5
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "pension",
+            "short": 10,
+            "long": 60
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "pension",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "pension",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-016-ma20-foreign_registered-s3l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 3,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_registered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_registered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-017-ma20-foreign_registered-s5l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 5,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_registered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_registered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-018-ma20-foreign_registered-s10l60",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_registered",
+            "short": 10,
+            "long": 60
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_registered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_registered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-019-ma20-foreign_unregistered-s3l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 3,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_unregistered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    },
+    {
+      "spec_version": 2,
+      "name": "maE-ma-flowaccel-020-ma20-foreign_unregistered-s5l20",
+      "direction": "long",
+      "entry": {
+        "all_of": [
+          {
+            "signal": "price_filter",
+            "mode": "above_ma",
+            "window": 20
+          },
+          {
+            "signal": "flow_accel",
+            "subject": "foreign_unregistered",
+            "short": 5,
+            "long": 20
+          },
+          {
+            "signal": "net_vol_ratio",
+            "subject": "foreign_unregistered",
+            "window": 5,
+            "op": ">=",
+            "value": 0.05
+          }
+        ]
+      },
+      "exit": {
+        "signal_all_of": [
+          {
+            "signal": "net_streak",
+            "subject": "foreign_unregistered",
+            "min_days": 3,
+            "sign": "sell"
+          }
+        ],
+        "stop_loss_pct": 5,
+        "take_profit_pct": 8,
+        "max_hold_days": 10
+      },
+      "note": "MA-related candidate only; not backtested/saved yet. 이동평균선은 price_filter above_ma/below_ma 그리드(5/20/60) 사용."
+    }
+  ]
+}
