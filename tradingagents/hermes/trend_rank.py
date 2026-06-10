@@ -449,6 +449,14 @@ def format_digest(
     if not fade.empty:
         asof = fade["asof_date"].iloc[0]
         prov = _kr_provenance(list(fade["entity"]), store=store) if is_kr else {}
+        us_names = {}
+        if not is_kr:
+            try:
+                from ..dataflows.trends import sector_map
+
+                us_names = sector_map.get_names(list(fade["entity"]))
+            except Exception:
+                us_names = {}
         lines.append(f"📊 과열 주목 종목 [{mkt}] {asof}")
         lines.append(
             "(미국에서 달아오른 종목의 한국 짝 — 토론방이 달아오르기 시작)"
@@ -459,7 +467,10 @@ def format_digest(
             n = int(row["n_sources"])
             code = row["entity"]
             pv = prov.get(code, {})
-            label = f"{pv.get('name') or code}({code})" if is_kr else code
+            if is_kr:
+                label = f"{pv.get('name') or code}({code})"
+            else:
+                label = f"{us_names.get(str(code).upper(), code)}({code})"
             lines.append(
                 f"{i + 1}. {row.get('tier', '')} {label}  "
                 f"쏠림점수 {row['fade_score']} · {n}곳 동의"

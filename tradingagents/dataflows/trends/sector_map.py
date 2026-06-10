@@ -14,6 +14,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _CACHE = Path.home() / ".tradingagents" / "trends" / "sector_map.json"
+_NAME_CACHE = Path.home() / ".tradingagents" / "trends" / "ticker_names.json"
 
 
 def _load_cache() -> dict:
@@ -23,9 +24,21 @@ def _load_cache() -> dict:
         return {}
 
 
+def _load_name_cache() -> dict:
+    try:
+        return json.loads(_NAME_CACHE.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
 def _save_cache(d: dict) -> None:
     _CACHE.parent.mkdir(parents=True, exist_ok=True)
     _CACHE.write_text(json.dumps(d, ensure_ascii=False))
+
+
+def _save_name_cache(d: dict) -> None:
+    _NAME_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    _NAME_CACHE.write_text(json.dumps(d, ensure_ascii=False))
 
 
 def get_sectors(tickers: list) -> dict:
@@ -47,3 +60,25 @@ def get_sectors(tickers: list) -> dict:
                 cache[t] = "Unknown"
         _save_cache(cache)
     return {t: cache.get(t, "Unknown") for t in upper}
+
+
+def get_names(tickers: list) -> dict:
+    """ticker→company name dict. 캐시 우선, 실패 시 ticker 자체를 반환."""
+    cache = _load_name_cache()
+    upper = [str(t).upper() for t in tickers]
+    missing = [t for t in upper if t not in cache]
+    if missing:
+        try:
+            import yfinance as yf
+        except ImportError:
+            return {t: cache.get(t, t) for t in upper}
+        for t in missing:
+            try:
+                info = yf.Ticker(t).info
+                name = info.get("shortName") or info.get("longName") or info.get("displayName")
+                cache[t] = str(name).strip() if name else t
+            except Exception as exc:  # yfinance 예외 다양 → 광범위 캐치
+                logger.warning("name 조회 실패 %s: %s", t, exc)
+                cache[t] = t
+        _save_name_cache(cache)
+    return {t: cache.get(t, t) for t in upper}

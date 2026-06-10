@@ -88,6 +88,19 @@ def test_digest_empty_when_no_consensus(tmp_path):
     assert "없음" in format_digest("us", store=s)
 
 
+def test_digest_us_includes_company_name(tmp_path, monkeypatch):
+    import tradingagents.dataflows.trends.sector_map as sm
+
+    monkeypatch.setattr(sm, "get_names", lambda tks: {str(t).upper(): "NVIDIA Corporation" for t in tks})
+    s = TrendStore(root=tmp_path)
+    s.write([_row("NVDA", "apewisdom"), _row("NVDA", "finviz_unusual")])
+
+    d = format_digest("us", store=s)
+
+    assert "NVIDIA Corporation(NVDA)" in d
+    assert "관심 쏠림" in d
+
+
 def test_apewisdom_parsing(monkeypatch):
     fake = {
         "results": [
