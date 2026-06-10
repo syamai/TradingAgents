@@ -13,8 +13,9 @@ look-ahead 차단 (타협 불가, 코드 구조로 보장):
   - 단일 포지션(청산 전 재진입 금지). 데이터 끝 미청산분은 마지막 close 강제청산.
 
 수익률·위험 메트릭:
-  - per-trade net 수익률은 거래비용을 곱셈으로 반영:
-    ``net = exit*(1-tx) / (entry*(1+tx)) - 1`` (tx=편도).
+  - per-trade net 수익률은 거래비용을 곱셈으로 반영(매수/매도 비대칭):
+    ``net = exit*(1-SELL_COST) / (entry*(1+BUY_COST)) - 1``.
+    BUY_COST=위탁수수료, SELL_COST=위탁수수료+매도 거래세(0.18%).
   - Sharpe/MDD/누적수익률은 종목별 일별 net 수익률을 *active 종목 동일가중*
     포트폴리오로 결합한 equity curve 에서 산출 (per-trade net 과 정합).
 """
@@ -30,9 +31,14 @@ from tradingagents.dataflows.market_history import fetch_kospi
 from tradingagents.hermes.labeling import _close_at_or_after
 from tradingagents.hermes.strategy_spec import validate_spec
 
-# 거래비용 — 편도 수수료. entry/exit 각 레그에 곱셈 반영.
-# 사용자 기준: 국내주식 위탁수수료 0.015% = 0.00015 (편도).
+# 거래비용 — 매수/매도 비대칭. 각 레그에 곱셈 반영.
+#   BUY_COST  = 위탁수수료 0.015% (매수 시)
+#   SELL_COST = 위탁수수료 0.015% + 매도 거래세 0.18% (매도 시)
+# TX_COST_ONE_WAY(편도 수수료)는 하위 참조 호환 위해 유지 — 위탁수수료 의미.
 TX_COST_ONE_WAY = 0.00015
+SELL_TAX = 0.0018                        # 국내주식 매도 거래세 (매도 레그에만 추가)
+BUY_COST = TX_COST_ONE_WAY              # 매수: 수수료만
+SELL_COST = TX_COST_ONE_WAY + SELL_TAX  # 매도: 수수료 + 거래세
 TRADING_DAYS_PER_YEAR = 252
 
 # 종목 분할 — md5(code6) % 100 < IN_SAMPLE_PCT → in-sample.
@@ -166,7 +172,7 @@ def _simulate(spec: dict, df: pd.DataFrame):
     sl = spec["exit"].get("stop_loss_pct")
     tp = spec["exit"].get("take_profit_pct")
     mh = spec["exit"]["max_hold_days"]
-    tx = TX_COST_ONE_WAY
+    buy_cost, sell_cost = BUY_COST, SELL_COST
 
     i = 0
     while i < n - 2:                      # e=i+1 <= n-2 → 청산 봉(>=e+1) 보장
@@ -212,7 +218,7 @@ def _simulate(spec: dict, df: pd.DataFrame):
 
         exit_price = close[exit_idx]
         gross = exit_price / entry_price - 1
-        net = (exit_price * (1 - tx)) / (entry_price * (1 + tx)) - 1
+        net = (exit_price * (1 - sell_cost)) / (entry_price * (1 + buy_cost)) - 1
         trades.append({
             "entry_date": str(dates[e]),
             "exit_date": str(dates[exit_idx]),
@@ -231,8 +237,8 @@ def _simulate(spec: dict, df: pd.DataFrame):
             active.iloc[t] = True
         # 거래비용 곱셈 반영 — 진입 레그는 첫 보유일에, 청산 레그는 청산일에.
         first = e + 1
-        daily_ret.iloc[first] = (1 + daily_ret.iloc[first]) / (1 + tx) - 1
-        daily_ret.iloc[exit_idx] = (1 + daily_ret.iloc[exit_idx]) * (1 - tx) - 1
+        daily_ret.iloc[first] = (1 + daily_ret.iloc[first]) / (1 + buy_cost) - 1
+        daily_ret.iloc[exit_idx] = (1 + daily_ret.iloc[exit_idx]) * (1 - sell_cost) - 1
 
         i = exit_idx + 1                 # 단일 포지션 — 청산 봉 이후 재진입
 

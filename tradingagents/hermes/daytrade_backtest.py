@@ -16,7 +16,7 @@ look-ahead 0 규약: 신호는 종가 확정 후 알려지는 값(수급/공매�
     overnight_tow  과거 W일 overnight(open/전일close−1) 누적 = Tug-of-War (Lou-Polk-Skouras 2019).
     reversal       단기 가격반전 = −과거 W일 수익(롱=패자). skip 으로 bid-ask bounce 완화.
 
-공통 통제(노트 §5): net 왕복비용(2×TX_COST_ONE_WAY, 기본 편도 0.015%) 차감, ETF 제외,
+공통 통제(노트 §5): net 왕복비용(수수료 2×0.015% + 매도 거래세 0.18%) 차감, ETF 제외,
 유동성 하위 제외(저유동·저가 bounce 완화), 채점 상한 2025-06-30, 연도별 시장초과 IR 게이트.
 """
 from __future__ import annotations
@@ -131,7 +131,7 @@ def run_daytrade_backtest(holdings: dict, kospi, *, kind: str, window: int = 5,
         kseries = ks[~ks.index.duplicated()].reindex(dates)
 
     per_ret, per_ex, per_year, n_pick = [], [], [], []
-    rt_cost = 2 * cost_one_way
+    rt_cost = 2 * cost_one_way + bt.SELL_TAX   # 왕복 수수료 + 매도 거래세
     start = window + skip + 2
     for r in range(start, len(dates) - rebalance - 1, rebalance):
         if exclude_ban and kind == "short_low" and _in_ban(dates[r]):

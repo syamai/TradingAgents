@@ -17,7 +17,8 @@ import pandas as pd
 
 from tradingagents.hermes import backtest_engine as bt
 
-TX_ONE_WAY = bt.TX_COST_ONE_WAY          # 편도 거래비용
+TX_ONE_WAY = bt.TX_COST_ONE_WAY          # 편도 위탁수수료
+RT_COST = bt.BUY_COST + bt.SELL_COST     # 왕복 거래비용(매수수수료 + 매도수수료+거래세)
 GATE_EXCESS_MIN_IR = 0.5                  # per-name 게이트와 동일 임계
 
 
@@ -126,7 +127,7 @@ def run_xsec_rank_backtest(holdings: dict, kospi, *, kind: str, window: int,
             continue
         k = max(1, int(round(len(names) * quantile)))
         picks = (names.nsmallest(k) if direction == "low" else names.nlargest(k)).index
-        rets = (exit_[picks] / entry[picks] - 1.0) - 2 * TX_ONE_WAY   # round-trip 비용
+        rets = (exit_[picks] / entry[picks] - 1.0) - RT_COST   # round-trip 비용(매도세 포함)
         pr = float(rets.mean())
         per_ret.append(pr)
         n_pick.append(len(picks))

@@ -10,8 +10,7 @@
     기존 5종은 ``backtest_engine._eval_signal`` 위임.
   - ``_simulate_v2`` : 기존 ``_simulate`` 의 진입/청산/tx 로직을 그대로 따르되
     신호 결합만 ``_and_v2`` 사용 (look-ahead 불변식 동일 — 체결 close[i+1]).
-  - 완화 게이트 : win_rate > 0.50, sharpe > 1.0 (사용자 지정). MDD/거래수/
-    in-out 격차는 기존 임계 유지.
+  - 엄격 게이트 : sharpe > 1.0, MDD≥-20%, 거래≥50. 승률 및 승률 격차 조건은 제외.
 """
 from __future__ import annotations
 
@@ -24,8 +23,7 @@ from tradingagents.dataflows.market_history import fetch_kospi, fetch_usdkrw
 from tradingagents.hermes import backtest_engine as bt
 from tradingagents.hermes.strategy_spec_v2 import FLOW_GROUPS, _BASE_SIGNALS, validate_spec_v2
 
-# 완화 게이트 (사용자 지정 — strict 부등호).
-GATE_V2_MIN_WIN_RATE = 0.50   # win_rate > 0.50
+# 완화 게이트 (사용자 지정 — strict 부등호). 승률 조건은 제외한다.
 GATE_V2_MIN_SHARPE = 1.0      # sharpe   > 1.0
 
 
@@ -271,7 +269,7 @@ def _simulate_v2(spec: dict, df: pd.DataFrame, *, kospi: Optional[pd.DataFrame] 
     sl = spec["exit"].get("stop_loss_pct")
     tp = spec["exit"].get("take_profit_pct")
     mh = spec["exit"]["max_hold_days"]
-    tx = bt.TX_COST_ONE_WAY
+    buy_cost, sell_cost = bt.BUY_COST, bt.SELL_COST
 
     i = 0
     while i < n - 2:
@@ -317,7 +315,7 @@ def _simulate_v2(spec: dict, df: pd.DataFrame, *, kospi: Optional[pd.DataFrame] 
 
         exit_price = close[exit_idx]
         gross = exit_price / entry_price - 1
-        net = (exit_price * (1 - tx)) / (entry_price * (1 + tx)) - 1
+        net = (exit_price * (1 - sell_cost)) / (entry_price * (1 + buy_cost)) - 1
         trades.append({
             "entry_date": str(dates[e]),
             "exit_date": str(dates[exit_idx]),
@@ -334,8 +332,8 @@ def _simulate_v2(spec: dict, df: pd.DataFrame, *, kospi: Optional[pd.DataFrame] 
             daily_ret.iloc[t] = 0.0 if bad_bar[t] else close[t] / close[t - 1] - 1
             active.iloc[t] = True
         first = e + 1
-        daily_ret.iloc[first] = (1 + daily_ret.iloc[first]) / (1 + tx) - 1
-        daily_ret.iloc[exit_idx] = (1 + daily_ret.iloc[exit_idx]) * (1 - tx) - 1
+        daily_ret.iloc[first] = (1 + daily_ret.iloc[first]) / (1 + buy_cost) - 1
+        daily_ret.iloc[exit_idx] = (1 + daily_ret.iloc[exit_idx]) * (1 - sell_cost) - 1
 
         i = exit_idx + 1
 
@@ -348,18 +346,13 @@ def _simulate_v2(spec: dict, df: pd.DataFrame, *, kospi: Optional[pd.DataFrame] 
 def passes_single_gate_v2(m: dict) -> bool:
     return (
         m["n_trades"] >= bt.GATE_MIN_TRADES
-        and m["win_rate"] is not None and m["win_rate"] > GATE_V2_MIN_WIN_RATE
         and m["sharpe"] is not None and m["sharpe"] > GATE_V2_MIN_SHARPE
         and m["mdd_pct"] >= bt.GATE_MAX_DRAWDOWN_PCT
     )
 
 
 def passes_full_gate_v2(in_m: dict, out_m: dict) -> bool:
-    if not (passes_single_gate_v2(in_m) and passes_single_gate_v2(out_m)):
-        return False
-    if in_m["win_rate"] is None or out_m["win_rate"] is None:
-        return False
-    return abs(in_m["win_rate"] - out_m["win_rate"]) <= bt.GATE_MAX_WIN_RATE_GAP
+    return passes_single_gate_v2(in_m) and passes_single_gate_v2(out_m)
 
 
 # === 공개 진입점 ===

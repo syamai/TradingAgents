@@ -62,7 +62,7 @@ def _simulate_trailing(
     sl = spec["exit"].get("stop_loss_pct") if keep_fixed_sl else None
     tp = spec["exit"].get("take_profit_pct")
     mh = spec["exit"]["max_hold_days"]
-    tx = bt.TX_COST_ONE_WAY
+    buy_cost, sell_cost = bt.BUY_COST, bt.SELL_COST
     trail = None if trail_pct is None else float(trail_pct)
 
     i = 0
@@ -106,7 +106,7 @@ def _simulate_trailing(
 
         exit_price = close[exit_idx]
         gross = exit_price / entry_price - 1
-        net = (exit_price * (1 - tx)) / (entry_price * (1 + tx)) - 1
+        net = (exit_price * (1 - sell_cost)) / (entry_price * (1 + buy_cost)) - 1
         trades.append({
             "entry_date": str(dates[e]),
             "exit_date": str(dates[exit_idx]),
@@ -122,8 +122,8 @@ def _simulate_trailing(
             daily_ret.iloc[t] = close[t] / close[t - 1] - 1
             active.iloc[t] = True
         first = e + 1
-        daily_ret.iloc[first] = (1 + daily_ret.iloc[first]) / (1 + tx) - 1
-        daily_ret.iloc[exit_idx] = (1 + daily_ret.iloc[exit_idx]) * (1 - tx) - 1
+        daily_ret.iloc[first] = (1 + daily_ret.iloc[first]) / (1 + buy_cost) - 1
+        daily_ret.iloc[exit_idx] = (1 + daily_ret.iloc[exit_idx]) * (1 - sell_cost) - 1
 
         i = exit_idx + 1
 
