@@ -37,7 +37,9 @@ import fcntl
 import logging
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, time as dtime, timedelta
+from functools import lru_cache
+from zoneinfo import ZoneInfo
 
 import tradingagents  # noqa: F401 — dotenv 자동 로딩 트리거
 from tradingagents.dataflows import kis_api
@@ -128,14 +130,48 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
+_KST = ZoneInfo("Asia/Seoul")
+_DAILY_SUPPLY_CONFIRM_TIME = dtime(16, 40)  # 장 종료(15:30) + 약 1시간 버퍼
+
+
+@lru_cache(maxsize=1)
+def _latest_collectable_korean_trading_day() -> date:
+    """KIS 일별 수급(investor/program/short) 수집 가능 최신 거래일.
+
+    KIS 일별 수급은 한국 주식장 종료 후 약 1시간 뒤 당일분(T)이 조회된다.
+    장 종료 전/확정 전에는 오늘 날짜를 종목마다 호출하지 않도록 전 거래일로
+    제한하고, 확정 시간 이후에는 오늘이 KOSPI 거래일이면 오늘까지 수집한다.
+    market_history 조회 실패 시에는 보수적으로 KST calendar T-1로 폴백한다.
+    """
+    now = datetime.now(_KST)
+    today = now.date()
+    try:
+        from tradingagents.dataflows.market_history import fetch_kospi
+
+        start = (today - timedelta(days=14)).strftime("%Y-%m-%d")
+        end = today.strftime("%Y-%m-%d")
+        df = fetch_kospi(start, end)
+        dates = sorted(str(d)[:10] for d in df["date"].dropna().tolist())
+        if today.isoformat() in dates and now.time() >= _DAILY_SUPPLY_CONFIRM_TIME:
+            return today
+        prior = [d for d in dates if d < today.isoformat()]
+        if prior:
+            from datetime import datetime as _dt
+
+            return _dt.strptime(prior[-1], "%Y-%m-%d").date()
+    except Exception:  # noqa: BLE001
+        pass
+    return today if now.time() >= _DAILY_SUPPLY_CONFIRM_TIME else today - timedelta(days=1)
+
+
 def _resolve_window(
     store: KisHistoryStore, ticker: str, endpoint: str, years: int, full: bool
 ) -> tuple[str, str] | None:
     """수집할 (start_date, end_date) 결정. None이면 skip (이미 최신)."""
-    today = date.today()
-    # 분봉(가격 OHLCV)은 장 마감·체결확정(~15:40) 후 당일치가 KIS에 올라온다 → end=오늘.
-    # 수급(investor/program/short)은 KIS가 당일분을 익일 확정 → end=어제(T-1).
-    last_day = today if endpoint == "minute" else today - timedelta(days=1)
+    today = datetime.now(_KST).date()
+    # 분봉(가격 OHLCV)은 장 마감 후 당일치가 KIS에 올라온다 → end=오늘.
+    # 일별 수급(investor/program/short)은 장 종료+약 1시간 뒤 당일치가 조회된다.
+    last_day = today if endpoint == "minute" else _latest_collectable_korean_trading_day()
     end_date = last_day.strftime("%Y-%m-%d")
     if full:
         start = today - timedelta(days=365 * years)
