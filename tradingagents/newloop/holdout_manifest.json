@@ -1,0 +1,512 @@
+{
+  "frozen_at": "2026-06-11",
+  "purpose": "Stage1 게이트 홀드아웃 시험지 — 탐색(discovery)에 사용 금지, 채점 전용",
+  "store_dir": "~/.tradingagents/kis_history_fresh_exam",
+  "data_window": [
+    "2024-06-11",
+    "2026-06-11"
+  ],
+  "note": "2026-06-11 신규 수집(선발·평가 미사용 100종목). SELECTED 14에는 동일자 1회 노출됨 — 신규 전략에는 청정.",
+  "tickers": [
+    {
+      "code": "085620",
+      "name": "미래에셋생명",
+      "market": "KOSPI"
+    },
+    {
+      "code": "282330",
+      "name": "BGF리테일",
+      "market": "KOSPI"
+    },
+    {
+      "code": "007070",
+      "name": "GS리테일",
+      "market": "KOSPI"
+    },
+    {
+      "code": "462870",
+      "name": "시프트업",
+      "market": "KOSPI"
+    },
+    {
+      "code": "001430",
+      "name": "세아베스틸지주",
+      "market": "KOSPI"
+    },
+    {
+      "code": "005070",
+      "name": "코스모신소재",
+      "market": "KOSPI"
+    },
+    {
+      "code": "034230",
+      "name": "파라다이스",
+      "market": "KOSPI"
+    },
+    {
+      "code": "030610",
+      "name": "교보증권",
+      "market": "KOSPI"
+    },
+    {
+      "code": "330590",
+      "name": "롯데리츠",
+      "market": "KOSPI"
+    },
+    {
+      "code": "100090",
+      "name": "SK오션플랜트",
+      "market": "KOSPI"
+    },
+    {
+      "code": "451800",
+      "name": "한화리츠",
+      "market": "KOSPI"
+    },
+    {
+      "code": "036530",
+      "name": "SNT홀딩스",
+      "market": "KOSPI"
+    },
+    {
+      "code": "006340",
+      "name": "대원전선",
+      "market": "KOSPI"
+    },
+    {
+      "code": "005090",
+      "name": "SGC에너지",
+      "market": "KOSPI"
+    },
+    {
+      "code": "002350",
+      "name": "넥센타이어",
+      "market": "KOSPI"
+    },
+    {
+      "code": "093050",
+      "name": "LF",
+      "market": "KOSPI"
+    },
+    {
+      "code": "006380",
+      "name": "카프로",
+      "market": "KOSPI"
+    },
+    {
+      "code": "017940",
+      "name": "E1",
+      "market": "KOSPI"
+    },
+    {
+      "code": "094800",
+      "name": "맵스리얼티",
+      "market": "KOSPI"
+    },
+    {
+      "code": "161000",
+      "name": "애경케미칼",
+      "market": "KOSPI"
+    },
+    {
+      "code": "002240",
+      "name": "고려제강",
+      "market": "KOSPI"
+    },
+    {
+      "code": "460860",
+      "name": "동국제강",
+      "market": "KOSPI"
+    },
+    {
+      "code": "003000",
+      "name": "부광약품",
+      "market": "KOSPI"
+    },
+    {
+      "code": "417310",
+      "name": "코람코더원리츠",
+      "market": "KOSPI"
+    },
+    {
+      "code": "950210",
+      "name": "프레스티지바이오파마",
+      "market": "KOSPI"
+    },
+    {
+      "code": "060980",
+      "name": "HL홀딩스",
+      "market": "KOSPI"
+    },
+    {
+      "code": "183190",
+      "name": "아세아시멘트",
+      "market": "KOSPI"
+    },
+    {
+      "code": "015860",
+      "name": "일진홀딩스",
+      "market": "KOSPI"
+    },
+    {
+      "code": "009290",
+      "name": "광동제약",
+      "market": "KOSPI"
+    },
+    {
+      "code": "034830",
+      "name": "한국토지신탁",
+      "market": "KOSPI"
+    },
+    {
+      "code": "033270",
+      "name": "유나이티드제약",
+      "market": "KOSPI"
+    },
+    {
+      "code": "003720",
+      "name": "삼영",
+      "market": "KOSPI"
+    },
+    {
+      "code": "005680",
+      "name": "삼영전자",
+      "market": "KOSPI"
+    },
+    {
+      "code": "002900",
+      "name": "TYM",
+      "market": "KOSPI"
+    },
+    {
+      "code": "037270",
+      "name": "YG PLUS",
+      "market": "KOSPI"
+    },
+    {
+      "code": "010580",
+      "name": "에스엠벡셀",
+      "market": "KOSPI"
+    },
+    {
+      "code": "000050",
+      "name": "경방",
+      "market": "KOSPI"
+    },
+    {
+      "code": "025000",
+      "name": "KPX케미칼",
+      "market": "KOSPI"
+    },
+    {
+      "code": "007160",
+      "name": "사조산업",
+      "market": "KOSPI"
+    },
+    {
+      "code": "001630",
+      "name": "종근당홀딩스",
+      "market": "KOSPI"
+    },
+    {
+      "code": "007860",
+      "name": "서연",
+      "market": "KOSPI"
+    },
+    {
+      "code": "100250",
+      "name": "진양홀딩스",
+      "market": "KOSPI"
+    },
+    {
+      "code": "033530",
+      "name": "SJG세종",
+      "market": "KOSPI"
+    },
+    {
+      "code": "084680",
+      "name": "이월드",
+      "market": "KOSPI"
+    },
+    {
+      "code": "000860",
+      "name": "강남제비스코",
+      "market": "KOSPI"
+    },
+    {
+      "code": "293480",
+      "name": "하나제약",
+      "market": "KOSPI"
+    },
+    {
+      "code": "002220",
+      "name": "한일철강",
+      "market": "KOSPI"
+    },
+    {
+      "code": "271980",
+      "name": "제일약품",
+      "market": "KOSPI"
+    },
+    {
+      "code": "004150",
+      "name": "한솔홀딩스",
+      "market": "KOSPI"
+    },
+    {
+      "code": "011280",
+      "name": "태림포장",
+      "market": "KOSPI"
+    },
+    {
+      "code": "168360",
+      "name": "펨트론",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "034950",
+      "name": "한국기업평가",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "114810",
+      "name": "한솔아이원스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "078160",
+      "name": "메디포스트",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "493280",
+      "name": "아이엠바이오로직스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "064260",
+      "name": "다날",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "067630",
+      "name": "HLB생명과학",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "117730",
+      "name": "티로보틱스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "119850",
+      "name": "지엔씨에너지",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "455900",
+      "name": "엔젤로보틱스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "488900",
+      "name": "비츠로넥스텍",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "091700",
+      "name": "파트론",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "441270",
+      "name": "파인엠텍",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "241520",
+      "name": "DSC인베스트먼트",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "101730",
+      "name": "위메이드맥스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "378340",
+      "name": "필에너지",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "112290",
+      "name": "와이씨켐",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "322310",
+      "name": "오로스테크놀로지",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "419530",
+      "name": "SAMG엔터",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "242040",
+      "name": "나무기술",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "377460",
+      "name": "큐에이드",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "159010",
+      "name": "아스플로",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "098120",
+      "name": "마이크로컨텍솔",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "040350",
+      "name": "크레오에스지",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "416180",
+      "name": "신성에스티",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "019010",
+      "name": "베뉴지",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "054210",
+      "name": "이랜텍",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "115450",
+      "name": "HLB테라퓨틱스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "338840",
+      "name": "와이바이오로직스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "088800",
+      "name": "에이스테크",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "064550",
+      "name": "바이오니아",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "256840",
+      "name": "한국비엔씨",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "211270",
+      "name": "AP위성",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "054450",
+      "name": "텔레칩스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "474170",
+      "name": "루미르",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "484120",
+      "name": "도우인시스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "108380",
+      "name": "대양전기공업",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "264450",
+      "name": "유비쿼스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "039860",
+      "name": "나노엔텍",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "226590",
+      "name": "엠디바이스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "049430",
+      "name": "코메론",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "066410",
+      "name": "버킷스튜디오",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "270660",
+      "name": "에브리봇",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "042600",
+      "name": "새로닉스",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "051980",
+      "name": "중앙첨단소재",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "140670",
+      "name": "알에스오토메이션",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "001540",
+      "name": "안국약품",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "321370",
+      "name": "센서뷰",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "038290",
+      "name": "마크로젠",
+      "market": "KOSDAQ"
+    },
+    {
+      "code": "039560",
+      "name": "다산네트웍스",
+      "market": "KOSDAQ"
+    }
+  ]
+}
