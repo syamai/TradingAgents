@@ -19,7 +19,7 @@ import pandas as pd
 
 from tradingagents.dataflows.kis_history_store import KisHistoryStore
 from tradingagents.hermes import backtest_engine as bt
-from tradingagents.hermes.backtest_engine_v2 import _market_overlay_multiplier, _simulate_v2
+from tradingagents.hermes.backtest_engine_v2 import _and_v2, _market_overlay_multiplier, _simulate_v2
 from tradingagents.hermes.forward_test import ETF_CODES
 from tradingagents.hermes.strategy_research_v2 import _preload
 from tradingagents.hermes.strategy_store import _row_to_strategy
@@ -36,6 +36,9 @@ INITIAL_CAPITAL_KRW = 100_000_000
 TOP_SHOW = 20
 KST = ZoneInfo("Asia/Seoul")
 DAILY_SUPPLY_CONFIRM_TIME = dtime(16, 40)
+# 수집이 일부 종목만 갱신하고 죽으면 전체 MAX(date)는 최신으로 보인다(예: 79/407만
+# 갱신돼도 MAX=오늘). 기대 최신일을 가진 종목 비율이 이 값 미만이면 보류한다.
+STALE_COVERAGE_MIN = 0.8
 # 2026-06-10 재선정 — 새 비용 게이트(매도세 0.18% 반영, engine 039c49bd) + 3-arm forward 실험.
 #   Arm A (틱손절, 견고성 바스켓): 1087 1091 1081(+FX overlay) 2746 1013
 #   Arm B (ride 변형 — 넓은손절 SL40/긴보유 180d, 휩쏘 회피 가설): 3009 3010 3011
@@ -136,6 +139,38 @@ def expected_kis_daily_date(kospi) -> str | None:
         return today
     prior = [d for d in dates if d < today]
     return prior[-1] if prior else (dates[-1] if dates else None)
+
+
+def today_fill_buy(spec: dict, cdf, latest_date: str, trades: list[dict]) -> dict | None:
+    """직전 봉 신호 → 오늘 종가 체결 진입.
+
+    ``_simulate_v2`` 는 마지막 봉 체결 진입을 만들지 않는다(``while i < n - 2`` —
+    백테스트에선 0일 강제청산 거래가 돼 제외). 그 결과 '오늘 매수'(entry_date ==
+    오늘)는 trades 에서 절대 나오지 않으므로, 페이퍼트레이딩용으로 여기서 직접
+    산출한다. 엔진과 동일하게 bad_bar 회피·단일 포지션(직전 봉 점유 시 미진입)
+    의미론을 따른다.
+    """
+    n = len(cdf)
+    if n < 3:
+        return None
+    dates = cdf["date"].astype(str).to_numpy()
+    if str(dates[n - 1]) != latest_date:
+        return None
+    close = bt._num(cdf["close"]).to_numpy(dtype=float)
+    if bt._bad_bar_mask(close)[n - 1]:
+        return None
+    if not bool(_and_v2(cdf, spec["entry"]["all_of"]).to_numpy()[n - 2]):
+        return None
+    prev_date = str(dates[n - 2])
+    for tr in trades:
+        if tr["entry_date"] <= prev_date <= tr["exit_date"]:
+            return None
+    return {
+        "entry_date": latest_date,
+        "entry_price": float(close[n - 1]),
+        "exit_date": None,
+        "exit_reason": "open",
+    }
 
 
 def overlay_stock_weight(spec: dict, latest_date: str, kospi, usdkrw) -> float:
@@ -345,13 +380,17 @@ def main() -> int:
     kospi = kf(None, None)
     usdkrw = uf(None, None)
     expected_date = expected_kis_daily_date(kospi)
-    if expected_date and latest_date < expected_date and not bool(int(__import__("os").environ.get("PAPERTRADE_ALLOW_STALE", "0"))):
-        print("## 일일 페이퍼트레이딩 보류 — 원천 수급 데이터 지연")
-        print(f"- 현재 holdings 최신일: **{latest_date}**")
-        print(f"- 기대 최신일: **{expected_date}**")
-        print("- 조치: KIS 일별 수급 업데이트가 완료된 뒤 다시 실행하세요.")
-        print("- 강제 실행이 필요하면 `PAPERTRADE_ALLOW_STALE=1`을 지정하세요.")
-        return 3
+    if expected_date and not bool(int(__import__("os").environ.get("PAPERTRADE_ALLOW_STALE", "0"))):
+        nonempty = [df for df in holdings.values() if df is not None and not df.empty]
+        fresh = sum(1 for df in nonempty if str(df["date"].iloc[-1]) >= expected_date)
+        coverage = fresh / len(nonempty) if nonempty else 0.0
+        if latest_date < expected_date or coverage < STALE_COVERAGE_MIN:
+            print("## 일일 페이퍼트레이딩 보류 — 원천 수급 데이터 지연")
+            print(f"- 현재 holdings 최신일: **{latest_date}** / 기대 최신일: **{expected_date}**")
+            print(f"- 커버리지: **{fresh}/{len(nonempty)} 종목 ({coverage:.0%})** — 기준 {STALE_COVERAGE_MIN:.0%}")
+            print("- 조치: KIS 일별 수급 업데이트가 완료된 뒤 다시 실행하세요.")
+            print("- 강제 실행이 필요하면 `PAPERTRADE_ALLOW_STALE=1`을 지정하세요.")
+            return 3
 
     strategy_reports = []
     all_errors = []
@@ -370,7 +409,7 @@ def main() -> int:
 
         for tk, df in holdings.items():
             try:
-                trades, _daily, _active, _cdf = _simulate_v2(spec, df, kospi=kospi)
+                trades, _daily, _active, cdf = _simulate_v2(spec, df, kospi=kospi)
             except Exception as e:  # keep daily report robust
                 if len(errors) < 3:
                     errors.append(f"#{sid} {tk}: {type(e).__name__} {e}")
@@ -386,6 +425,16 @@ def main() -> int:
                     sells.append(row)
                 if ed <= latest_date and (xd > latest_date or is_forced_today):
                     open_by_ticker[tk].append(row)
+            try:
+                fill = today_fill_buy(spec, cdf, latest_date, trades)
+            except Exception as e:
+                if len(errors) < 3:
+                    errors.append(f"#{sid} {tk} today_fill: {type(e).__name__} {e}")
+                fill = None
+            if fill is not None:
+                row = {"ticker": tk, "sid": sid, "name": st["name"], **fill}
+                buys.append(row)
+                open_by_ticker[tk].append(row)
 
         selected = [tk for tk, _ in Counter({tk: len(v) for tk, v in open_by_ticker.items()}).most_common(MAX_POSITIONS)]
         per_name_weight = min(MAX_SINGLE_WEIGHT, (target_stock_weight / 100.0) / MAX_POSITIONS)
