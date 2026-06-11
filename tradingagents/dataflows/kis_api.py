@@ -209,12 +209,23 @@ _RANGE_MAX_RETRIES = 3
 _INVESTOR_PROGRAM_PAGE_DAYS = 30
 _SHORT_PAGE_DAYS = 100
 
+# 무거운 endpoint(investor=종목·10년당 ~84콜) 응답 중 KIS 서버가 연결을 끊는
+# transient 실패. HTTP 500(soft rate limit)과 같은 클래스로 보고 재시도한다.
+# fetcher는 끝에서야 rows를 반환하므로, 한 콜만 끊겨도 미재시도 시 종목 전체가
+# 실패·미저장된다.
+_RANGE_TRANSIENT_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+)
+
 
 def _call_with_backoff(url_path: str, tr_id: str, params: dict) -> dict:
-    """_call + HTTP 500 시 exponential backoff. 5년치 수집의 burst-거부 회복용.
+    """_call + HTTP 500·연결 끊김 시 exponential backoff. 5년치 수집 회복용.
 
     토큰 만료(401/403)는 기존 _call이 처리. 여기서는 KIS의 "soft rate limit"
-    (HTTP 500으로 거부) 패턴만 흡수.
+    (HTTP 500으로 거부) 과 무거운 endpoint 응답 중 연결 끊김(Read timeout·
+    broken pipe) 같은 transient 실패만 흡수한다. rt_cd 논리 에러(RuntimeError)는 전파.
     """
     for attempt in range(_RANGE_MAX_RETRIES):
         try:
@@ -226,6 +237,16 @@ def _call_with_backoff(url_path: str, tr_id: str, params: dict) -> dict:
                 logger.warning(
                     "KIS 500 (attempt %d/%d), backing off %.1fs",
                     attempt + 1, _RANGE_MAX_RETRIES, wait,
+                )
+                time.sleep(wait)
+                continue
+            raise
+        except _RANGE_TRANSIENT_ERRORS as e:
+            if attempt < _RANGE_MAX_RETRIES - 1:
+                wait = _RANGE_BACKOFF_BASE_SEC * (2 ** attempt)
+                logger.warning(
+                    "KIS conn error %s (attempt %d/%d), backing off %.1fs",
+                    type(e).__name__, attempt + 1, _RANGE_MAX_RETRIES, wait,
                 )
                 time.sleep(wait)
                 continue

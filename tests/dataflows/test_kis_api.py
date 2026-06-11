@@ -464,7 +464,7 @@ class TestFetchShortInterest:
 
 @pytest.mark.unit
 class TestRangeBackoff:
-    """500 발생 시 exponential backoff + 재시도 검증 (_call_with_backoff)."""
+    """HTTP 500·연결 끊김 시 exponential backoff + 재시도 검증 (_call_with_backoff)."""
 
     def test_success_first_try(self, isolated_cache, kis_env, monkeypatch):
         monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
@@ -504,6 +504,41 @@ class TestRangeBackoff:
             get.return_value = _mock_response(404, {})
             from requests.exceptions import HTTPError
             with pytest.raises(HTTPError):
+                kis_api._call_with_backoff("/p", "TR", {})
+            assert get.call_count == 1
+
+    # 무거운 endpoint(investor) 응답 중 KIS가 연결을 끊는 transient 실패도
+    # 500과 동일하게 재시도해야 한다 (미재시도 시 종목 전체 실패·미저장).
+    @pytest.mark.parametrize("exc", [
+        kis_api.requests.exceptions.ConnectionError("HTTPSConnectionPool: Read timed out"),
+        kis_api.requests.exceptions.Timeout("read timeout"),
+        kis_api.requests.exceptions.ChunkedEncodingError("Connection broken: BrokenPipeError"),
+    ])
+    def test_conn_error_then_success(self, exc, isolated_cache, kis_env, monkeypatch):
+        slept = []
+        monkeypatch.setattr(kis_api.time, "sleep", lambda s: slept.append(s))
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.side_effect = [exc, _mock_response(200, {"rt_cd": "0", "output2": [{"x": 1}]})]
+            body = kis_api._call_with_backoff("/p", "TR", {})
+            assert body["output2"] == [{"x": 1}]
+            assert get.call_count == 2
+            assert 1.0 in slept  # exp backoff: 1s × (2**0) after first conn error
+
+    def test_conn_error_three_times_propagates(self, isolated_cache, kis_env, monkeypatch):
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        ConnError = kis_api.requests.exceptions.ConnectionError
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.side_effect = ConnError("Read timed out")
+            with pytest.raises(ConnError):
+                kis_api._call_with_backoff("/p", "TR", {})
+            assert get.call_count == 3  # _RANGE_MAX_RETRIES
+
+    def test_rt_cd_error_not_retried(self, isolated_cache, kis_env, monkeypatch):
+        # rt_cd 논리 에러(RuntimeError)는 transient 아님 → 즉시 전파, 재시도 없음
+        monkeypatch.setattr(kis_api.time, "sleep", lambda *a: None)
+        with patch("tradingagents.dataflows.kis_api.requests.get") as get:
+            get.return_value = _mock_response(200, {"rt_cd": "9", "msg1": "토큰 사용중"})
+            with pytest.raises(RuntimeError, match="rt_cd=9"):
                 kis_api._call_with_backoff("/p", "TR", {})
             assert get.call_count == 1
 
