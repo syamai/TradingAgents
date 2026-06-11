@@ -101,3 +101,30 @@ class TestWriteJson:
         assert (tmp_path / "arms_eval_2026-06-12.json").exists()
         latest = json.loads((tmp_path / "arms_eval_latest.json").read_text(encoding="utf-8"))
         assert latest["as_of"] == "2026-06-12"
+
+
+@pytest.mark.unit
+class TestWeightedRealized:
+    def test_open_buy_events_excluded(self):
+        """미청산 BUY 이벤트(net NULL)는 실현 집계에서 제외 — 포함 시 TypeError 회귀."""
+        import sqlite3
+
+        con = sqlite3.connect(":memory:")
+        con.executescript(
+            """
+            CREATE TABLE paper_trade_events (
+                run_id INT, strategy_id INT, event_type TEXT, ticker TEXT,
+                entry_date TEXT, exit_date TEXT, net_ret_pct REAL, exit_reason TEXT);
+            CREATE TABLE paper_strategy_snapshots (
+                run_id INT, strategy_id INT, per_name_weight_pct REAL);
+            """
+        )
+        con.execute("INSERT INTO paper_strategy_snapshots VALUES (1, 7, 3.0)")
+        con.execute(  # 오늘 체결된 미청산 매수 — exit 필드 전부 NULL
+            "INSERT INTO paper_trade_events VALUES (1, 7, 'BUY', '000001', '2026-06-11', NULL, NULL, 'open')")
+        con.execute(
+            "INSERT INTO paper_trade_events VALUES (1, 7, 'SELL', '000002', '2026-06-10', '2026-06-11', 2.5, 'take_profit')")
+        agg = fae.weighted_realized(con, [7])
+        assert agg[7]["n"] == 1
+        assert agg[7]["wins"] == 1
+        assert agg[7]["all"] == pytest.approx(0.03 * 2.5)

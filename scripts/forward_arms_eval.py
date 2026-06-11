@@ -41,7 +41,8 @@ def weighted_realized(con, sids):
                    s.per_name_weight_pct
             FROM paper_trade_events e
             LEFT JOIN paper_strategy_snapshots s ON s.run_id=e.run_id AND s.strategy_id=e.strategy_id
-            WHERE e.strategy_id IN ({ph}) AND e.entry_date>=?""", (*sids, FREEZE)).fetchall()
+            WHERE e.strategy_id IN ({ph}) AND e.entry_date>=?
+              AND e.event_type='SELL'""", (*sids, FREEZE)).fetchall()
     seen={}
     for sid,tk,ed,xd,net,reason,wt in rows:
         seen.setdefault((sid,tk,ed,xd), (sid, net, reason, wt if wt is not None else 3.0))
@@ -66,11 +67,12 @@ def _verdicts(n, all_drag, sl_drag, sl_n, kospi_pct):
     """판정 3종 기계화 — ①가중총실현>0 ②KOSPI 초과 ③손절손실 미잠식. 데이터 없으면 None(판정 불가)."""
     if not n:
         return {"realized_positive": None, "beats_kospi": None, "stoploss_not_eroding": None}
+    # bool() 강제 — kospi_pct가 pandas 경유 numpy 스칼라면 비교 결과 np.bool_이 되어 JSON 직렬화 실패.
     return {
-        "realized_positive": all_drag > 0,
-        "beats_kospi": (all_drag > kospi_pct) if kospi_pct is not None else None,
+        "realized_positive": bool(all_drag > 0),
+        "beats_kospi": bool(all_drag > kospi_pct) if kospi_pct is not None else None,
         # 손절 가중손실 절대값 < 손절 외 실현손익 → 손절이 총실현을 잠식하지 않음. 손절 0건이면 잠식 없음.
-        "stoploss_not_eroding": True if not sl_n else abs(sl_drag) < (all_drag - sl_drag),
+        "stoploss_not_eroding": True if not sl_n else bool(abs(sl_drag) < (all_drag - sl_drag)),
     }
 
 
@@ -128,7 +130,8 @@ def kospi_return(d0, d1):
     c=k["close"].to_numpy()
     if len(c)<2:
         return None, (None, None)
-    return (c[-1]/c[0]-1)*100, (str(k["date"].iloc[0]), str(k["date"].iloc[-1]))
+    # float() 강제 — numpy 스칼라는 JSON 직렬화 불가.
+    return float((c[-1]/c[0]-1)*100), (str(k["date"].iloc[0]), str(k["date"].iloc[-1]))
 
 
 def main():
