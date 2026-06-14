@@ -7,7 +7,10 @@ import pytest
 from tradingagents.newloop.stage1_gate import (
     GATE_MIN_CLUSTERS,
     GATE_MIN_DOWN_TRADES,
+    GATE_MIN_T_ALPHA,
     GATE_MIN_TRADES,
+    deflated_t_threshold,
+    dsr_benchmark_t,
     ols_alpha_beta_clustered,
     score_pairs,
 )
@@ -121,3 +124,61 @@ class TestScorePairs:
         assert 0 < r["down"]["n"] < GATE_MIN_DOWN_TRADES
         assert r["status"] == "insufficient"
         assert r["checks"]["enough_down"] is False
+
+
+@pytest.mark.unit
+class TestDeflation:
+    """s1-v3: 누적 시도 수 N 에 맞춘 동적 합격선(다중검정 보정)."""
+
+    def test_threshold_floor_and_monotone(self):
+        # N=1 단일검정은 HLZ 하한 3.0, N 이 커질수록 단조 증가, 결코 3.0 밑은 없음
+        assert deflated_t_threshold(1) == GATE_MIN_T_ALPHA
+        assert deflated_t_threshold(24) == GATE_MIN_T_ALPHA  # N≈38 전까진 floor 가 지배
+        seq = [deflated_t_threshold(n) for n in (1, 100, 400, 3106)]
+        assert all(b >= a for a, b in zip(seq, seq[1:]))
+        assert deflated_t_threshold(100) > GATE_MIN_T_ALPHA
+        assert deflated_t_threshold(100) == pytest.approx(3.28, abs=0.05)
+        assert deflated_t_threshold(400) == pytest.approx(3.66, abs=0.05)
+
+    def test_dsr_benchmark_grows_with_n(self):
+        assert dsr_benchmark_t(1) is None
+        assert dsr_benchmark_t(3106) > dsr_benchmark_t(100) > 0
+
+    def test_bootstrap_threshold_engaged(self):
+        """score_pairs 가 정규임계가 아니라 wild-cluster 부트스트랩 임계로 판정."""
+        r = score_pairs(_pairs(alpha=2.0, beta=1.0), n_trials=1)
+        m = r["multiplicity"]
+        assert m["t_crit_method"] == "wild_bootstrap"
+        assert m["t_crit"] >= GATE_MIN_T_ALPHA          # floor 의도 보존
+        assert "t_crit_normal" in m
+        # 진짜 강한 알파는 부트스트랩 임계도 넘어 통과
+        assert r["t_alpha"] >= m["t_crit"]
+        assert r["status"] == "pass"
+
+    def test_genuine_alpha_blocked_when_n_large(self):
+        """N=1 에서 통과하는 진짜 알파라도, 누적 N 이 충분히 크면 합격선이
+        관측 t 를 추월해 탈락한다 — '천천히 반복'이 아니라 N 자체가 임계를 올림."""
+        # 현실적 잡음(amp=6)으로 t≈6.4 인 진짜 알파 — 무잡음이면 t 가 수백이라
+        # 임계가 추월할 수 없다(실제 홀드아웃엔 항상 잡음이 있다).
+        cycle = [-3.0, -1.5, 1.0, 2.5, 4.0, 6.0]
+        pairs = []
+        i = 0
+        for mi, mo in enumerate(MONTHS):
+            for j in range(8):
+                x = cycle[(mi + j) % len(cycle)]
+                noise = 6.0 * (((i * 7 + 3) % 11) - 5) / 5.0  # 결정적 ±6
+                pairs.append((2.0 + 1.0 * x + noise, x, mo))
+                i += 1
+        base = score_pairs(pairs, n_trials=1)
+        assert base["status"] == "pass"
+        t_obs = base["t_alpha"]
+        # 관측 t 를 넘기는 합격선을 만드는 최소 N 을 찾는다 (단조 증가이므로 존재)
+        n = 10
+        while deflated_t_threshold(n) <= t_obs and n < 10 ** 18:
+            n *= 10
+        big = score_pairs(pairs, n_trials=n)
+        assert big["multiplicity"]["t_crit"] > t_obs
+        assert big["checks"]["alpha_significant"] is False
+        assert big["status"] == "fail"
+        # FWER p 는 N 과 함께 커진다 (운으로 이 t 이상이 나올 확률)
+        assert big["multiplicity"]["fwer_p"] > base["multiplicity"]["fwer_p"]

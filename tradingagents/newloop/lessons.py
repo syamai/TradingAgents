@@ -16,7 +16,13 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from tradingagents.newloop.ledger import LEDGER_DB, MAX_SUBMISSIONS, VARIANTS_MAX
+from tradingagents.newloop.ledger import (
+    HOLDOUT_TRIAL_BUDGET,
+    LEDGER_DB,
+    MAX_SUBMISSIONS,
+    VARIANTS_MAX,
+)
+from tradingagents.newloop.stage1_gate import deflated_t_threshold
 
 EXHAUSTION_K = 5  # 연속 소진 family 수 — 도달 시 신규 생성 중단·보고
 
@@ -81,7 +87,10 @@ def build_lessons(db_path: str | None = None) -> dict:
         "exhausted": exhausted,
         "exhaustion_rule": f"최근 {EXHAUSTION_K}개 family 연속 무통과 소진 시 신규 생성 중단",
         "exam_wear": {"total_families": len(out_fams), "total_specs_scored": total_specs,
-                      "note": "홀드아웃 시험지는 쓸수록 닳는다 — 채점 총량을 항상 보고"},
+                      "budget": HOLDOUT_TRIAL_BUDGET,
+                      "remaining": max(0, HOLDOUT_TRIAL_BUDGET - total_specs),
+                      "next_t_crit": round(deflated_t_threshold(total_specs + 1), 2),
+                      "note": "홀드아웃 시험지는 쓸수록 닳는다 — 채점 총량/예산을 항상 보고"},
         "limits": {"max_submissions_per_family": MAX_SUBMISSIONS,
                    "max_variants_per_submission": VARIANTS_MAX},
     }
@@ -93,9 +102,14 @@ def to_markdown(lessons: dict) -> str:
         L += ["**⛔ 고갈 선언 상태 — 새 가설을 생성하지 말 것.** "
               f"({lessons['exhaustion_rule']})", ""]
     w = lessons["exam_wear"]
-    L += [f"- 시험지 마모: family {w['total_families']}개, 누적 채점 spec {w['total_specs_scored']}개",
+    L += [f"- 시험지 마모: family {w['total_families']}개, "
+          f"누적 채점 spec {w['total_specs_scored']}/{w['budget']}개 (잔여 {w['remaining']})",
+          f"- 다음 채점이 직면할 동적 합격선: t(α) ≥ {w['next_t_crit']} "
+          f"(누적 N 이 클수록 상승 — 다중검정 보정. 운으로 통과가 누적되지 않게 막는 장치)",
           f"- 한도: family당 제출 {lessons['limits']['max_submissions_per_family']}회, "
           f"제출당 변형 {lessons['limits']['max_variants_per_submission']}개", ""]
+    if w["remaining"] <= 0:
+        L += ["**⛔ 홀드아웃 예산 소진 — 더 채점할 수 없다. 새 홀드아웃 수집 필요(사람).**", ""]
     if lessons["families"]:
         L += ["| family | 가설 | 제출 | 상태 | best t(α) | best β | 탈락 양식 |",
               "|---|---|---|---|---|---|---|"]

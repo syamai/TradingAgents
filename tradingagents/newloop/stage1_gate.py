@@ -26,6 +26,7 @@ import argparse
 import json
 import math
 import os
+import random
 import sqlite3
 import statistics
 from collections import defaultdict
@@ -42,16 +43,149 @@ from tradingagents.newloop import ledger
 #   W2: 미세 알파(α 0.05%)×거대 표본이 t만으로 통과 실증 → 경제성 하한 추가
 #       (슬리피지·모형오차 버퍼보다 커야 의미).
 #   W3: 반올림된 t로 판정 시 경계 뒤집힘 실증 → 판정은 raw, 표시만 반올림.
-GATE_VERSION = "s1-v2"
+# s1-v3 (2026-06-12): 다중검정 보정 —
+#   고정 t≥3.0 은 단일검정 하한(HLZ 2016)일 뿐, 홀드아웃을 N 번 들여다보면
+#   운만으로 통과가 누적된다(N=770·t≥3 → 기대 거짓통과 ≈1.07 실측 계산).
+#   합격선을 누적 채점 수 N 에 맞춰 동적 상향(Šidák FWER 보정) + 원장에 총 N
+#   상한(ledger.HOLDOUT_TRIAL_BUDGET). N 은 게이트가 ledger 에서 읽어온다.
+GATE_VERSION = "s1-v3"
 GATE_MIN_TRADES = 30      # 미만이면 운/실력 구분 불가 → insufficient(판정 보류)
 GATE_MIN_CLUSTERS = 8     # 진입월 군집 최소 수 — 시기 다양성 없이는 t 신뢰 불가
-GATE_MIN_T_ALPHA = 3.0    # α 의 t 하한(군집-로버스트) — 다중비교 보정 임계
+GATE_MIN_T_ALPHA = 3.0    # α 의 t 하한(단일검정, HLZ 2016) — 동적 합격선의 절대 floor
 GATE_MIN_ALPHA_PCT = 0.3  # α 경제성 하한(%) — 슬리피지·모형오차 이하의 알파는 무의미
 GATE_MIN_DOWN_TRADES = 10  # 하락창 최소 표본 — 미만이면 위장 검사 불가 → 보류
 GATE_DOWN_T_FLOOR = -2.0  # 하락창 차감알파가 유의하게 음수면 베타 위장 → 탈락
+GATE_FWER_ALPHA = 0.05    # 홀드아웃 수명 전체의 family-wise 거짓통과 목표
+BOOTSTRAP_B = 2000        # wild bootstrap 재표본 수 (임계 보정)
+_Z99 = 2.3263478740408408  # Φ⁻¹(0.99) 단측 — 부트스트랩 꼬리 팽창계수 기준점
+
+_EULER_GAMMA = 0.5772156649015329
+_NORM = statistics.NormalDist()  # 표준정규 (stdlib — scipy 비의존)
+
+
+def _quantile(xs: list[float], q: float) -> float:
+    """정렬·선형보간 분위 (numpy 비의존)."""
+    s = sorted(xs)
+    if not s:
+        return float("nan")
+    if len(s) == 1:
+        return s[0]
+    pos = q * (len(s) - 1)
+    lo = int(math.floor(pos))
+    hi = min(lo + 1, len(s) - 1)
+    return s[lo] + (s[hi] - s[lo]) * (pos - lo)
+
+
+def _resampled_t_samples(xs, ys, groups, t_alpha_fn, method, block_len, B, seed):
+    """귀무(α=0) 하 재표본 t(α) 경험분포. method='wild'(군집 부호반전) | 'mbb'
+    (이동블록 잔차 복원추출). 평균 0 전체모형 잔차를 써 알파 누출을 막는다."""
+    n = len(xs)
+    mx = sum(xs) / n
+    sxx_c = sum((x - mx) ** 2 for x in xs)
+    if n < 10 or sxx_c <= 0:
+        return None
+    my = sum(ys) / n
+    b_full = sum((xs[i] - mx) * (ys[i] - my) for i in range(n)) / sxx_c
+    a_full = my - b_full * mx
+    resid = [ys[i] - a_full - b_full * xs[i] for i in range(n)]   # mean 0
+    rng = random.Random(seed)
+    ts: list[float] = []
+    if method == "wild":
+        uniq = list(dict.fromkeys(groups))
+        for _ in range(B):
+            sign = {g: (1.0 if rng.random() < 0.5 else -1.0) for g in uniq}
+            ys_star = [b_full * xs[i] + resid[i] * sign[groups[i]] for i in range(n)]
+            t = t_alpha_fn(xs, ys_star, groups)
+            if t is not None and math.isfinite(t):
+                ts.append(t)
+    else:  # mbb — 이동블록 잔차 복원추출(시계열 자기상관 보존 + HAC 소표본 재현)
+        L = max(2, block_len)
+        nblocks = -(-n // L)
+        for _ in range(B):
+            rr: list[float] = []
+            for _b in range(nblocks):
+                s = rng.randint(0, n - L)
+                rr.extend(resid[s:s + L])
+            rr = rr[:n]
+            ys_star = [b_full * xs[i] + rr[i] for i in range(n)]
+            t = t_alpha_fn(xs, ys_star, groups)
+            if t is not None and math.isfinite(t):
+                ts.append(t)
+    return ts if len(ts) >= 100 else None
+
+
+def wild_bootstrap_t_crit(xs, ys, groups, t_alpha_fn, n_trials: int,
+                          *, method: str = "wild", block_len: int = 5,
+                          B: int | None = None, seed: int = 20260612) -> float | None:
+    """귀무(α=0) 부트스트랩으로 동적 t(α) 합격선을 데이터에서 보정.
+
+    정규분위(deflated_t_threshold)는 소표본 군집/HAC t 의 두꺼운 꼬리를 못 막아
+    실현 FWER 이 목표(0.05)를 크게 초과한다(재감사 실증: 소표본 HAC-t 에서
+    P(t≥3)=1.9% = 명목 14배, 400회 채점 FWER≈0.96). 이를 막으려 이 표본의 귀무
+    t 분포를 직접 만들어 임계를 잡는다.
+
+    method='wild' (Stage1 군집-로버스트): 군집(groups) 단위 Rademacher 부호반전.
+    method='mbb'  (Stage2 HAC 시계열): 길이 block_len 이동블록 잔차 복원추출 —
+      부호반전은 HAC 소표본 과대산포를 못 재현하므로(실측) 블록 복원추출로 교체.
+
+    극단 분위는 B 가 천문학적이어야 직접 추정되므로, 99% 분위에서 잰 '정규 대비
+    꼬리 팽창계수'(≥1)를 목표 꼬리확률의 정규-z 에 곱해 외삽한다(floor 의도 포함).
+
+    t_alpha_fn(xs, ys_star, groups) -> t(α) 또는 None. degenerate 면 None
+    (호출부가 정규 임계로 폴백).
+    """
+    ts = _resampled_t_samples(xs, ys, groups, t_alpha_fn, method, block_len,
+                              B or BOOTSTRAP_B, seed)
+    if not ts:
+        return None
+    q99 = _quantile([abs(t) for t in ts], 0.99)   # 양측 대칭 귀무 → |t| 상위
+    if q99 <= 0:
+        return None
+    inflation = max(1.0, q99 / _Z99)              # 정규 대비 꼬리 팽창 (≥1)
+    # 목표 꼬리확률 = FWER 시도당(α')과 HLZ 단일검정 강도(t≥3.0 ⇒ ≈0.00135) 중
+    # 더 엄격한 쪽. 그 정규-z 를 꼬리 팽창계수로 부풀려 임계로(floor 의도까지 보정).
+    alpha_prime = -math.expm1(math.log1p(-GATE_FWER_ALPHA) / max(n_trials, 1))
+    p_target = min(alpha_prime, _NORM.cdf(-GATE_MIN_T_ALPHA))
+    z_target = -_NORM.inv_cdf(p_target)           # ≥ GATE_MIN_T_ALPHA
+    return inflation * z_target                   # inflation≥1·z_target≥3.0 ⇒ ≥3.0
 
 DEFAULT_WINDOW_START = "2025-07-01"
 STRAT_DB = os.path.expanduser("~/.tradingagents/hermes/strategies_v2.db")  # 읽기전용 입력
+
+
+def deflated_t_threshold(n_trials: int) -> float:
+    """누적 시도 수 N 에 맞춰 동적 상향된 t(α) 합격선 (Šidák FWER 보정).
+
+    홀드아웃을 N 번 들여다봤을 때 '운으로 적어도 하나 통과'할 확률을
+    GATE_FWER_ALPHA 이하로 묶으려면 시도당 유의수준을 α'=1-(1-α)^(1/N) 로
+    조여야 한다 → 임계 t = Φ⁻¹(1-α'). 단 단일검정 하한 GATE_MIN_T_ALPHA(3.0,
+    HLZ 2016) 밑으로는 절대 내리지 않는다. N≈38 부터 3.0 을 넘어 상승
+    (N=100→3.28, N=400→3.66).
+    """
+    if n_trials <= 1:
+        return GATE_MIN_T_ALPHA
+    # α' = 1-(1-α)^(1/N) 를 expm1 로 안정 계산하고, 상측분위는 대칭형
+    # -Φ⁻¹(α') 로 구한다(1-α' 가 거대 N 에서 1.0 으로 반올림돼 inv_cdf 가
+    # 터지는 것을 회피).
+    alpha_prime = -math.expm1(math.log1p(-GATE_FWER_ALPHA) / n_trials)
+    return max(GATE_MIN_T_ALPHA, -_NORM.inv_cdf(alpha_prime))
+
+
+def dsr_benchmark_t(n_trials: int) -> float | None:
+    """N 번 시도 시 순수 운이 낼 '기대 최대 t' (Bailey-López de Prado deflated
+    benchmark). 관측 t 가 이보다 못하면 운의 기대치 이하 — 보고용 진단."""
+    if n_trials < 2:
+        return None
+    # Φ⁻¹(1-q) = -Φ⁻¹(q) — 거대 N 에서 1-q 가 1.0 으로 반올림되는 것 회피
+    z1 = -_NORM.inv_cdf(1.0 / n_trials)
+    z2 = -_NORM.inv_cdf(1.0 / (n_trials * math.e))
+    return (1.0 - _EULER_GAMMA) * z1 + _EULER_GAMMA * z2
+
+
+def _fwer_p(t_alpha: float, n_trials: int) -> float:
+    """N 번 시도에서 운만으로 이 t 이상이 적어도 하나 나올 확률 = 1-(1-p)^N."""
+    p = _NORM.cdf(-t_alpha)
+    return 1.0 - (1.0 - p) ** max(n_trials, 1)
 
 
 def ols_alpha_beta_clustered(xs: list[float], ys: list[float], clusters: list[str]):
@@ -118,21 +252,32 @@ def _mean_t(xs: list[float]):
     return len(xs), m, (m / (sd / math.sqrt(len(xs))) if sd > 0 else None)
 
 
-def score_pairs(pairs: list[tuple[float, float, str]]) -> dict:
+def score_pairs(pairs: list[tuple[float, float, str]], n_trials: int = 1) -> dict:
     """(net%, basket%, 진입월) 목록 → 기계 판정. 순수 함수(엔진 비의존).
+
+    n_trials = 홀드아웃 누적 채점 수(이 채점 포함). 합격선을 다중검정 보정해
+    동적 상향한다 (n_trials=1 이면 단일검정 = 기본 t≥3.0).
 
     판정 = 전 조건 AND. 판정은 전부 raw 값으로 하고 출력만 반올림한다.
       ① n ≥ GATE_MIN_TRADES, 군집(진입월) ≥ GATE_MIN_CLUSTERS   (미달: insufficient)
-      ② t(α) ≥ GATE_MIN_T_ALPHA (군집-로버스트) AND α ≥ GATE_MIN_ALPHA_PCT
+      ② t(α) ≥ deflated_t_threshold(n_trials) AND α ≥ GATE_MIN_ALPHA_PCT
       ③ 하락창 n ≥ GATE_MIN_DOWN_TRADES (미달: insufficient)
          AND 하락창 차감알파 t > GATE_DOWN_T_FLOOR
     """
+    t_crit_norm = deflated_t_threshold(n_trials)
+    t_crit = t_crit_norm  # 회귀 성공 후 부트스트랩 임계로 교체
+    dsr_bench = dsr_benchmark_t(n_trials)
     out = {
         "gate_version": GATE_VERSION,
         "n_trades": len(pairs), "n_clusters": 0,
         "alpha_pct": None, "t_alpha": None, "beta": None, "t_beta_vs1": None,
         "down": {"n": 0, "mean_pct": None, "t": None},
         "up": {"n": 0, "mean_pct": None, "t": None},
+        "multiplicity": {"n_trials": n_trials, "t_crit": round(t_crit, 3),
+                         "t_crit_normal": round(t_crit_norm, 3), "t_crit_method": "normal",
+                         "fwer_alpha": GATE_FWER_ALPHA, "fwer_p": None,
+                         "dsr_benchmark_t": round(dsr_bench, 3) if dsr_bench is not None else None,
+                         "dsr": None},
         "checks": {"enough_trades": None, "enough_clusters": None,
                    "alpha_significant": None, "alpha_material": None,
                    "enough_down": None, "down_not_broken": None},
@@ -153,6 +298,18 @@ def score_pairs(pairs: list[tuple[float, float, str]]) -> dict:
     out["n_clusters"] = n_clusters
     out.update(alpha_pct=round(a, 4), t_alpha=round(t_a, 3),
                beta=round(b, 4), t_beta_vs1=round(t_b, 3))
+    # 소표본 군집 t 의 두꺼운 꼬리를 데이터에서 보정 (정규임계 폴백)
+    def _t_clustered(xx, yy, gg):
+        r = ols_alpha_beta_clustered(xx, yy, gg)
+        return r[1] if r is not None else None
+    t_boot = wild_bootstrap_t_crit(baskets, nets, months, _t_clustered, n_trials)
+    if t_boot is not None:
+        t_crit = t_boot
+        out["multiplicity"]["t_crit"] = round(t_crit, 3)
+        out["multiplicity"]["t_crit_method"] = "wild_bootstrap"
+    out["multiplicity"]["fwer_p"] = round(_fwer_p(t_a, n_trials), 6)
+    if dsr_bench is not None:
+        out["multiplicity"]["dsr"] = round(_NORM.cdf(t_a - dsr_bench), 4)
     if n_clusters < GATE_MIN_CLUSTERS:
         out["checks"]["enough_clusters"] = False
         return out
@@ -168,7 +325,7 @@ def score_pairs(pairs: list[tuple[float, float, str]]) -> dict:
                  "t": round(up_t, 3) if up_t is not None else None}
 
     # 판정은 raw 값으로 (반올림 경계 뒤집힘 방지 — s1-v2 W3)
-    out["checks"]["alpha_significant"] = bool(t_a >= GATE_MIN_T_ALPHA)
+    out["checks"]["alpha_significant"] = bool(t_a >= t_crit)  # 동적 합격선 (s1-v3)
     out["checks"]["alpha_material"] = bool(a >= GATE_MIN_ALPHA_PCT)
     if dn_n < GATE_MIN_DOWN_TRADES or dn_t is None:
         # 위장 여부를 못 본 채 합격시키는 것이 가장 위험 — 보류.
@@ -213,8 +370,9 @@ def collect_pairs(spec: dict, tickers: list[str], loader, basket_ret,
 
 
 def score(spec: dict, tickers: list[str], loader, basket_ret,
-          w0: str = DEFAULT_WINDOW_START, w1: str | None = None) -> dict:
-    out = score_pairs(collect_pairs(spec, tickers, loader, basket_ret, w0, w1))
+          w0: str = DEFAULT_WINDOW_START, w1: str | None = None,
+          n_trials: int = 1) -> dict:
+    out = score_pairs(collect_pairs(spec, tickers, loader, basket_ret, w0, w1), n_trials)
     out["window"] = [w0, w1]
     return out
 
@@ -268,6 +426,17 @@ def main() -> int:
                 return 2
             specs.append((f"file:{sp.get('name', i)}", sp))
 
+    # 다중검정 보정: 홀드아웃 누적 채점 수 N 에 맞춰 합격선을 동적 상향한다.
+    # 예산 초과는 채점(시험지 소모) 전에 거른다.
+    cum_before = ledger.cumulative_trials()
+    n_eff = cum_before + len(specs)
+    budget = ledger.HOLDOUT_TRIAL_BUDGET
+    if n_eff > budget:
+        print(f"제출 거부 [{args.family}]: 홀드아웃 예산 초과 "
+              f"(누적 {cum_before}+{len(specs)} > {budget}) — 새 홀드아웃 수집 필요")
+        return 2
+    t_crit = deflated_t_threshold(n_eff)
+
     w0, _, w1 = args.window.partition(":")
     w1 = w1 or None
 
@@ -275,18 +444,21 @@ def main() -> int:
     tickers, loader, basket_ret = holdout_universe()
 
     print(f"Stage1 {GATE_VERSION} | family={args.family} | 홀드아웃 {len(tickers)}종목 | 창 {w0}~{w1 or '끝'}")
-    print(f"{'ref':>10} {'n':>5} {'군집':>4} {'α%':>7} {'t(α)':>6} {'β':>6} {'하락n':>5} {'하락t':>6}  판정")
+    print(f"  다중검정 N={n_eff} (예산 {budget}, 잔여 {budget - n_eff}) → 동적 합격선 t(α)≥{t_crit:.2f}")
+    print(f"{'ref':>10} {'n':>5} {'군집':>4} {'α%':>7} {'t(α)':>6} {'β':>6} {'하락n':>5} {'하락t':>6} {'FWERp':>8}  판정")
     results = []
     for ref, sp in specs:
-        r = score(sp, tickers, loader, basket_ret, w0, w1)
+        r = score(sp, tickers, loader, basket_ret, w0, w1, n_trials=n_eff)
         results.append({"strategy_ref": ref, "gate_version": GATE_VERSION,
                         "status": r["status"], "result": r})
         dn = r["down"]
+        fp = r["multiplicity"]["fwer_p"]
         print(f"{ref:>10} {r['n_trades']:>5} {r['n_clusters']:>4} "
               f"{r['alpha_pct'] if r['alpha_pct'] is not None else '-':>7} "
               f"{r['t_alpha'] if r['t_alpha'] is not None else '-':>6} "
               f"{r['beta'] if r['beta'] is not None else '-':>6} "
-              f"{dn['n']:>5} {dn['t'] if dn['t'] is not None else '-':>6}  {r['status']}")
+              f"{dn['n']:>5} {dn['t'] if dn['t'] is not None else '-':>6} "
+              f"{fp if fp is not None else '-':>8}  {r['status']}")
 
     sub = ledger.record_submission(args.family, results)
     st = ledger.family_state(args.family)
@@ -302,6 +474,9 @@ def main() -> int:
                 "thresholds": {"min_trades": GATE_MIN_TRADES, "min_clusters": GATE_MIN_CLUSTERS,
                                "min_t_alpha": GATE_MIN_T_ALPHA, "min_alpha_pct": GATE_MIN_ALPHA_PCT,
                                "min_down_trades": GATE_MIN_DOWN_TRADES, "down_t_floor": GATE_DOWN_T_FLOOR},
+                "multiplicity": {"n_trials": n_eff, "cumulative_before": cum_before,
+                                 "fwer_alpha": GATE_FWER_ALPHA, "t_crit": round(t_crit, 3),
+                                 "budget": budget, "budget_remaining": budget - n_eff},
                 "family": args.family, "submission": sub,
                 "window": [w0, w1], "results": results,
             }, f, ensure_ascii=False, indent=2)

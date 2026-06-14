@@ -74,3 +74,27 @@ class TestLedger:
         with pytest.raises(ValueError):
             ledger.record_submission("fam-f", [], db_path=db)
         assert ledger.family_state("fam-f", db_path=db)["submissions"] == 0
+
+    def test_holdout_budget_caps_cumulative_trials(self, tmp_path, monkeypatch):
+        """총 N 상한: 누적 채점 spec 이 예산을 넘으면 어떤 family 도 제출 불가.
+        예산 초과 제출은 원자적으로 거부되고 슬롯·카운트를 소모하지 않는다."""
+        db = _db(tmp_path)
+        monkeypatch.setattr(ledger, "HOLDOUT_TRIAL_BUDGET", 3)
+        ledger.register_family("fam-g", "가설", db_path=db)
+        ledger.record_submission("fam-g", [_result(ref="db:1"), _result(ref="db:2")], db_path=db)
+        assert ledger.cumulative_trials(db_path=db) == 2
+
+        # 다음 제출(2개)이 2+2=4>3 → 거부, 카운트·슬롯 불변
+        ledger.register_family("fam-h", "가설2", db_path=db)
+        with pytest.raises(ValueError, match="예산"):
+            ledger.record_submission("fam-h", [_result(ref="db:3"), _result(ref="db:4")], db_path=db)
+        assert ledger.cumulative_trials(db_path=db) == 2
+        assert ledger.family_state("fam-h", db_path=db)["submissions"] == 0
+
+        # 잔여 1 — 1개짜리는 통과, 그 뒤 소진
+        ledger.record_submission("fam-h", [_result(ref="db:5")], db_path=db)
+        assert ledger.cumulative_trials(db_path=db) == 3
+        assert ledger.budget_state(db_path=db) == {"used": 3, "budget": 3, "remaining": 0}
+        ledger.register_family("fam-i", "가설3", db_path=db)
+        ok, why = ledger.can_submit("fam-i", db_path=db)
+        assert ok is False and "예산" in why

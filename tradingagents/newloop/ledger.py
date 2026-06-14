@@ -6,6 +6,13 @@
     재응시를 반복하면 홀드아웃 시험지도 유출되기 때문.
   - 제출 1회에 변형(spec) 은 VARIANTS_MAX 개까지.
   - 결과 기록은 append-only: 수정·삭제 함수를 제공하지 않는다.
+
+총 N 상한 (2026-06-12 추가):
+  - "느리게 도는 것"은 다중검정 수학을 바꾸지 않는다(거짓통과 확률에 시간 변수
+    없음). family당 한도·고갈정지는 *약한* 상한 — 운으로 통과하면 리셋된다.
+  - 깨끗한 천장은 홀드아웃 1장당 **누적 채점 spec 수의 절대 상한**에서만 나온다.
+    HOLDOUT_TRIAL_BUDGET 도달 시 어떤 family도 제출 불가 → 새 홀드아웃 수집 필요.
+  - 이 누적 N 이 게이트의 동적 합격선(다중검정 보정)을 결정한다(stage1_gate).
 """
 
 from __future__ import annotations
@@ -20,6 +27,9 @@ LEDGER_DB = os.path.join(LEDGER_DIR, "ledger.db")
 
 MAX_SUBMISSIONS = 2   # family 당 제출 한도 (최초 1 + 수정 재응시 1)
 VARIANTS_MAX = 24     # 제출 1회당 spec 변형 상한
+HOLDOUT_TRIAL_BUDGET = 400  # 홀드아웃 1장당 누적 채점 spec 절대 상한 (다중검정 천장)
+# 근거: t≥3 동적 보정 하에서 N=400 합격선 t_crit≈3.66 — 진짜 우위는 여전히 통과
+# 가능하되, 운 통과 누적은 봉쇄. 1/평일·~12spec 기준 ≈7주 수명. 도달 시 새 홀드아웃.
 
 
 def _connect(db_path: str | None = None) -> sqlite3.Connection:
@@ -55,6 +65,18 @@ def _now() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
+def cumulative_trials(*, db_path: str | None = None) -> int:
+    """홀드아웃에 채점된 누적 spec 수(= gate_results 전체 행). 다중검정 N."""
+    con = _connect(db_path)
+    return con.execute("SELECT COUNT(*) FROM gate_results").fetchone()[0]
+
+
+def budget_state(*, db_path: str | None = None) -> dict:
+    used = cumulative_trials(db_path=db_path)
+    return {"used": used, "budget": HOLDOUT_TRIAL_BUDGET,
+            "remaining": max(0, HOLDOUT_TRIAL_BUDGET - used)}
+
+
 def register_family(family_key: str, hypothesis: str, *, db_path: str | None = None) -> None:
     """채점 전 사전등록. 이미 있으면 무시(가설 변경 불가 — write-once)."""
     con = _connect(db_path)
@@ -79,6 +101,9 @@ def can_submit(family_key: str, *, db_path: str | None = None) -> tuple[bool, st
         return False, "이미 통과한 family — Stage2(forward)로"
     if status == "exhausted" or used >= mx:
         return False, f"재응시 한도 소진({used}/{mx}) — 시험지 마모 방지"
+    total = con.execute("SELECT COUNT(*) FROM gate_results").fetchone()[0]
+    if total >= HOLDOUT_TRIAL_BUDGET:
+        return False, f"홀드아웃 시험지 예산 소진({total}/{HOLDOUT_TRIAL_BUDGET}) — 새 홀드아웃 수집 필요"
     return True, "ok"
 
 
@@ -98,6 +123,13 @@ def record_submission(family_key: str, results: list[dict], *, db_path: str | No
     con = _connect(db_path)
     try:
         con.execute("BEGIN IMMEDIATE")
+        total = con.execute("SELECT COUNT(*) FROM gate_results").fetchone()[0]
+        if total + len(results) > HOLDOUT_TRIAL_BUDGET:
+            con.rollback()
+            raise ValueError(
+                f"홀드아웃 시험지 예산 초과: 누적 {total}+{len(results)} > "
+                f"{HOLDOUT_TRIAL_BUDGET} — 새 홀드아웃 수집 필요"
+            )
         cur = con.execute(
             "UPDATE families SET submissions = submissions + 1 "
             "WHERE family_key=? AND status='active' AND submissions < max_submissions",
