@@ -569,8 +569,17 @@ def _preload(tickers: list[str]):
     # 미분류 ETN 안전망으로 이름의 'ETN' 도 함께 제외(재수집 직후 분류 전 보호).
     _types = _short_store.ticker_security_types()
     _names = _short_store.ticker_names()
+    # 홀드아웃(시험지) 종목은 디스커버리가 절대 보면 안 된다(무결성). 단 홀드아웃 스토어를
+    # *로딩*하는 경우(holdout_universe)엔 제외하면 안 되므로, 현재 스토어가 홀드아웃
+    # 스토어가 아닐 때만 매니페스트 종목을 제외한다.
+    from tradingagents.newloop.holdout import load_manifest
+    _hm = load_manifest()
+    _holdout_codes = {t["code"] for t in _hm["tickers"]}
+    _is_holdout_store = (os.path.realpath(str(_short_store.root))
+                         == os.path.realpath(os.path.expanduser(_hm["store_dir"])))
     _exclude = {tk for tk in tickers
-                if _types.get(tk) in ("ETF", "ETN") or "ETN" in (_names.get(tk) or "")}
+                if _types.get(tk) in ("ETF", "ETN") or "ETN" in (_names.get(tk) or "")
+                or (not _is_holdout_store and tk in _holdout_codes)}
     for tk in tickers:
         if tk in _exclude:
             continue

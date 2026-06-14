@@ -9,9 +9,11 @@ from tradingagents.newloop.stage1_gate import (
     GATE_MIN_DOWN_TRADES,
     GATE_MIN_T_ALPHA,
     GATE_MIN_TRADES,
+    SCORE_DATE_HI,
     deflated_t_threshold,
     dsr_benchmark_t,
     ols_alpha_beta_clustered,
+    score,
     score_pairs,
 )
 
@@ -182,3 +184,23 @@ class TestDeflation:
         assert big["status"] == "fail"
         # FWER p 는 N 과 함께 커진다 (운으로 이 t 이상이 나올 확률)
         assert big["multiplicity"]["fwer_p"] > base["multiplicity"]["fwer_p"]
+
+
+@pytest.mark.unit
+class TestScoringWindow:
+    """채점 창은 급등 컷오프(2025-06-30)를 넘지 못한다 — 금지 구간 채점 방지(s1-v3)."""
+
+    @staticmethod
+    def _empty_loader(_tk):
+        return None, {}
+
+    def test_window_end_clamped_to_cutoff(self):
+        # 컷오프를 넘는 끝을 줘도 강제로 2025-06-30 으로 클램프
+        r = score({"name": "x"}, [], self._empty_loader, lambda a, b: None,
+                  w0="", w1="2026-12-31")
+        assert r["window"][1] == SCORE_DATE_HI
+
+    def test_window_default_ends_at_cutoff(self):
+        # 기본 호출(끝 미지정)도 컷오프에서 끝남 — 급등 구간 미채점
+        r = score({"name": "x"}, [], self._empty_loader, lambda a, b: None)
+        assert r["window"] == ["", SCORE_DATE_HI]

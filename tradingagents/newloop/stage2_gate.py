@@ -49,7 +49,9 @@ import pandas as pd
 
 from tradingagents.newloop import ledger
 from tradingagents.newloop.stage1_gate import (
+    DEFAULT_WINDOW_END,
     DEFAULT_WINDOW_START,
+    SCORE_DATE_HI,
     STRAT_DB,
     _mean_t,
     deflated_t_threshold,
@@ -252,7 +254,9 @@ def portfolio_daily(spec: dict, tickers: list[str], loader, kospi, usdkrw, w0: s
 
 
 def score(spec: dict, tickers: list[str], loader, kospi, usdkrw,
-          w0: str = DEFAULT_WINDOW_START, w1: str | None = None, n_trials: int = 1) -> dict:
+          w0: str = DEFAULT_WINDOW_START, w1: str | None = DEFAULT_WINDOW_END, n_trials: int = 1) -> dict:
+    if not w1 or w1 > SCORE_DATE_HI:          # 급등 컷오프 강제 상한 — 금지 구간 채점 방지
+        w1 = SCORE_DATE_HI
     r_p, r_m, w, k = portfolio_daily(spec, tickers, loader, kospi, usdkrw, w0, w1)
     if r_p is None:
         return {"stage": "s2-v1", "status": "insufficient", "n_days": 0,
@@ -274,8 +278,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Stage2 게이트 — 포트폴리오 시장중립 평가")
     ap.add_argument("--ids", default=None, help="strategies_v2.db 전략 id 콤마 목록")
     ap.add_argument("--spec-file", default=None, help="spec JSON 파일(단일 또는 배열)")
-    ap.add_argument("--window", default=f"{DEFAULT_WINDOW_START}:",
-                    help="날짜 창 'YYYY-MM-DD:YYYY-MM-DD' (끝 생략 가능)")
+    ap.add_argument("--window", default=f"{DEFAULT_WINDOW_START}:{DEFAULT_WINDOW_END}",
+                    help="날짜 창 'YYYY-MM-DD:YYYY-MM-DD' (끝 생략 시 2025-06-30 컷오프)")
     ap.add_argument("--out", default=None, help="결과 JSON 저장 경로")
     args = ap.parse_args()
     if not args.ids and not args.spec_file:

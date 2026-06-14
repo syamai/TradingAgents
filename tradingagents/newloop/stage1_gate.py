@@ -149,7 +149,12 @@ def wild_bootstrap_t_crit(xs, ys, groups, t_alpha_fn, n_trials: int,
     z_target = -_NORM.inv_cdf(p_target)           # ≥ GATE_MIN_T_ALPHA
     return inflation * z_target                   # inflation≥1·z_target≥3.0 ⇒ ≥3.0
 
-DEFAULT_WINDOW_START = "2025-07-01"
+# 채점 창: 시작은 개방(데이터 시작부터), 끝은 2025-06-30 급등 컷오프 상한.
+# 그 이후는 비정상 급등 레짐이라 채점 금지·forward 관찰 전용(CLAUDE.md).
+# SCORE_DATE_HI 는 hermes.strategy_validation 의 동일 상수(고정 사실)를 newloop 격리 유지 위해 로컬 미러.
+SCORE_DATE_HI = "2025-06-30"
+DEFAULT_WINDOW_START = ""              # 빈 값 = 데이터 시작부터 모든 거래 포함
+DEFAULT_WINDOW_END = SCORE_DATE_HI
 STRAT_DB = os.path.expanduser("~/.tradingagents/hermes/strategies_v2.db")  # 읽기전용 입력
 
 
@@ -370,8 +375,10 @@ def collect_pairs(spec: dict, tickers: list[str], loader, basket_ret,
 
 
 def score(spec: dict, tickers: list[str], loader, basket_ret,
-          w0: str = DEFAULT_WINDOW_START, w1: str | None = None,
+          w0: str = DEFAULT_WINDOW_START, w1: str | None = DEFAULT_WINDOW_END,
           n_trials: int = 1) -> dict:
+    if not w1 or w1 > SCORE_DATE_HI:          # 급등 컷오프 강제 상한 — 금지 구간 채점 방지
+        w1 = SCORE_DATE_HI
     out = score_pairs(collect_pairs(spec, tickers, loader, basket_ret, w0, w1), n_trials)
     out["window"] = [w0, w1]
     return out
@@ -391,7 +398,7 @@ def main() -> int:
     ap.add_argument("--hypothesis", default=None, help="가설 한 줄 (family 최초 등록 시 필수)")
     ap.add_argument("--ids", default=None, help="기존 strategies_v2.db 의 전략 id 콤마 목록")
     ap.add_argument("--spec-file", default=None, help="spec JSON 파일(단일 또는 배열)")
-    ap.add_argument("--window", default=f"{DEFAULT_WINDOW_START}:",
+    ap.add_argument("--window", default=f"{DEFAULT_WINDOW_START}:{DEFAULT_WINDOW_END}",
                     help="진입일 창 'YYYY-MM-DD:YYYY-MM-DD' (끝 생략 가능)")
     ap.add_argument("--out", default=None, help="결과 JSON 저장 경로")
     args = ap.parse_args()
