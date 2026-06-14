@@ -347,9 +347,14 @@ class KisHistoryStore:
                 ticker TEXT PRIMARY KEY,
                 company_name TEXT NOT NULL,
                 market TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                security_type TEXT
             )
         """)
+        # 기존 DB 마이그레이션: security_type 컬럼이 없으면 추가 (지수상품 분류 영속화).
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(tickers)")}
+        if "security_type" not in cols:
+            conn.execute("ALTER TABLE tickers ADD COLUMN security_type TEXT")
 
     def set_ticker_metadata(
         self, ticker: str, company_name: str, market: str
@@ -370,6 +375,17 @@ class KisHistoryStore:
                 "  market=excluded.market, "
                 "  updated_at=excluded.updated_at",
                 (norm, company_name, market, now),
+            )
+
+    def set_security_type(self, ticker: str, security_type: str) -> None:
+        """증권유형('STOCK'/'ETF'/'ETN' 등) 기록. tickers 행이 있어야 한다(메타 선등록)."""
+        if "sqlite" not in self.backends:
+            return
+        with self._sqlite_conn() as conn:
+            self._ensure_tickers_table(conn)
+            conn.execute(
+                "UPDATE tickers SET security_type=? WHERE ticker=?",
+                (security_type, _norm_ticker(ticker)),
             )
 
     def get_ticker_metadata(self, ticker: str) -> Optional[dict]:
@@ -394,6 +410,28 @@ class KisHistoryStore:
             "ticker": row[0], "company_name": row[1],
             "market": row[2], "updated_at": row[3],
         }
+
+    def ticker_names(self) -> dict[str, str]:
+        """{ticker: company_name} 일괄 조회 (tickers 테이블). 없으면 빈 dict."""
+        if "sqlite" not in self.backends or not self._sqlite_path().exists():
+            return {}
+        with self._sqlite_conn() as conn:
+            try:
+                rows = conn.execute("SELECT ticker, company_name FROM tickers").fetchall()
+            except sqlite3.OperationalError:
+                return {}
+        return {r[0]: r[1] for r in rows}
+
+    def ticker_security_types(self) -> dict[str, str]:
+        """{ticker: security_type} 일괄 조회. 미분류는 값이 None. 없으면 빈 dict."""
+        if "sqlite" not in self.backends or not self._sqlite_path().exists():
+            return {}
+        with self._sqlite_conn() as conn:
+            try:
+                rows = conn.execute("SELECT ticker, security_type FROM tickers").fetchall()
+            except sqlite3.OperationalError:
+                return {}
+        return {r[0]: r[1] for r in rows}
 
     # === Analysis reports (raw·derived 외 분석 산출물) ===
 

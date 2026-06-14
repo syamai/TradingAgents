@@ -564,7 +564,16 @@ def _preload(tickers: list[str]):
     holdings: dict[str, object] = {}
     min_d = max_d = None
     _short_store = KisHistoryStore()
+    # 지수상품(ETF·ETN)은 종목선정 대상이 아님 — 팩터 신호가 무의미. 권위 분류는
+    # security_type(scripts/classify_security_types.py 가 yfinance quoteType 로 적재).
+    # 미분류 ETN 안전망으로 이름의 'ETN' 도 함께 제외(재수집 직후 분류 전 보호).
+    _types = _short_store.ticker_security_types()
+    _names = _short_store.ticker_names()
+    _exclude = {tk for tk in tickers
+                if _types.get(tk) in ("ETF", "ETN") or "ETN" in (_names.get(tk) or "")}
     for tk in tickers:
+        if tk in _exclude:
+            continue
         df, _meta = load_holdings(tk)
         if df is None or df.empty:
             continue
