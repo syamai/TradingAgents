@@ -1,7 +1,7 @@
 ---
 name: newloop-researcher
-description: "newloop 가설 생성·자가학습 tick — 원장의 실패 교훈을 읽고 구조적으로 새로운 가설 family 1개를 사전등록·설계해 Stage1 게이트(시장 도움 제거 채점)에 응시하고 결과를 보고. 베타 위장(상승장 고민감 종목 선택)은 게이트가 절편 α로 적발하므로 시장중립적 우위 가설 우선. 고갈 선언 시 생성 중단."
-version: 0.1.0
+description: "newloop 가설 생성·자가학습 tick — 원장의 실패 교훈을 읽고 구조적으로 새로운 가설 family 1개를 사전등록·설계해 Stage1 게이트(시장 도움 제거 채점)에 응시. Stage1 통과 시 Stage2(포트폴리오 시장중립) 채점→통과 시 Stage3 forward 관찰 등록까지 자동 연결하고 결과를 보고. 베타 위장(상승장 고민감 종목 선택)은 게이트가 절편 α로 적발하므로 시장중립적 우위 가설 우선. 고갈 선언 시 생성 중단."
+version: 0.2.0
 platforms: [linux, macos]
 metadata:
   hermes:
@@ -58,13 +58,38 @@ uv run python -m tradingagents.newloop.stage1_gate \
   재응시 금지(시험지 마모 방지 규율의 핵심).
 - `spec 무효`면 슬롯이 소모되지 않았으므로 spec 수정 후 재시도 가능.
 
+### 3.5 Stage1 통과 시 — Stage2 채점 → forward 등록 (자동 연결)
+Stage1 결과 JSON(`artifacts/newloop/stage1_<family>_<date>.json`)의 `results[]` 에서
+**`status == "pass"` 인 spec 만** 추린다. 하나도 없으면 이 단계 전체 생략
+(`insufficient`·`fail` 은 절대 넘기지 않음). pass 가 있을 때만 아래를 순서대로 실행:
+
+1. 통과 spec 들만 모아 `/tmp/newloop_s2_<family>.json`(JSON 배열)로 저장.
+2. Stage2(포트폴리오 시장중립) 채점 — Stage1 과 같은 홀드아웃 예산을 `<family>-s2` 키로 공유:
+   ```bash
+   uv run python -m tradingagents.newloop.stage2_gate \
+     --family <family> --spec-file /tmp/newloop_s2_<family>.json \
+     --out artifacts/newloop/stage2_<family>_$(date +%Y%m%d).json
+   ```
+   `제출 거부`(예산/한도 소진)면 그대로 보고하고 종료 — 우회 금지.
+3. Stage2 결과(`artifacts/newloop/stage2_<family>_<date>.json`)에서 다시 `status == "pass"`
+   인 spec 만 추려 `/tmp/newloop_fwd_<family>.json` 저장 → forward(Stage3) 관찰 등록:
+   ```bash
+   uv run python -m tradingagents.newloop.forward --register --family <family> \
+     --spec-file /tmp/newloop_fwd_<family>.json \
+     --out artifacts/newloop/forward_<family>_$(date +%Y%m%d).json
+   ```
+   forward 는 **채점이 아니라 2025-06-30 이후 관찰**(예산 비소비). 등록 후 4주 경과해야
+   판정 자격이 생기므로, 등록 직후 forward 메트릭은 표본 부족이 정상이다.
+
 ### 4. 보고 (Telegram)
 - family·가설·결과표(ref / n / 군집 / t(α) / β / 하락창 / FWERp / 판정)
 - 다중검정 상태: **누적 채점 N / 예산(HOLDOUT_TRIAL_BUDGET) 잔여**, 이번 채점이
   직면한 **동적 합격선 t(α)≥t_crit(N)**. 합격선은 t≥3.0 고정이 아니라 누적 N 이
   클수록 오른다 — "느리게 반복"으로는 못 피한다(N 자체가 임계를 올림).
 - 원장 상태(제출 #/한도)와 시험지 마모(누적 family·spec 수)
-- **pass 발생 시**: "🎯 Stage1 통과 — Stage2(forward) 후보" 강조 + 사람 확인 요청.
+- **Stage1 pass 발생 시**: Step 3.5 의 Stage2 결과(α연율·β·t(α)·t임계·하락t·판정)와,
+  Stage2 도 통과면 forward 등록 사실(관찰 시작·판정 최소 4주)을 함께 보고.
+  "🎯 Stage1→Stage2 통과 — forward 관찰 진입" 강조 + 사람 확인 요청.
   insufficient는 탈락이 아님(표본/하락창 부족) — 구분해 보고.
 - **예산 소진(잔여 0) 또는 거부 시**: 그대로 보고 — 새 홀드아웃 수집은 사람 결정.
 

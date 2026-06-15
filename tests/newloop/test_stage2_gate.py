@@ -10,7 +10,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from tradingagents.newloop import ledger
 from tradingagents.newloop.stage2_gate import (
+    GATE_VERSION,
+    S2_ALPHA_ANN_MIN,
     S2_BETA_MAX,
     S2_MIN_INVESTED_DAYS,
     hac_ols,
@@ -186,3 +189,48 @@ class TestBootstrapAndDiagnostics:
         r = score_portfolio(r_p, r_m, w, n_trials=1)
         assert r["concentration"] is None
         assert r["status"] == "pass"
+
+
+@pytest.mark.unit
+class TestCostAwareThreshold:
+    """s2-v2: 비용 인지 α 하한(3%/년) — 유의해도 비용 미만이면 경제성 탈락."""
+
+    def test_version_and_floor(self):
+        assert GATE_VERSION == "s2-v2"
+        assert S2_ALPHA_ANN_MIN == 3.0
+
+    def test_significant_subcost_alpha_fails_material(self):
+        # α 일간 0.0001 → 연율 ≈ 2.52% < 3% 하한. 잡음 작아 t 는 유의하지만 경제성 탈락.
+        r_p, r_m, w = _full(alpha_daily=0.0001, beta=1.0, idio=0.00015)
+        r = score_portfolio(r_p, r_m, w)
+        assert 0 < r["alpha_ann_pct"] < S2_ALPHA_ANN_MIN
+        assert r["checks"]["alpha_significant"] is True
+        assert r["checks"]["alpha_material"] is False
+        assert r["status"] == "fail"
+
+
+@pytest.mark.unit
+class TestStage2BudgetSharing:
+    """#4: Stage2 채점이 '<family>-s2' 키로 같은 누적 N(예산)에 합산된다."""
+
+    def test_separate_s2_key_shares_budget(self, tmp_path):
+        db = str(tmp_path / "ledger.db")
+        ledger.register_family("famX", "h", db_path=db)
+        ledger.record_submission(
+            "famX",
+            [{"strategy_ref": "s1", "gate_version": "s1-v3", "status": "pass", "result": {}}],
+            db_path=db)
+        assert ledger.cumulative_trials(db_path=db) == 1
+        # Stage1 family 는 통과로 잠겨 재제출 불가
+        ok1, _ = ledger.can_submit("famX", db_path=db)
+        assert ok1 is False
+        # Stage2 는 '<family>-s2' 별도 키 — 신규라 제출 가능
+        ledger.register_family("famX-s2", "[S2] famX", db_path=db)
+        ok2, _ = ledger.can_submit("famX-s2", db_path=db)
+        assert ok2 is True
+        ledger.record_submission(
+            "famX-s2",
+            [{"strategy_ref": "s1", "gate_version": GATE_VERSION, "status": "pass", "result": {}}],
+            db_path=db)
+        # 누적 N 이 Stage1+Stage2 합산 → 예산 공유 (#4)
+        assert ledger.cumulative_trials(db_path=db) == 2

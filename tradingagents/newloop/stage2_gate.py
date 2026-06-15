@@ -27,8 +27,10 @@ market_overlay(디리스킹)는 포지션 사이징이라 y=r_p/w 비율 채점�
 단일종목) 채점이 단일종목 꼬리에 지배될 수 있다 → concentration 진단을 출력
 (판정 게이트 아님, 해석용).
 
-합격 기준(S2_*)·forward 연결·채점 창은 **사용자 재확인 대상**이라 PROVISIONAL.
-남은 검토(검증 방식 논의용): 채점 창의 2025-07+ 인플레 레짐, ledger 기록·예산 공유.
+합격 기준(S2_*)은 사용자 확정(2026-06-15, s2-v2): 비용 인지 α 하한 3%/년.
+채점 창은 2025-06-30 급등 컷오프 상한 — 그 이후는 forward 관찰 전용(newloop/forward.py).
+ledger 기록·예산 공유: Stage2 채점도 '<family>-s2' 키로 gate_results 에 append 돼
+홀드아웃 누적 N(HOLDOUT_TRIAL_BUDGET)을 Stage1 과 공유한다(다중검정 마모 반영).
 
 사용:
     uv run python -m tradingagents.newloop.stage2_gate \\
@@ -59,11 +61,15 @@ from tradingagents.newloop.stage1_gate import (
 )
 
 TRADING_DAYS = 252
+GATE_VERSION = "s2-v2"   # s2-v1→v2: 합격 임계 확정(비용 인지 α 하한) + ledger 예산 공유 배선
 
-# ── 임시 합격 기준 (검증 방식 사용자 재확인 대상 — PROVISIONAL) ──────────────
+# ── 합격 기준 (사용자 확정 2026-06-15 — s2-v2) ────────────────────────────────
 S2_MIN_INVESTED_DAYS = 40   # 투입일(현금 제외) 최소 — 미만이면 판정 보류
 S2_MIN_DOWN_DAYS = 15      # 투입 하락일 최소 — 베타 위장검사 표본
-S2_ALPHA_ANN_MIN = 0.0    # 연율 시장중립 알파 하한(%) — 비용 모델 확정 후 상향
+S2_ALPHA_ANN_MIN = 3.0    # 연율 시장중립 알파 하한(%). 비용 인지: 20일 보유·연 ~12 왕복 ×
+# 왕복비용 ~0.3~0.5%(증권거래세 0.18%+수수료+슬리피지) ≈ 3~6% 드래그. 3% 는 보수적 하한 —
+# t 유의성 AND 이 하한 = "진짜 AND 비용 후에도 경제적". 비용모델 기반이라 홀드아웃 적합이
+# 아님(자기참조 시험지 마모 회피); forward 누적이 추가 검증.
 S2_BETA_MAX = 1.6         # 시장 민감도 상한 — 베타 위장 차단
 S2_DOWN_EXCESS_T_FLOOR = -2.0  # 투입 하락일 시장중립 초과수익 t 하한
 S2_HAC_MIN_LAG = 10       # HAC 최소 lag (보유기간 모를 때 보수적 하한)
@@ -114,7 +120,7 @@ def score_portfolio(r_p, r_m, w, n_trials: int = 1, max_hold_days: int = 0, k=No
     t_crit_norm = deflated_t_threshold(n_trials)
     t_crit = t_crit_norm  # 회귀 성공 후 부트스트랩 임계로 교체
     out = {
-        "stage": "s2-v1", "n_days": n_total, "n_invested_days": n_inv,
+        "stage": GATE_VERSION, "n_days": n_total, "n_invested_days": n_inv,
         "deployment": round(float(w.mean()), 4) if n_total else None,
         "alpha_ann_pct": None, "alpha_daily": None, "beta": None,
         "t_alpha": None, "t_beta": None, "maxlags": None,
@@ -125,7 +131,7 @@ def score_portfolio(r_p, r_m, w, n_trials: int = 1, max_hold_days: int = 0, k=No
         "checks": {"enough_days": None, "alpha_significant": None,
                    "alpha_material": None, "beta_controlled": None,
                    "enough_down": None, "down_not_broken": None},
-        "thresholds_provisional": True,
+        "thresholds_provisional": False,
         "status": "insufficient", "gate_passed": False,
     }
     if n_inv < S2_MIN_INVESTED_DAYS:
@@ -259,7 +265,7 @@ def score(spec: dict, tickers: list[str], loader, kospi, usdkrw,
         w1 = SCORE_DATE_HI
     r_p, r_m, w, k = portfolio_daily(spec, tickers, loader, kospi, usdkrw, w0, w1)
     if r_p is None:
-        return {"stage": "s2-v1", "status": "insufficient", "n_days": 0,
+        return {"stage": GATE_VERSION, "status": "insufficient", "n_days": 0,
                 "window": [w0, w1], "checks": {"enough_days": False}}
     out = score_portfolio(r_p, r_m, w, n_trials, max_hold_days=_max_hold_days(spec), k=k)
     out["window"] = [w0, w1]
@@ -276,6 +282,9 @@ def _load_spec_from_db(sid: int) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Stage2 게이트 — 포트폴리오 시장중립 평가")
+    ap.add_argument("--family", required=True,
+                    help="가설 계열 키 — 원장엔 '<family>-s2' 로 기록(Stage1 과 예산 공유)")
+    ap.add_argument("--hypothesis", default=None, help="가설 한 줄 (s2 family 최초 등록 시)")
     ap.add_argument("--ids", default=None, help="strategies_v2.db 전략 id 콤마 목록")
     ap.add_argument("--spec-file", default=None, help="spec JSON 파일(단일 또는 배열)")
     ap.add_argument("--window", default=f"{DEFAULT_WINDOW_START}:{DEFAULT_WINDOW_END}",
@@ -285,6 +294,17 @@ def main() -> int:
     if not args.ids and not args.spec_file:
         ap.error("--ids 또는 --spec-file 필요")
 
+    # Stage2 도 같은 홀드아웃 시험지를 소모하므로 예산을 공유한다(#4). 원장 키는
+    # '<family>-s2' — Stage1 통과로 잠긴 family(status='passed')와 충돌하지 않게 분리하고,
+    # 그 자체로 재응시 한도(MAX_SUBMISSIONS)를 독립으로 갖는다. 사전등록·예산 확인은
+    # 채점보다 먼저(시험지 마모 방지).
+    s2_family = f"{args.family}-s2"
+    ledger.register_family(s2_family, args.hypothesis or f"[S2] {args.family} 포트폴리오 시장중립 검증")
+    ok, why = ledger.can_submit(s2_family)
+    if not ok:
+        print(f"제출 거부 [{s2_family}]: {why}")
+        return 2
+
     specs: list[tuple[str, dict]] = []
     if args.ids:
         for s in args.ids.split(","):
@@ -293,8 +313,24 @@ def main() -> int:
     if args.spec_file:
         with open(args.spec_file, encoding="utf-8") as f:
             loaded = json.load(f)
+        # 깨진 spec 이 0거래→insufficient 로 제출 슬롯을 낭비하지 않도록 전수 검증.
+        from tradingagents.hermes.strategy_spec_v2 import validate_spec_v2
         for i, sp in enumerate(loaded if isinstance(loaded, list) else [loaded]):
+            try:
+                validate_spec_v2(sp)
+            except Exception as e:
+                print(f"spec 무효(제출 미기록): #{i} {sp.get('name', '?')} — {e}")
+                return 2
             specs.append((f"file:{sp.get('name', i)}", sp))
+
+    # 다중검정 N = 홀드아웃 누적 채점(Stage1+Stage2 공유) + 이번 배치. 예산 초과는 채점 전 차단.
+    cum_before = ledger.cumulative_trials()
+    n_eff = cum_before + len(specs)
+    budget = ledger.HOLDOUT_TRIAL_BUDGET
+    if n_eff > budget:
+        print(f"제출 거부 [{s2_family}]: 홀드아웃 예산 초과 "
+              f"(누적 {cum_before}+{len(specs)} > {budget}) — 새 홀드아웃 수집 필요")
+        return 2
 
     w0, _, w1 = args.window.partition(":")
     w1 = w1 or None
@@ -310,15 +346,16 @@ def main() -> int:
                    for _r, sp in specs)
     usdkrw = fetch_usdkrw("2018-01-01", w1 or "2027-01-01") if needs_fx else None
 
-    # 다중검정 N = 홀드아웃 누적 채점 + 이번 배치 (Stage1 과 공유 — 마모 반영)
-    n_eff = ledger.cumulative_trials() + len(specs)
-    print(f"Stage2 s2-v1 | 홀드아웃 {len(tickers)}종목 | 창 {w0}~{w1 or '끝'} | 다중검정 N={n_eff}")
+    print(f"Stage2 {GATE_VERSION} | family={s2_family} | 홀드아웃 {len(tickers)}종목 | "
+          f"창 {w0}~{w1 or '끝'}")
+    print(f"  다중검정 N={n_eff} (예산 {budget}, 잔여 {budget - n_eff})")
     print(f"{'ref':>10} {'투입일':>5} {'배치%':>6} {'α연율%':>8} {'β':>6} {'t(α)':>7} "
-          f"{'t임계':>6} {'단독%':>5} {'하락t':>6}  판정(임시)")
+          f"{'t임계':>6} {'단독%':>5} {'하락t':>6}  판정")
     results = []
     for ref, sp in specs:
         r = score(sp, tickers, loader, kospi, usdkrw, w0, w1, n_trials=n_eff)
-        results.append({"strategy_ref": ref, "result": r})
+        results.append({"strategy_ref": ref, "gate_version": GATE_VERSION,
+                        "status": r["status"], "result": r})
         dn = r.get("down", {})
         dep = r.get("deployment")
         conc = r.get("concentration") or {}
@@ -332,16 +369,22 @@ def main() -> int:
               f"{round(conc.get('frac_solo') * 100) if conc.get('frac_solo') is not None else '-':>5} "
               f"{dn.get('t') if dn.get('t') is not None else '-':>6}  {r['status']}")
 
+    sub = ledger.record_submission(s2_family, results)
+    st = ledger.family_state(s2_family)
+    print(f"\n원장 기록: 제출 #{sub}/{st['max_submissions']} → family 상태: {st['status']}")
+
     if args.out:
         os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as f:
             json.dump({
                 "created_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
-                "stage": "s2-v1", "thresholds_provisional": True,
+                "stage": GATE_VERSION, "thresholds_provisional": False,
                 "thresholds": {"min_invested_days": S2_MIN_INVESTED_DAYS,
                                "min_down_days": S2_MIN_DOWN_DAYS, "alpha_ann_min": S2_ALPHA_ANN_MIN,
                                "beta_max": S2_BETA_MAX, "down_excess_t_floor": S2_DOWN_EXCESS_T_FLOOR},
-                "multiplicity": {"n_trials": n_eff},
+                "multiplicity": {"n_trials": n_eff, "cumulative_before": cum_before,
+                                 "budget": budget, "budget_remaining": budget - n_eff},
+                "family": s2_family, "submission": sub,
                 "window": [w0, w1], "results": results,
             }, f, ensure_ascii=False, indent=2)
         print(f"저장: {args.out}")
