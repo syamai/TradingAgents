@@ -121,13 +121,19 @@ def var_irf(
     df: pd.DataFrame, cols: list[str], horizon: int = VAR_HORIZON,
     max_lag: int = 8,
 ) -> dict:
-    """VAR fit (AIC 로 차수 선택) → 누적 IRF.
+    """VAR fit (AIC 로 차수 선택) → 직교화(orthogonalized) 누적 IRF.
 
-    한 변수의 1-σ 충격이 다른 변수에 ``horizon`` 일 동안 누적적으로 미치는
-    효과. 표준화 충격이므로 절댓값 자체보다 *방향과 지속성* 해석.
+    한 변수의 1-σ *구조*충격(Cholesky 직교화)이 다른 변수에 ``horizon`` 일 동안
+    누적적으로 미치는 효과. 충격이 1σ 로 표준화돼 변수 단위(예: net_qty 주 vs
+    return %)가 달라도 비교 가능 — 단 응답값 자체는 응답변수 단위(여기선 return %).
+
+    key ``"{src}->{tgt}"`` = **src 1σ 충격 → tgt 누적 반응**. Cholesky 직교화는
+    ``cols`` 순서에 의존: 앞쪽 변수일수록 외생적이라, 뒤 변수의 충격에 동시(t=0)
+    반응이 0 으로 식별된다(예: cols=["return", ...] 면 net→return 의 t0=0, 지연
+    효과만 잡힘 = Granger 와 정합한 *선행* 측정).
 
     return:
-      ``{"order": p, "cols": cols, "irf_cum": {f"{i}->{j}": [v_0..v_horizon]}}``
+      ``{"order": p, "cols": cols, "irf_cum": {f"{src}->{tgt}": [v_0..v_horizon]}}``
     """
     sub = df[cols].replace([np.inf, -np.inf], np.nan).dropna()
     if len(sub) < (max_lag + 5) * len(cols) or any(sub[c].std() == 0 for c in cols):
@@ -144,12 +150,15 @@ def var_irf(
     except (ValueError, np.linalg.LinAlgError):
         return {"order": None, "cols": cols, "irf_cum": {}}
 
-    cum = irf.cum_effects  # shape (horizon+1, k, k) — orthogonalized 디폴트
+    # 직교화 누적 IRF. statsmodels 규약: cum[step, response, impulse].
+    # key "src->tgt"(src 충격→tgt 반응) = response=tgt(j), impulse=src(i) → cum[:, j, i].
+    # (구버그: irf.cum_effects[:, i, j] = 비직교·단위충격 + 방향 반전 → 단위 혼재로 무의미)
+    cum = irf.orth_cum_effects  # shape (horizon+1, k, k)
     out_irf: dict = {}
     for i, src in enumerate(cols):
         for j, tgt in enumerate(cols):
             key = f"{src}->{tgt}"
-            out_irf[key] = [round(float(v), 5) for v in cum[:, i, j]]
+            out_irf[key] = [round(float(v), 5) for v in cum[:, j, i]]
     return {"order": int(order), "cols": cols, "irf_cum": out_irf,
             "horizon": int(horizon)}
 
