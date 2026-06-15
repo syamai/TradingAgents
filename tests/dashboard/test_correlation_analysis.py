@@ -38,6 +38,8 @@ def _sample_holdings_signed(n: int = 60) -> pd.DataFrame:
         rows.append({
             "date": d.strftime("%Y-%m-%d"),
             "close": new_close,
+            # compute_advanced_report 는 volume>0 행만 분석(유령행 제거 규약) — 양수 필수
+            "volume": 100_000,
             **{f"{s}_qty": 0 for s in SUBS_10},
             "retail_qty": int(round(-100 * delta)),
             "foreign_registered_qty": int(round(+100 * delta)),
