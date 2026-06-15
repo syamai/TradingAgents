@@ -24,6 +24,8 @@ import pandas as pd
 from sklearn.feature_selection import mutual_info_regression
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.stattools import adfuller, coint, grangercausalitytests
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import statsmodels.api as sm
 
 from dashboard.holdings_chart import SUBJECT_LABELS
 from tradingagents.dataflows.kis_holdings import SUBS_10
@@ -161,6 +163,87 @@ def var_irf(
             out_irf[key] = [round(float(v), 5) for v in cum[:, j, i]]
     return {"order": int(order), "cols": cols, "irf_cum": out_irf,
             "horizon": int(horizon)}
+
+
+# === 3b. 공선성 교정 선행 예측 검정 =========================================
+
+def _bh_survivors(pvals: list[float], alpha: float = 0.05) -> list[int]:
+    """Benjamini-Hochberg(FDR). 생존 p-value 의 인덱스 리스트 반환."""
+    pv = np.asarray(pvals, dtype=float)
+    order = np.argsort(pv)
+    m = len(pv)
+    keep: set = set()
+    for i, idx in enumerate(order):
+        if pv[idx] <= alpha * (i + 1) / m:
+            keep = set(order[: i + 1].tolist())
+    return sorted(keep)
+
+
+def forward_lead_test(
+    df: pd.DataFrame,
+    subjects: tuple[str, ...] = KEY_SUBJECTS,
+    *,
+    numeraire: str = "retail",
+    horizon: int = 1,
+    hac_lags: int = 5,
+    alpha: float = 0.05,
+) -> dict:
+    """제로섬 공선성을 교정한 선행 예측 검정 — naive 다변량 통제의 대체.
+
+    투자자유형 net_qty 는 시장청산상 합≈0 이라 전부 동시 투입하면 다중공선성
+    (개인·외국인 VIF 가 수십대로 폭증)으로 SE 가 팽창해, 진짜 선행 신호도
+    비유의로 죽는다('신호 없음'과 '식별 불가'를 구분 못함). ``numeraire``
+    (기본 '개인' retail)를 제외해 VIF 를 낮춘 뒤
+    ``ret(t+horizon) ~ Σ_s net_s(t)[z]`` 를 HAC(Newey-West) 로 적합하고,
+    각 주체의 VIF·계수·BH-FDR 생존을 반환한다.
+
+    df 는 holdings(``close``,``volume``,``price_change_pct``,``{s}_net_qty``).
+    ``close>0 & volume>0 & price_change_pct`` 유한 행만 사용.
+
+    return: ``{"n", "numeraire", "horizon", "vif": {s: v}, "rows":
+              [{subject, b, t, p}], "fdr_survivors": [s...]}``
+    """
+    cols = [s for s in subjects if s != numeraire]
+    out: dict = {"n": 0, "numeraire": numeraire, "horizon": int(horizon),
+                 "vif": {}, "rows": [], "fdr_survivors": []}
+    if df.empty or not cols:
+        return out
+    d = df.sort_values("date").reset_index(drop=True)
+    d = d[(d["close"] > 0) & (d["volume"] > 0)].replace(
+        [np.inf, -np.inf], np.nan).dropna(
+        subset=["price_change_pct"]).reset_index(drop=True)
+    need = [f"{s}_net_qty" for s in cols]
+    if len(d) < 50 or any(c not in d.columns for c in need):
+        return out
+    ret = d["price_change_pct"].astype(float)
+    Z: dict = {}
+    for s in cols:
+        v = d[f"{s}_net_qty"].astype(float).to_numpy()
+        sd = v.std()
+        if sd == 0:
+            return out
+        Z[s] = (v - v.mean()) / sd
+    X = pd.DataFrame(Z)
+    y = ret.shift(-horizon)
+    m = pd.concat([y.rename("_y"), X], axis=1).dropna()
+    if len(m) < 50:
+        return out
+    Xc = sm.add_constant(m[cols])
+    try:
+        res = sm.OLS(m["_y"], Xc).fit(cov_type="HAC", cov_kwds={"maxlags": hac_lags})
+        vifs = {cols[i]: float(variance_inflation_factor(Xc.values, i + 1))
+                for i in range(len(cols))}
+    except (ValueError, np.linalg.LinAlgError):
+        return out
+    pvals = [float(res.pvalues[s]) for s in cols]
+    keep = _bh_survivors(pvals, alpha)
+    out["n"] = int(len(m))
+    out["vif"] = {s: round(v, 2) for s, v in vifs.items()}
+    out["rows"] = [{"subject": s, "b": round(float(res.params[s]), 4),
+                    "t": round(float(res.tvalues[s]), 3),
+                    "p": round(float(res.pvalues[s]), 5)} for s in cols]
+    out["fdr_survivors"] = [cols[i] for i in keep]
+    return out
 
 
 # === 4. Cointegration (Engle-Granger) =======================================
