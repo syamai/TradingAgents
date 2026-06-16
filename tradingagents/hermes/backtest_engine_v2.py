@@ -105,6 +105,16 @@ def _eval_signal_v2(df: pd.DataFrame, sig: dict) -> pd.Series:
         pe = bt._num(df["private_equity_net_qty"]).fillna(0).rolling(sig["window"]).sum()
         return (fu < 0) & (pe < 0)
 
+    if t == "flow_unwind":
+        # 주도세력 누적순매수(net_qty cumsum)가 trailing W일 고점 대비 X% 되돌림 = 매집 포지션 청산.
+        # cumsum 은 trend_slope 와 동일 관용구 — rolling(win) 이라 누적 절대수준 오프셋은 상쇄(윈도우 무관).
+        cum = bt._num(df[f"{sig['subject']}_net_qty"]).fillna(0).cumsum()
+        win = sig["window"]
+        peak = cum.rolling(win, min_periods=1).max()            # trailing 고점
+        span = peak - cum.rolling(win, min_periods=1).min()     # 레인지 정규화(cum<0 부호안정)
+        drawdown = (peak - cum) / span.where(span > 0)          # 분모0 → NaN → False
+        return drawdown >= sig["drawdown_pct"] / 100.0
+
     if t == "liquidity_filter":
         value = (bt._num(df["close"]) * bt._num(df["volume"])).rolling(sig["window"]).mean()
         return value >= sig["value"] if sig["op"] == ">=" else value <= sig["value"]

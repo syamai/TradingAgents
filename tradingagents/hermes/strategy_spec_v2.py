@@ -22,6 +22,9 @@
                         (한 주체 쏠림보다 분산 매집을 선호).
   - ``fast_money_unwind``: 외국인비등록 + 사모가 W일 동시 순매도. 주로 exit 에서
                         단기자금 이탈/과열 해소를 감지.
+  - ``flow_unwind``   : 지정 주체 누적순매수(net_qty cumsum)가 W일 trailing 고점 대비
+                        drawdown_pct% 되돌림 — 주도세력이 모은 누적 포지션을 되팔기 시작
+                        (leader-exit). 주로 exit 에서 사용.
   - ``liquidity_filter``: W일 평균 거래대금(close*volume) 임계. 저유동 아티팩트 차단.
   - ``short_ratio``   : 공매도 거래량 비중(short_volume_ratio %)의 W일 trailing 평균
                         임계 — 낮은 공매도 압력(<=) 선호. short 데이터 부재 시 False.
@@ -71,6 +74,9 @@ FLOW_GROUPS: dict[str, tuple[str, ...]] = {
 FLOW_CONSENSUS_MIN_BUYERS_GRID: tuple[int, ...] = (2, 3, 4)
 FLOW_DISPERSION_MAX_SHARE_GRID: tuple[float, ...] = (0.5, 0.6, 0.7)
 FAST_MONEY_UNWIND_WINDOW_GRID: tuple[int, ...] = (3, 5, 10)
+# 주도세력 누적 되돌림 청산(leader-exit) 그리드 (이산 — 과최적화 방어).
+FLOW_UNWIND_WINDOW_GRID: tuple[int, ...] = (10, 20, 60)
+FLOW_UNWIND_DRAWDOWN_GRID: tuple[float, ...] = (30.0, 50.0, 70.0)
 LIQUIDITY_WINDOW_GRID: tuple[int, ...] = (20, 60)
 LIQUIDITY_VALUE_GRID: tuple[float, ...] = (1_000_000_000.0, 5_000_000_000.0, 10_000_000_000.0, 20_000_000_000.0)
 # 공매도 압력 신호 그리드 (short_volume_ratio = 공매도 거래량 비중 %, 이산).
@@ -202,6 +208,15 @@ def _validate_signal_v2(sig: dict, where: str) -> None:
     elif stype == "fast_money_unwind":
         base._in_grid(
             base._need(sig, "window", where), FAST_MONEY_UNWIND_WINDOW_GRID, where, "window"
+        )
+
+    elif stype == "flow_unwind":
+        base._check_subject(sig, where)
+        base._in_grid(
+            base._need(sig, "window", where), FLOW_UNWIND_WINDOW_GRID, where, "window"
+        )
+        base._in_grid(
+            base._need(sig, "drawdown_pct", where), FLOW_UNWIND_DRAWDOWN_GRID, where, "drawdown_pct"
         )
 
     elif stype == "liquidity_filter":

@@ -243,3 +243,52 @@ class TestFastMoneyUnwind:
         s = v2._eval_signal_v2(df, {"signal": "fast_money_unwind", "window": 3})
         assert bool(s.iloc[5]) is True
         assert bool(s.iloc[2]) is False
+
+
+# === flow_unwind (cum_qty leader-exit) ===
+
+@pytest.mark.unit
+class TestFlowUnwind:
+    def test_semantics(self):
+        # 누적순매수(cumsum)가 40일 상승 후 40일 하락 → trailing 고점 대비 되돌림.
+        n = 80
+        net = np.r_[np.full(40, 100.0), np.full(40, -100.0)]
+        df = pd.DataFrame({
+            "date": pd.date_range("2021-01-01", periods=n, freq="D").astype(str),
+            "close": 1000.0, "volume": 1,
+            "pension_net_qty": net,
+            "retail_net_qty": 0.0, "price_change_pct": 0.0,
+        })
+        sig = {"signal": "flow_unwind", "subject": "pension", "window": 20, "drawdown_pct": 50.0}
+        s = v2._eval_signal_v2(df, sig)
+        # 엔진 공식 직접 재현.
+        cum = pd.Series(net).cumsum()
+        peak = cum.rolling(20, min_periods=1).max()
+        span = peak - cum.rolling(20, min_periods=1).min()
+        drawdown = (peak - cum) / span.where(span > 0)
+        expected = (drawdown >= 0.5)
+        pd.testing.assert_series_equal(
+            s.reset_index(drop=True), expected.reset_index(drop=True), check_names=False,
+        )
+        # 매집 구간(cum 단조 상승, 0~39)은 되돌림 없음 → 전부 False.
+        assert not s.iloc[:40].any()
+        # 분산 후반부(되돌림 진행)는 True.
+        assert bool(s.iloc[60]) is True
+
+    def test_offgrid_window_raises(self):
+        with pytest.raises(ValueError):
+            validate_spec_v2(_spec([{
+                "signal": "flow_unwind", "subject": "pension",
+                "window": 11, "drawdown_pct": 50.0}]))
+
+    def test_offgrid_drawdown_raises(self):
+        with pytest.raises(ValueError):
+            validate_spec_v2(_spec([{
+                "signal": "flow_unwind", "subject": "pension",
+                "window": 20, "drawdown_pct": 40.0}]))
+
+    def test_bad_subject_raises(self):
+        with pytest.raises(ValueError):
+            validate_spec_v2(_spec([{
+                "signal": "flow_unwind", "subject": "institution",
+                "window": 20, "drawdown_pct": 50.0}]))
